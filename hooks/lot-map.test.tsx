@@ -81,14 +81,36 @@ test('hook helpers', () => {
   expect(firstLine('\nBlocked by x: rule.\nCommand: secret')).toBe('Blocked by x: rule.')
   expect(formatMs(1500, stringsFor('en'))).toBe('1.5 s')
   expect(formatMs(1500, stringsFor('ru'))).toBe('1.5 с')
+  expect(formatMs(1500, stringsFor('de'))).toBe('1,5 s')
+  expect(stringsFor('en').records(1, '#7')).toBe('1 record: #7')
+  expect(stringsFor('en').stations.web).toBe('Network')
 })
 
-test('both languages have every word', () => {
+const LANGUAGES = ['en', 'ru', 'es', 'fr', 'de'] as const
+
+test('every language has every word, in a table of its own', () => {
   const en = stringsFor('en')
-  const ru = stringsFor('ru')
-  expect(Object.keys(ru).sort()).toEqual(Object.keys(en).sort())
-  expect(Object.keys(ru.stations).sort()).toEqual(Object.keys(en.stations).sort())
+  for (const language of LANGUAGES) {
+    const t = stringsFor(language)
+    expect(Object.keys(t).sort()).toEqual(Object.keys(en).sort())
+    expect(Object.keys(t.stations).sort()).toEqual(Object.keys(en.stations).sort())
+    expect(Object.values(t.stations).every(name => name !== '')).toBe(true)
+  }
+  expect(new Set(LANGUAGES.map(language => stringsFor(language).title)).size).toBe(LANGUAGES.length)
+  expect(stringsFor('constructor').title).toBe(en.title)
 })
+
+for (const [language, row] of [['es', 'Archivos  b/content.py'], ['fr', 'Fichiers   b/content.py'], ['de', 'Dateien    b/content.py']] as const) {
+  test(`the pane speaks ${language}, its columns even`, { options: { language } }, async ($, on) => {
+    on('clock.now', () => ({ value: 1_000_000 }))
+    on('tool.call', () => ({ result: {} }))
+    await $.tool.call({ tool: 'Read', file_path: '/a/b/content.py' })
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect((await ui.find({ type: 'Text', text: /b\/content\.py/ }))?.text).toContain(row)
+    await ui.unmount()
+  })
+}
 
 test('options that make no sense count as not set', () => {
   const odd = setupFrom({ language: 'xx', coreName: '   ', memoryServers: 7, memoryLabels: ['no-equals', '=x', 'y='], hookRecords: 'yes' })

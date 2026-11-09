@@ -33,7 +33,7 @@ The pane opens by itself when a session starts. In a terminal it needs at least 
 | Memory | Claude Code's memory folder, plus whatever you name in the options |
 | Files | Read, Write, Edit, Grep, Glob, and shell commands that only look at or move files |
 | Shell | every other shell command |
-| Web | web fetch and search, `curl`, `gh`, `git push` and the like, MCP servers |
+| Network | web fetch and search, `curl`, `gh`, `git push` and the like, MCP servers |
 | Browser | browser tools |
 | Agents | subagents and workflows; their own calls start from this station |
 | Skills | skills and tool search |
@@ -51,7 +51,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `language` | `en` | `en` or `ru` |
+| `language` | `en` | `en`, `ru`, `es`, `fr` or `de` |
 | `coreName` | `CLAUDE` | what the circle in the middle says, up to ten characters |
 | `memoryServers` | `memory` | MCP servers whose tools light Memory |
 | `memoryCommands` | none | shell commands or scripts that light Memory, matched by how the name starts |
@@ -92,3 +92,7 @@ claude plugin validate .
 ```
 
 Words live in `hooks/text.ts`; a new language is one more table there and one more value of `language` in `.claude-plugin/plugin.json`.
+
+## License
+
+[MIT](LICENSE)

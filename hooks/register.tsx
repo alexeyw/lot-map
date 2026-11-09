@@ -74,10 +74,10 @@ async function noteContext($: EngineInterface, context: readonly string[] | unde
   if (text.trim() === '') return
   const ids = setup.hookRecords ? memoryIds(text) : []
   if (ids.length === 0) {
-    await begin($, { station: 'hooks', label: `${t.addedContext} ${when}`, status: 'ok' })
+    await begin($, { station: 'hooks', label: t.addedContext(when), status: 'ok' })
     return
   }
-  await begin($, { station: 'hooks', label: `${t.addedMemory} ${when}`, status: 'ok' })
+  await begin($, { station: 'hooks', label: t.addedMemory(when), status: 'ok' })
   const shown = ids.slice(0, 6).map(id => `#${id}`).join(' ')
   await begin($, {
     station: 'memory',
@@ -90,6 +90,8 @@ async function noteContext($: EngineInterface, context: readonly string[] | unde
 export const register: Register = (on, options) => {
   const setup = setupFrom(options)
   const { t } = setup
+  // The feed's second column fits the longest station name of the language.
+  const column = Math.max(8, ...Object.values(t.stations).map(name => name.length))
 
   // Calls a settings hook refused, so that the tool's own row reads as blocked and not as an error.
   // Loses nothing across a reload that matters: a reload never lands in the middle of a call.
@@ -219,7 +221,7 @@ export const register: Register = (on, options) => {
       const mark = entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
       const took = entry.endedAt === undefined ? t.running : entry.endedAt > entry.startedAt ? formatMs(entry.endedAt - entry.startedAt, t) : ''
       const color = entry.status === 'run' ? '#e1ac6e' : entry.status === 'ok' ? undefined : '#e8654f'
-      const line = `${mark} ${t.stations[entry.station].padEnd(8)} ${entry.label}${took === '' ? '' : `  ${took}`}`
+      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${took === '' ? '' : `  ${took}`}`
       return (
         <Text mono size="footnote" color={color} dimColor={entry.status === 'ok'}>
           {line}

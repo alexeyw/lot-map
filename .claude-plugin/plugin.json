@@ -2,6 +2,7 @@
   "name": "lot-map",
   "version": "0.1.0",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
@@ -9,7 +10,10 @@
       "title": "Language",
       "options": [
         "en",
-        "ru"
+        "ru",
+        "es",
+        "fr",
+        "de"
       ],
       "default": "en",
       "description": "The language of the labels on the map."
