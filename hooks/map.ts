@@ -34,6 +34,7 @@ export type Setup = {
   memoryPaths: readonly string[]
   memoryLabels: ReadonlyMap<string, string>
   hookRecords: boolean
+  theme: 'auto' | 'dark' | 'light'
 }
 
 const list = (v: unknown): string[] =>
@@ -54,6 +55,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     memoryPaths: list(options.memoryPaths),
     memoryLabels,
     hookRecords: options.hookRecords === true,
+    theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
   }
 }
 
@@ -66,7 +68,7 @@ const lastTwo = (path: string): string => path.split('/').filter(Boolean).slice(
 /** Only the host: a login, a password, a path or a query never reach a label. */
 function hostOf(url: string): string {
   const [, scheme = '', rest = ''] = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
-  return (rest.split(/[/?#]/)[0].split('@').pop() ?? '').slice(0, 40) || scheme
+  return ((rest.split(/[/?#]/)[0] ?? '').split('@').pop() ?? '').slice(0, 40) || scheme
 }
 
 /** Claude Code's own memory folder counts for everyone; anything else is the person's to name. */
@@ -88,19 +90,20 @@ function segments(command: string): string[][] {
     .map(part => part.trim().split(/\s+/).filter(Boolean))
     .map(words => {
       let i = 0
-      while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i])) i++
+      while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i] ?? '')) i++
       return words.slice(i)
     })
     .filter(words => words.length > 0)
 }
 
-const base = (word: string): string => word.replace(/["']/g, '').split('/').pop() ?? word
+const base = (word = ''): string => word.replace(/["']/g, '').split('/').pop() ?? word
 
 /** The name a memory command goes by: the one word after the command, never an argument behind it. */
 function memoryLabel(words: string[], commands: readonly string[]): string {
   const head = base(words[0])
   if (!commands.includes(head)) return base(RUNNERS.has(head) && words[1] ? words[1] : words[0]).replace(/\.py$/, '')
-  return /^[a-z][a-z-]*$/.test(words[1] ?? '') ? words[1] : head
+  const sub = words[1] ?? ''
+  return /^[a-z][a-z-]*$/.test(sub) ? sub : head
 }
 
 function classifyBash(command: string, description: string, setup: Setup): Classified {
@@ -163,7 +166,7 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
   }
   const mcp = /^mcp__([^_].*?)__(.+)$/.exec(tool)
   if (mcp === null) return { station: 'shell', label: tool }
-  const [, server, name] = mcp
+  const [, server = '', name = ''] = mcp
   if (setup.memoryServers.has(server)) {
     const id = typeof input.id === 'number' || typeof input.id === 'string' ? ` #${input.id}` : ''
     return { station: 'memory', label: (setup.memoryLabels.get(name) ?? name.replace(/_/g, ' ')) + id }
@@ -196,7 +199,7 @@ export function firstLine(text: string, max = 72): string {
 
 /** The record numbers a memory hook put in front of the model: `[#123`, `[now #123`, `[todo #123`. */
 export function memoryIds(text: string): string[] {
-  return [...new Set([...text.matchAll(/\[(?:[a-z]+ )?#(\d+)/g)].map(m => m[1]))]
+  return [...new Set([...text.matchAll(/\[(?:[a-z]+ )?#(\d+)/g)].map(m => m[1] ?? ''))]
 }
 
 // ---- drawing ----------------------------------------------------------------------------------
@@ -209,31 +212,80 @@ const RX = 176
 const RY = 164
 const NODE = 22
 const CORE = 40
+/** Where spokes and pulses meet the core: outside the context ring. */
+const HUB = CORE + 8
 
-const GROUND = '#0a0c11'
-const RAISED = '#12151c'
-const LINE = '#272c36'
-const SPOKE = '#1a1e27'
-const BONE = '#ebe6dc'
-const ASH = '#9ba1ab'
-const ACCENT = '#e1ac6e'
-const HOT = '#f0c595'
-const RED = '#e8654f'
+type Palette = {
+  ground: string
+  raised: string
+  line: string
+  spoke: string
+  bone: string
+  ash: string
+  dim: string
+  accent: string
+  hot: string
+  red: string
+  mem: string
+  memHot: string
+}
+
+const DARK: Palette = {
+  ground: '#0a0c11',
+  raised: '#12151c',
+  line: '#272c36',
+  spoke: '#1a1e27',
+  bone: '#ebe6dc',
+  ash: '#9ba1ab',
+  dim: '#6b7280',
+  accent: '#e1ac6e',
+  hot: '#f0c595',
+  red: '#e8654f',
+  mem: '#62c7ba',
+  memHot: '#a5e6dc',
+}
+
+const LIGHT: Palette = {
+  ground: '#f5f2ea',
+  raised: '#ffffff',
+  line: '#cfc9bc',
+  spoke: '#e3ded2',
+  bone: '#1f2228',
+  ash: '#5f6570',
+  dim: '#8b909a',
+  accent: '#b8762a',
+  hot: '#8f560f',
+  red: '#c5402b',
+  mem: '#1c8c81',
+  memHot: '#136a62',
+}
+
 const FONT = 'font-family="SF Mono, ui-monospace, Menlo, monospace"'
 
 const PULSE_MS = 800
+const RIPPLE_MS = 450
 const GLOW_MS = 3200
 const ALARM_MS = 6000
+const SWITCH_MS = 8000
+const DONE_MS = 1100
+const TRAIL_STOPS = 7
 
 type Point = { x: number; y: number }
 
-const place = (i: number): Point => {
-  const a = (i * 2 * Math.PI) / STATIONS.length
-  return { x: CX + RX * Math.sin(a), y: CY - RY * Math.cos(a) }
-}
+const turn = (i: number): number => (i * 2 * Math.PI) / STATIONS.length
+const at = (a: number, f = 1): Point => ({ x: CX + RX * f * Math.sin(a), y: CY - RY * f * Math.cos(a) })
+const place = (i: number): Point => at(turn(i))
+const indexOf = (id: StationId): number => STATIONS.findIndex(s => s.id === id)
 
 const n1 = (v: number): string => (Math.round(v * 10) / 10).toString()
-const secs = (ms: number): string => `${(ms / 1000).toFixed(3)}s`
+/** A moment on the drawing's own clock, which starts at zero each time it is drawn; a past moment is negative. */
+const clock = (ms: number): string => `${(ms / 1000).toFixed(3)}s`
+
+/** A color between two, `k` of the way from the first. */
+function mix(a: string, b: string, k: number): string {
+  const part = (s: string, i: number): number => parseInt(s.slice(1 + 2 * i, 3 + 2 * i), 16)
+  return `#${[0, 1, 2].map(i => Math.round(part(a, i) + (part(b, i) - part(a, i)) * k).toString(16).padStart(2, '0')).join('')}`
+}
 
 /** Where a straight line from `from` to `to` meets the circle of radius `r` around `from`. */
 function edge(from: Point, to: Point, r: number): Point {
@@ -241,36 +293,116 @@ function edge(from: Point, to: Point, r: number): Point {
   return { x: from.x + ((to.x - from.x) * r) / d, y: from.y + ((to.y - from.y) * r) / d }
 }
 
-function pulse(a: Point, b: Point, color: string, age: number, radius: number): string {
+/** The same line moved sideways, so that several pulses on one spoke fly side by side. */
+function aside(a: Point, b: Point, off: number): [Point, Point] {
+  const d = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  const dx = (-(b.y - a.y) * off) / d
+  const dy = ((b.x - a.x) * off) / d
+  return [{ x: a.x + dx, y: a.y + dy }, { x: b.x + dx, y: b.y + dy }]
+}
+
+/** A pulse with a short tail behind it. A hollow one is a signal nobody asked for. */
+function pulse(a: Point, b: Point, color: string, age: number, radius: number, isHollow = false): string {
   // A negative begin carries on where the last drawing left off, so a redraw never restarts a flight.
-  const at = `begin="-${secs(age)}" dur="${secs(PULSE_MS)}" fill="freeze"`
+  const path = `M${n1(a.x)} ${n1(a.y)}L${n1(b.x)} ${n1(b.y)}`
+  let out = ''
+  for (let k = isHollow ? 0 : 2; k >= 0; k--) {
+    const timing = `begin="${clock(k * 45 - age)}" dur="${clock(PULSE_MS)}" fill="freeze"`
+    const peak = n1(1 - 0.36 * k)
+    const paint = isHollow ? `fill="none" stroke="${color}" stroke-width="1.4"` : `fill="${color}"`
+    out +=
+      `<circle r="${n1(radius * (1 - 0.27 * k))}" ${paint} opacity="0">` +
+      `<animateMotion path="${path}" ${timing}/>` +
+      `<animate attributeName="opacity" values="${peak};${peak};0" keyTimes="0;.82;1" ${timing}/>` +
+      `</circle>`
+  }
+  return out
+}
+
+/** A ring that spreads from where a pulse lands, at the moment it lands. */
+function ripple(p: Point, r: number, color: string, age: number): string {
+  const timing = `begin="${clock(PULSE_MS - age)}" dur="${clock(RIPPLE_MS)}" fill="freeze"`
   return (
-    `<circle r="${radius}" fill="${color}" opacity="0">` +
-    `<animateMotion path="M${n1(a.x)} ${n1(a.y)}L${n1(b.x)} ${n1(b.y)}" ${at}/>` +
-    `<animate attributeName="opacity" values="1;1;0" keyTimes="0;.82;1" ${at}/>` +
-    `</circle>`
+    `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${r}" fill="none" stroke="${color}" stroke-width="1.2" opacity="0">` +
+    `<animate attributeName="r" values="${r};${r + 11}" ${timing}/>` +
+    `<animate attributeName="opacity" values=".7;0" ${timing}/></circle>`
   )
 }
 
-function beam(a: Point, b: Point, color: string, age: number): string {
+function beam(a: Point, b: Point, color: string, age: number, isDashed: boolean): string {
   return (
-    `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke="${color}" stroke-width="1.4" opacity="0">` +
-    `<animate attributeName="opacity" values=".75;0" begin="-${secs(age)}" dur="${secs(GLOW_MS / 2)}" fill="freeze"/></line>`
+    `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke="${color}" stroke-width="1.4"${isDashed ? ' stroke-dasharray="3 4"' : ''} opacity="0">` +
+    `<animate attributeName="opacity" values=".75;0" begin="${clock(-age)}" dur="${clock(GLOW_MS / 2)}" fill="freeze"/></line>`
   )
 }
 
-function station(i: number, entries: Entry[], count: number, now: number, name: string): { under: string; over: string } {
-  const s = STATIONS[i]
+/** How far from the core a leg bends, by how many stations apart its ends are: far enough in to clear the labels under the nodes, far enough out to clear the core. */
+const BEND = [0.5, 0.5, 0.4, 0.45, 0.55, 0.75]
+
+/** The way from one station to another: a curve through the room between the core and the ring. */
+function leg(i: number, j: number): { path: string; end: Point } {
+  const n = STATIONS.length
+  let steps = (((j - i) % n) + n) % n
+  if (steps > n / 2) steps -= n
+  const bend = at(turn(i + steps / 2), BEND[Math.abs(steps)] ?? 0.5)
+  const a = edge(place(i), bend, NODE + 4)
+  const b = edge(place(j), bend, NODE + 4)
+  return { path: `M${n1(a.x)} ${n1(a.y)}Q${n1(bend.x)} ${n1(bend.y)} ${n1(b.x)} ${n1(b.y)}`, end: b }
+}
+
+/** The stations the main loop went through, oldest first, a station visited twice in a row counted once. */
+export function routeOf(entries: readonly Entry[], max = TRAIL_STOPS): { station: StationId; at: number }[] {
+  const stops: { station: StationId; at: number }[] = []
+  for (const e of entries) {
+    if (e.from === 'agents' || e.station === 'model') continue
+    const last = stops[stops.length - 1]
+    if (last !== undefined && last.station === e.station) last.at = e.startedAt
+    else stops.push({ station: e.station, at: e.startedAt })
+  }
+  return stops.slice(-max)
+}
+
+function trail(entries: readonly Entry[], now: number, c: Palette): string {
+  const stops = routeOf(entries)
+  let out = ''
+  for (let k = 1; k < stops.length; k++) {
+    const from = stops[k - 1]
+    const to = stops[k]
+    if (from === undefined || to === undefined) continue
+    const { path, end } = leg(indexOf(from.station), indexOf(to.station))
+    const isHead = k === stops.length - 1
+    const opacity = n1(0.12 + (0.5 * k) / (stops.length - 1))
+    // The newest leg draws itself; the rest are already there.
+    const drawing = isHead
+      ? ` pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" values="1;0" begin="${clock(to.at - now)}" dur=".5s" fill="freeze"/></path>`
+      : '/>'
+    out += `<path d="${path}" fill="none" stroke="${c.bone}" stroke-width="${isHead ? 1.5 : 1.1}" stroke-linecap="round" opacity="${opacity}"${drawing}`
+    if (isHead) {
+      out +=
+        `<circle cx="${n1(end.x)}" cy="${n1(end.y)}" r="2.4" fill="${c.bone}" opacity="0">` +
+        `<animate attributeName="opacity" values="0;.85" begin="${clock(to.at - now + 400)}" dur=".15s" fill="freeze"/></circle>`
+    }
+  }
+  return out
+}
+
+type Scene = { entries: Entry[]; board: Board; now: number; c: Palette; names: Strings['stations'] }
+
+function station(s: (typeof STATIONS)[number], i: number, { entries, board, now, c, names }: Scene): { under: string; over: string } {
   const p = place(i)
+  const x = n1(p.x)
+  const y = n1(p.y)
+  const count = board.counts[s.id] ?? 0
   const own = entries.filter(e => e.station === s.id)
   const running = own.filter(e => e.status === 'run')
   const latest = own.length > 0 ? own[own.length - 1] : undefined
   const since = latest === undefined ? Infinity : now - (latest.endedAt ?? latest.startedAt)
   const alarm = own.filter(e => e.status === 'block' || e.status === 'err').pop()
-  const alarmAge = alarm === undefined ? Infinity : now - alarm.startedAt
+  const alarmAge = alarm === undefined ? Infinity : now - (alarm.endedAt ?? alarm.startedAt)
   const isAlarm = alarmAge < ALARM_MS
   const isLit = running.length > 0 || since < GLOW_MS
-  const color = isAlarm ? RED : ACCENT
+  const [main, hot] = s.id === 'memory' ? [c.mem, c.memHot] : [c.accent, c.hot]
+  const color = isAlarm ? c.red : main
   const fade = isAlarm ? alarmAge : since
   const span = isAlarm ? ALARM_MS : GLOW_MS
 
@@ -278,104 +410,195 @@ function station(i: number, entries: Entry[], count: number, now: number, name: 
   if (isLit || isAlarm) {
     under +=
       running.length > 0 && !isAlarm
-        ? `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${NODE + 10}" fill="${color}" opacity=".16"/>`
-        : `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${NODE + 10}" fill="${color}" opacity="0">` +
-          `<animate attributeName="opacity" values=".3;0" begin="-${secs(fade)}" dur="${secs(span)}" fill="freeze"/></circle>`
+        ? `<circle cx="${x}" cy="${y}" r="${NODE + 10}" fill="${color}" opacity=".16"/>`
+        : `<circle cx="${x}" cy="${y}" r="${NODE + 10}" fill="${color}" opacity="0">` +
+          `<animate attributeName="opacity" values=".3;0" begin="${clock(-fade)}" dur="${clock(span)}" fill="freeze"/></circle>`
   }
   if (running.length > 0) {
-    const phase = (now - running[0].startedAt) % 1400
-    const at = `begin="-${secs(phase)}" dur="1.4s" repeatCount="indefinite"`
+    const elapsed = now - Math.min(...running.map(e => e.startedAt))
+    const beat = `begin="${clock(-(elapsed % 1400))}" dur="1.4s" repeatCount="indefinite"`
     under +=
-      `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${NODE}" fill="none" stroke="${color}" stroke-width="1.3">` +
-      `<animate attributeName="r" values="${NODE};${NODE + 15}" ${at}/>` +
-      `<animate attributeName="opacity" values=".9;0" ${at}/></circle>`
+      `<circle cx="${x}" cy="${y}" r="${NODE}" fill="none" stroke="${color}" stroke-width="1.3">` +
+      `<animate attributeName="r" values="${NODE};${NODE + 15}" ${beat}/>` +
+      `<animate attributeName="opacity" values=".9;0" ${beat}/></circle>`
+    // Two hands of a clock around the node: the inner one goes round in a minute, the outer one in ten.
+    const hand = (r: number, width: number, lapMs: number, isOnce: boolean): string =>
+      `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${hot}" stroke-width="${width}" pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="1" transform="rotate(-90 ${x} ${y})">` +
+      `<animate attributeName="stroke-dashoffset" values="1;0" begin="${clock(-(isOnce ? Math.min(elapsed, lapMs) : elapsed % lapMs))}" dur="${clock(lapMs)}" ${isOnce ? 'fill="freeze"' : 'repeatCount="indefinite"'}/></circle>`
+    under += hand(NODE + 4, 2.2, 60_000, false) + hand(NODE + 8, 1.2, 600_000, true)
   }
 
   // A lit node holds its color while something runs, otherwise it cools down to the resting line.
-  const stroke = running.length > 0 ? color : LINE
+  const stroke = running.length > 0 ? color : c.line
   const cooling =
     running.length === 0 && (isLit || isAlarm)
-      ? `<animate attributeName="stroke" values="${color};${LINE}" begin="-${secs(fade)}" dur="${secs(span)}" fill="freeze"/>`
+      ? `<animate attributeName="stroke" values="${color};${c.line}" begin="${clock(-fade)}" dur="${clock(span)}" fill="freeze"/>`
       : ''
-  const glyphColor = running.length > 0 || isLit || isAlarm ? (isAlarm ? RED : HOT) : ASH
-  const over =
-    `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${NODE}" fill="${RAISED}" stroke="${stroke}" stroke-width="1.2">${cooling}</circle>` +
-    `<path transform="translate(${n1(p.x)} ${n1(p.y)})" d="${s.icon}" fill="none" stroke="${glyphColor}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<text x="${n1(p.x)}" y="${n1(p.y + NODE + 15)}" text-anchor="middle" ${FONT} font-size="11.5" fill="${isLit || isAlarm ? BONE : ASH}">${name}</text>` +
-    (count > 0
-      ? `<text x="${n1(p.x)}" y="${n1(p.y + NODE + 28)}" text-anchor="middle" ${FONT} font-size="9.5" fill="#6b7280">${count}</text>`
-      : '')
+  const glyphColor = isAlarm ? c.red : isLit ? hot : s.id === 'memory' && count > 0 ? main : c.ash
+  // The words stand on a rim of the ground's own color, so a line that passes behind them never strikes them through.
+  const rim = `paint-order="stroke" stroke="${c.ground}" stroke-width="3.5" stroke-linejoin="round"`
+  let over =
+    `<circle cx="${x}" cy="${y}" r="${NODE}" fill="${c.raised}" stroke="${stroke}" stroke-width="1.2">${cooling}</circle>` +
+    `<path transform="translate(${x} ${y})" d="${s.icon}" fill="none" stroke="${glyphColor}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<text x="${x}" y="${n1(p.y + NODE + 15)}" text-anchor="middle" ${FONT} font-size="11.5" ${rim} fill="${isLit || isAlarm ? c.bone : c.ash}">${names[s.id]}</text>`
+
+  if (count > 0) {
+    // Memory keeps two counts: what was asked for, and what a hook brought down unasked.
+    const pushed = s.id === 'memory' ? Math.min(count, board.pushed ?? 0) : 0
+    const asked = count - pushed
+    const figures =
+      pushed === 0 ? String(count) : `${asked > 0 ? `${asked} ` : ''}<tspan fill="${main}">↓${pushed}</tspan>`
+    over += `<text x="${x}" y="${n1(p.y + NODE + 28)}" text-anchor="middle" ${FONT} font-size="9.5" ${rim} fill="${c.dim}">${figures}</text>`
+  }
+
+  // Top right: how many run at once. Top left: what went wrong since the last message, until the next one.
+  const corner = NODE * 0.74
+  if (running.length > 1) {
+    over +=
+      `<circle cx="${n1(p.x + corner)}" cy="${n1(p.y - corner)}" r="8" fill="${c.raised}" stroke="${color}" stroke-width="1"/>` +
+      `<text x="${n1(p.x + corner)}" y="${n1(p.y - corner + 3)}" text-anchor="middle" ${FONT} font-size="8.5" fill="${hot}">×${running.length}</text>`
+  }
+  const faults = board.faults?.[s.id] ?? 0
+  if (faults > 0) {
+    over +=
+      `<circle cx="${n1(p.x - corner)}" cy="${n1(p.y - corner)}" r="7.5" fill="${c.red}"/>` +
+      `<text x="${n1(p.x - corner)}" y="${n1(p.y - corner + 3.1)}" text-anchor="middle" ${FONT} font-size="9" font-weight="700" fill="${c.ground}">${faults > 99 ? '99+' : faults}</text>`
+  }
   return { under, over }
 }
 
+/** Which palette to draw in: the person's choice, or else what the app's theme said at session start. */
+const paletteOf = (board: Board, setup: Setup): Palette =>
+  setup.theme === 'light' || (setup.theme === 'auto' && board.light === true) ? LIGHT : DARK
+
 export function drawMap(board: Board, now: number, setup: Setup): string {
+  const c = paletteOf(board, setup)
   const core: Point = { x: CX, y: CY }
   const recent = board.entries.slice(-40)
-  const flights = recent.filter(e => now - e.startedAt < PULSE_MS).slice(-14)
-  const returns = recent.filter(e => e.endedAt !== undefined && now - e.endedAt < PULSE_MS).slice(-14)
+  const flights = recent.filter(e => now - e.startedAt < PULSE_MS + RIPPLE_MS).slice(-14)
+  const returns = recent.filter(e => e.endedAt !== undefined && e.from !== 'inbound' && now - e.endedAt < PULSE_MS + RIPPLE_MS).slice(-14)
   const beams = recent.filter(e => now - e.startedAt < GLOW_MS / 2).slice(-10)
   const anyRunning = recent.some(e => e.status === 'run')
-  const agentsAt = place(STATIONS.findIndex(s => s.id === 'agents'))
+  const agentsAt = place(indexOf('agents'))
+  const isBad = (e: Entry): boolean => e.status === 'block' || e.status === 'err'
+  const tone = (e: Entry): [string, string] => (e.station === 'memory' ? [c.mem, c.memHot] : [c.accent, c.hot])
 
-  let body = `<rect width="${W}" height="${H}" rx="12" fill="${GROUND}"/>`
+  let body = `<rect width="${W}" height="${H}" rx="12" fill="${c.ground}"/>`
 
   // Contours around the core.
   for (const [rx, ry] of [[66, 62], [104, 97], [142, 132]]) {
-    body += `<ellipse cx="${CX}" cy="${CY}" rx="${rx}" ry="${ry}" fill="none" stroke="${LINE}" stroke-width=".7" opacity=".45" stroke-dasharray="2 5"/>`
+    body += `<ellipse cx="${CX}" cy="${CY}" rx="${rx}" ry="${ry}" fill="none" stroke="${c.line}" stroke-width=".7" opacity=".45" stroke-dasharray="2 5"/>`
   }
 
   // Spokes first, then whatever flies along them, then the nodes on top.
-  STATIONS.forEach((_, i) => {
+  // A spoke wears in with use: by the end of a session the map shows where the work went.
+  STATIONS.forEach((s, i) => {
     const p = place(i)
-    const a = edge(core, p, CORE)
+    const a = edge(core, p, HUB)
     const b = edge(p, core, NODE)
-    body += `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke="${SPOKE}" stroke-width="1"/>`
+    const worn = Math.min(1, Math.log2(1 + (board.counts[s.id] ?? 0)) / 7)
+    const stroke = mix(c.spoke, s.id === 'memory' ? c.mem : c.accent, worn * 0.55)
+    body += `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke="${stroke}" stroke-width="${n1(1 + 2.6 * worn)}" stroke-linecap="round"/>`
   })
 
-  const drawn = STATIONS.map((s, i) => station(i, recent, board.counts[s.id] ?? 0, now, setup.t.stations[s.id]))
+  const scene: Scene = { entries: recent, board, now, c, names: setup.t.stations }
+  const drawn = STATIONS.map((s, i) => station(s, i, scene))
   body += drawn.map(d => d.under).join('')
+  body += trail(recent, now, c)
 
-  const pointOf = (id: StationId): Point => place(STATIONS.findIndex(s => s.id === id))
-  for (const e of beams) {
-    const p = pointOf(e.station)
+  /** The two ends of an entry's spoke: where it starts (the core or the agents station) and its own station. */
+  const ends = (e: Entry): [Point, Point] => {
+    const p = place(indexOf(e.station))
     const start = e.from === 'agents' ? agentsAt : core
-    const color = e.status === 'block' || e.status === 'err' ? RED : ACCENT
-    body += beam(edge(start, p, e.from === 'agents' ? NODE : CORE), edge(p, start, NODE), color, now - e.startedAt)
+    return [edge(start, p, e.from === 'agents' ? NODE : HUB), edge(p, start, NODE)]
+  }
+  /** Pulses that share a spoke and a moment fly in lanes, five apart. */
+  const lane = (list: Entry[], e: Entry): number => {
+    const peers = list.filter(x => x.station === e.station && x.from === e.from)
+    return (peers.indexOf(e) - (peers.length - 1) / 2) * 5
+  }
+
+  for (const e of beams) {
+    const [a, b] = ends(e)
+    body += beam(a, b, isBad(e) ? c.red : tone(e)[0], now - e.startedAt, e.from === 'inbound')
   }
   for (const e of flights) {
-    const p = pointOf(e.station)
-    const start = e.from === 'agents' ? agentsAt : core
-    const a = edge(start, p, e.from === 'agents' ? NODE : CORE)
-    const b = edge(p, start, NODE)
-    const color = e.status === 'block' ? RED : HOT
-    body += e.from === 'inbound' ? pulse(b, a, color, now - e.startedAt, 3.8) : pulse(a, b, color, now - e.startedAt, 3.8)
+    const [a, b] = aside(...ends(e), lane(flights, e))
+    const age = now - e.startedAt
+    const color = e.status === 'block' ? c.red : tone(e)[1]
+    if (e.from === 'inbound') {
+      body += pulse(b, a, color, age, 3.8, true) + ripple(core, HUB - 2, color, age)
+    } else {
+      body += pulse(a, b, color, age, 3.8) + ripple(place(indexOf(e.station)), NODE, color, age)
+    }
   }
   for (const e of returns) {
-    if (e.from === 'inbound') continue
-    const p = pointOf(e.station)
-    const start = e.from === 'agents' ? agentsAt : core
-    const a = edge(start, p, e.from === 'agents' ? NODE : CORE)
-    const b = edge(p, start, NODE)
-    const color = e.status === 'ok' ? ASH : RED
-    body += pulse(b, a, color, now - (e.endedAt as number), 2.6)
+    const [a, b] = aside(...ends(e), lane(returns, e))
+    body += pulse(b, a, e.status === 'ok' ? c.ash : c.red, now - (e.endedAt as number), 2.6)
   }
 
   body += drawn.map(d => d.over).join('')
+
+  // Each subagent still at work circles the agents station.
+  const crew = (board.agents ?? []).slice(0, 6)
+  crew.forEach((_, k) => {
+    const lap = 7000
+    const spin = `${n1(agentsAt.x)} ${n1(agentsAt.y)}`
+    body +=
+      `<g><animateTransform attributeName="transform" type="rotate" from="0 ${spin}" to="360 ${spin}" begin="${clock(-((now + (k * lap) / crew.length) % lap))}" dur="${clock(lap)}" repeatCount="indefinite"/>` +
+      `<circle cx="${n1(agentsAt.x)}" cy="${n1(agentsAt.y - NODE - 6)}" r="3" fill="${c.hot}"/></g>`
+  })
 
   // A name longer than three letters shrinks to stay inside the circle.
   const coreSize = Math.min(17, 62 / (0.75 * setup.core.length))
 
   // The core breathes at rest and quickens while something runs.
   const period = anyRunning ? 1600 : 4800
-  const at = `begin="-${secs(now % period)}" dur="${secs(period)}" repeatCount="indefinite"`
+  const breath = `begin="${clock(-(now % period))}" dur="${clock(period)}" repeatCount="indefinite"`
   body +=
-    `<circle cx="${CX}" cy="${CY}" r="${CORE + 6}" fill="${ACCENT}" opacity=".08">` +
-    `<animate attributeName="r" values="${CORE + 3};${CORE + 13};${CORE + 3}" ${at}/>` +
-    `<animate attributeName="opacity" values=".05;${anyRunning ? '.24' : '.12'};.05" ${at}/></circle>` +
-    `<circle cx="${CX}" cy="${CY}" r="${CORE}" fill="${RAISED}" stroke="${anyRunning ? ACCENT : LINE}" stroke-width="1.3"/>` +
-    `<text x="${CX}" y="${CY + (board.model === undefined ? 6 : 1)}" text-anchor="middle" ${FONT} font-size="${n1(coreSize)}" letter-spacing="${n1(coreSize * 0.147)}" fill="${BONE}">${escapeXml(setup.core)}</text>`
+    `<circle cx="${CX}" cy="${CY}" r="${CORE + 6}" fill="${c.accent}" opacity=".08">` +
+    `<animate attributeName="r" values="${CORE + 3};${CORE + 13};${CORE + 3}" ${breath}/>` +
+    `<animate attributeName="opacity" values=".05;${anyRunning ? '.24' : '.12'};.05" ${breath}/></circle>` +
+    `<circle cx="${CX}" cy="${CY}" r="${CORE}" fill="${c.raised}" stroke="${anyRunning ? c.accent : c.line}" stroke-width="1.3"/>`
+
+  // The context window as a ring around the core: it fills as the session goes and empties at a compaction.
+  if (board.context !== undefined) {
+    const full = Math.max(0, Math.min(100, Math.round(board.context)))
+    const ring = `cx="${CX}" cy="${CY}" r="${CORE + 5}" fill="none" stroke-width="2.2"`
+    body +=
+      `<circle ${ring} stroke="${c.line}" opacity=".7"/>` +
+      `<circle ${ring} stroke="${full >= 90 ? c.red : full >= 70 ? c.accent : c.ash}" pathLength="100" stroke-dasharray="${full} 100" transform="rotate(-90 ${CX} ${CY})"/>` +
+      `<text x="${CX}" y="${CY - 19}" text-anchor="middle" ${FONT} font-size="8" fill="${c.dim}">${full}%</text>`
+  }
+
+  const switchAge = board.switchedAt === undefined ? Infinity : now - board.switchedAt
+  const isSwitching = switchAge >= 0 && switchAge < SWITCH_MS
+  body += `<text x="${CX}" y="${CY + (board.model === undefined ? 6 : 1)}" text-anchor="middle" ${FONT} font-size="${n1(coreSize)}" letter-spacing="${n1(coreSize * 0.147)}" fill="${c.bone}">${escapeXml(setup.core)}</text>`
   if (board.model !== undefined) {
-    body += `<text x="${CX}" y="${CY + 17}" text-anchor="middle" ${FONT} font-size="9" fill="${ASH}">${escapeXml(shortModel(board.model))}</text>`
+    body += `<text x="${CX}" y="${CY + 17}" text-anchor="middle" ${FONT} font-size="9" fill="${isSwitching ? c.hot : c.ash}">${escapeXml(shortModel(board.model))}</text>`
+  }
+
+  // A changed model rings at the core and at its station for a few seconds.
+  if (isSwitching) {
+    const model = place(indexOf('model'))
+    const laps = Math.ceil((SWITCH_MS - switchAge) / 1600)
+    for (const [p, r] of [[core, CORE], [model, NODE]] as const) {
+      const ringing = `begin="${clock(-(switchAge % 1600))}" dur="1.6s" repeatCount="${laps}" fill="freeze"`
+      body +=
+        `<circle cx="${n1(p.x)}" cy="${n1(p.y)}" r="${r}" fill="none" stroke="${c.bone}" stroke-width="1.4" opacity="0">` +
+        `<animate attributeName="r" values="${r};${r + 26}" ${ringing}/>` +
+        `<animate attributeName="opacity" values=".7;0" ${ringing}/></circle>`
+    }
+  }
+
+  // The answer leaves the core as one wide ring.
+  const done = recent.filter(e => e.mark === 'done').pop()
+  if (done !== undefined && now - done.startedAt < DONE_MS) {
+    const leaving = `begin="${clock(done.startedAt - now)}" dur="${clock(DONE_MS)}" fill="freeze"`
+    body +=
+      `<circle cx="${CX}" cy="${CY}" r="${CORE}" fill="none" stroke="${c.bone}" stroke-width="1.6" opacity="0">` +
+      `<animate attributeName="r" values="${CORE};${CORE + 38}" ${leaving}/>` +
+      `<animate attributeName="opacity" values=".6;0" ${leaving}/></circle>`
   }
 
   // Twice the viewBox, so the picture fills whatever room the pane gives it.
@@ -386,9 +609,36 @@ function escapeXml(text: string): string {
   return text.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] as string)
 }
 
+// ---- the feed ---------------------------------------------------------------------------------
+
+/** A row of the feed: one entry, or several finished ones in a row at one station, shown as the newest of them. */
+export type Row = { entry: Entry; times: number; tookMs: number }
+
+const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
+
+/** The newest rows first. Finished calls that follow one another at one station fold into a single row. */
+export function foldRows(entries: readonly Entry[], max = 16): Row[] {
+  const rows: Row[] = []
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i]
+    if (e === undefined) continue
+    const took = e.endedAt === undefined ? 0 : Math.max(0, e.endedAt - e.startedAt)
+    const last = rows[rows.length - 1]
+    if (last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from) {
+      last.times++
+      last.tookMs += took
+      continue
+    }
+    if (rows.length === max) break
+    rows.push({ entry: e, times: 1, tookMs: took })
+  }
+  return rows
+}
+
 export function describeNow(board: Board, t: Strings): string {
   const running = board.entries.filter(e => e.status === 'run')
-  if (running.length === 0) return t.idle
+  const context = board.context === undefined ? '' : ` · ${t.context} ${Math.round(board.context)}%`
   const top = running[running.length - 1]
-  return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}`
+  if (top === undefined) return `${t.idle}${context}`
+  return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}${context}`
 }

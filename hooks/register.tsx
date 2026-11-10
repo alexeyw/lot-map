@@ -2,14 +2,15 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, describeNow, drawMap, firstLine, formatMs, memoryIds, setupFrom, shortModel } from './map'
+import { STATIONS, classify, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
 const KEEP = 80
+const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
-const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-1' })
+const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-2' })
 
 const newId = (now: number): string => `${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`
 
@@ -27,12 +28,18 @@ type Start = {
   label: string
   from?: Entry['from']
   status?: Status
+  agentId?: string
+  mark?: Entry['mark']
   /** Adds nothing to the station's count: a second view of something already counted. */
   uncounted?: boolean
   startedAt?: number
   endedAt?: number
-  patch?: Pick<Board, 'model' | 'step'>
+  patch?: Partial<Pick<Board, 'model' | 'step' | 'switchedAt'>>
 }
+
+const isFault = (status: Status): boolean => status === 'err' || status === 'block'
+
+const oneMore = (faults: Board['faults'], station: StationId): Board['faults'] => ({ ...faults, [station]: (faults?.[station] ?? 0) + 1 })
 
 async function begin($: EngineInterface, start: Start): Promise<string | undefined> {
   return quietly(async () => {
@@ -45,26 +52,46 @@ async function begin($: EngineInterface, start: Start): Promise<string | undefin
       startedAt: start.startedAt ?? now,
       status: start.status ?? 'run',
       ...(start.status !== undefined ? { endedAt: start.endedAt ?? now } : {}),
+      ...(start.agentId !== undefined ? { agentId: start.agentId } : {}),
+      ...(start.mark !== undefined ? { mark: start.mark } : {}),
     }
     await update($, board, b => ({
       ...b,
       ...start.patch,
       entries: [...b.entries, entry].slice(-KEEP),
       counts: start.uncounted ? b.counts : { ...b.counts, [entry.station]: (b.counts[entry.station] ?? 0) + 1 },
+      // What a hook brought to memory unasked is counted apart from what was asked for.
+      ...(entry.station === 'memory' && entry.from === 'inbound' && !start.uncounted ? { pushed: (b.pushed ?? 0) + 1 } : {}),
+      // An interrupted turn lands on the person's own station and is no fault of anything.
+      ...(isFault(entry.status) && entry.station !== 'you' ? { faults: oneMore(b.faults, entry.station) } : {}),
+      ...(entry.agentId !== undefined && !(b.agents ?? []).includes(entry.agentId)
+        ? { agents: [...(b.agents ?? []), entry.agentId].slice(-CREW) }
+        : {}),
     }))
     return entry.id
   })
 }
 
-async function finish($: EngineInterface, id: string | undefined, status: Status): Promise<void> {
+async function finish($: EngineInterface, id: string | undefined, status: Status, patch?: Pick<Board, 'context'>): Promise<void> {
   if (id === undefined) return
   await quietly(async () => {
     const now = await $.clock.now()
-    await update($, board, b => ({
-      ...b,
-      entries: b.entries.map(e => (e.id === id && e.status === 'run' ? { ...e, status, endedAt: now } : e)),
-    }))
+    await update($, board, b => {
+      const open = b.entries.find(e => e.id === id && e.status === 'run')
+      return {
+        ...b,
+        ...patch,
+        entries: b.entries.map(e => (e === open ? { ...e, status, endedAt: now } : e)),
+        ...(open !== undefined && isFault(status) ? { faults: oneMore(b.faults, open.station) } : {}),
+      }
+    })
   })
+}
+
+/** How full the context window is, as the status line has it; costs nothing. */
+async function contextOf($: EngineInterface): Promise<Pick<Board, 'context'>> {
+  const percent = await quietly(async () => (await $.session.usage()).context.percent)
+  return typeof percent === 'number' ? { context: percent } : {}
 }
 
 /** What a settings hook added to the context: shown as the hook acting and, when it brought records, as memory. */
@@ -97,9 +124,24 @@ export const register: Register = (on, options) => {
   // Loses nothing across a reload that matters: a reload never lands in the middle of a call.
   const refused = new Set<string>()
 
+  // The model the main loop last ran on: in this session, or else in the last session in this folder.
+  // The one thing the map keeps between sessions, and only its name.
+  let lastModel: string | undefined
+  let modelKey = 'model'
+
   on('session.start', async ($, e, next) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
     void quietly(() => $.ui.open({ id: PANE, title: t.title }))
+    await quietly(async () => {
+      modelKey = `model:${e.cwd}`
+      const kept = await $.store.get(modelKey)
+      if (lastModel === undefined && typeof kept === 'string') lastModel = kept
+    })
+    await quietly(async () => {
+      const theme = (await $.config.list()).find(row => row.key === 'theme')?.value
+      const isLight = typeof theme === 'string' && theme.toLowerCase().includes('light')
+      await update($, board, b => (b.light === isLight ? b : { ...b, light: isLight }))
+    })
     return next(e)
   })
 
@@ -110,6 +152,8 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined && e.text !== '') {
+      // A new message clears what went wrong on the way to the last answer.
+      await quietly(() => update($, board, b => (b.faults === undefined ? b : { ...b, faults: {} })))
       await begin($, { station: 'you', label: t.newMessage, from: 'inbound', status: 'ok' })
     }
     return next(e)
@@ -117,22 +161,54 @@ export const register: Register = (on, options) => {
 
   on('turn.step', async function* ($, e, next) {
     const isMain = e.agentId === undefined
+    if (isMain && lastModel !== e.model) {
+      const before = lastModel
+      lastModel = e.model
+      void quietly(() => $.store.set(modelKey, e.model))
+      if (before !== undefined) {
+        const now = await quietly(() => $.clock.now())
+        await begin($, {
+          station: 'model',
+          label: `${shortModel(before)} → ${shortModel(e.model)}`,
+          status: 'ok',
+          mark: 'switch',
+          uncounted: true,
+          ...(now !== undefined ? { patch: { switchedAt: now } } : {}),
+        })
+      }
+    }
     const id = await begin($, {
       station: 'model',
       label: `${shortModel(e.model)} · ${t.step(e.index + 1)}${isMain ? '' : ` · ${t.subagent}`}`,
       from: isMain ? 'core' : 'agents',
-      ...(isMain ? { patch: { model: e.model, step: e.index + 1 } } : {}),
+      ...(isMain ? { patch: { model: e.model, step: e.index + 1 } } : { agentId: e.agentId }),
     })
     try {
       return yield* next(e)
     } finally {
-      await finish($, id, 'ok')
+      await finish($, id, 'ok', isMain ? await contextOf($) : undefined)
     }
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId === undefined) {
-      await begin($, { station: 'you', label: e.isAborted ? t.turnAborted : t.answerReady, status: e.isAborted ? 'err' : 'ok' })
+    if (e.agentId !== undefined) {
+      // A subagent's loop is over: it leaves the agents station, and a call of its that never reported back is settled.
+      const agentId = e.agentId
+      await quietly(async () => {
+        const now = await $.clock.now()
+        await update($, board, b => ({
+          ...b,
+          agents: (b.agents ?? []).filter(id => id !== agentId),
+          entries: b.entries.map(x => (x.status === 'run' && x.agentId === agentId ? { ...x, status: 'ok' as const, endedAt: now } : x)),
+        }))
+      })
+    } else {
+      await begin($, {
+        station: 'you',
+        label: e.isAborted ? t.turnAborted : t.answerReady,
+        status: e.isAborted ? 'err' : 'ok',
+        ...(e.isAborted ? {} : { mark: 'done' as const }),
+      })
       // An interrupted call never reports back; left alone its row would pulse for the rest of the session.
       await quietly(async () => {
         const now = await $.clock.now()
@@ -148,7 +224,7 @@ export const register: Register = (on, options) => {
   on('tool.call', async ($, e, next) => {
     const id = await quietly(async () => {
       const seen = classify(e.tool, e as unknown as Record<string, unknown>, setup)
-      return begin($, { ...seen, from: e.agentId === undefined ? 'core' : 'agents' })
+      return begin($, { ...seen, ...(e.agentId === undefined ? { from: 'core' as const } : { from: 'agents' as const, agentId: e.agentId }) })
     })
     try {
       const ran = await next(e)
@@ -208,7 +284,7 @@ export const register: Register = (on, options) => {
     try {
       return await next(e)
     } finally {
-      await finish($, id, 'ok')
+      await finish($, id, 'ok', await contextOf($))
     }
   })
 
@@ -217,13 +293,15 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
 
-    const rows = state.entries.slice(-16).reverse().map(entry => {
-      const mark = entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
-      const took = entry.endedAt === undefined ? t.running : entry.endedAt > entry.startedAt ? formatMs(entry.endedAt - entry.startedAt, t) : ''
-      const color = entry.status === 'run' ? '#e1ac6e' : entry.status === 'ok' ? undefined : '#e8654f'
-      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${took === '' ? '' : `  ${took}`}`
+    const rows = foldRows(state.entries).map(({ entry, times, tookMs }) => {
+      const isSwitch = entry.mark === 'switch'
+      const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
+      const took = entry.endedAt === undefined ? t.running : tookMs > 0 ? formatMs(tookMs, t) : ''
+      // Theme keys, so the rows read on a light theme as well as on a dark one.
+      const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
+      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}${took === '' ? '' : `  ${took}`}`
       return (
-        <Text mono size="footnote" color={color} dimColor={entry.status === 'ok'}>
+        <Text mono size="footnote" color={color} dimColor={entry.status === 'ok' && !isSwitch}>
           {line}
         </Text>
       )

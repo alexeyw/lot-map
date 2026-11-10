@@ -22,7 +22,7 @@ claude plugin install lot-map --marketplace alexeyw/lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns and draws text only; otherwise type `/lot-map`. Built and tested on Claude Code 2.1.317 on macOS.
+The pane opens by itself when a session starts. In a terminal it needs at least 144 columns and draws text only; otherwise type `/lot-map`. Built and tested on Claude Code 2.1.321 on macOS.
 
 ## What lights up
 
@@ -39,11 +39,30 @@ The pane opens by itself when a session starts. In a terminal it needs at least 
 | Skills | skills and tool search |
 | Hooks | settings hooks that refuse a call, ask for permission, add context or take a moment |
 
-A pulse flies out when something starts and returns when it ends. Refusals and errors turn red. Below the map are the current action and the last 16 rows: `●` running, `·` done, `✕` failed or blocked.
+A pulse flies out when something starts and returns when it ends. Refusals and errors turn red.
+
+## Reading the map
+
+- **The route.** A thin line joins the last few stations the main loop went through, in order, and its newest leg draws itself. Model steps are left out, or every leg would pass through Model.
+- **Worn spokes.** A spoke grows thicker and brighter the more its station is used, so at the end of a session the map shows where the work went.
+- **How long.** Two clock hands grow around a station while a call runs: the inner one goes round in a minute, the outer one in ten.
+- **Several at once.** Calls that start together fly side by side, and the station carries their number, such as `×3`.
+- **What went wrong.** A red dot with a count stays on a station from an error or a refusal until your next message.
+- **Memory.** It has a colour of its own. A solid pulse is a memory Claude asked for; a hollow one on a dashed line is what a hook brought unasked. Under the station, the plain number counts the first and `↓` the second.
+- **The context window.** The ring around the centre fills as the session goes, with the percentage above the name. It turns amber at 70% and red at 90%.
+- **A change of model.** The centre and the Model station ring for a few seconds, and the feed gets a row such as `opus 5.5 → fable 5.2`. This also happens when a session starts on a different model from the last session in the same folder.
+- **Subagents.** Each one still at work circles the Agents station as a small dot, and its calls start from there.
+- **The answer.** One wide ring leaves the centre when the answer is ready.
+
+Below the map are the current action with the context percentage, and the last 16 rows: `●` running, `·` done, `✕` failed or blocked, `◆` a change of model. Finished calls that follow one another at one station fold into one row, marked `+2` for the two it stands for besides the one named.
 
 | At work | Subagents | A hook refuses |
 | --- | --- | --- |
 | ![At work](docs/map-working.png) | ![Subagents](docs/map-agents.png) | ![A hook refuses](docs/map-blocked.png) |
+
+| A change of model | After the answer | Light colours |
+| --- | --- | --- |
+| ![A change of model](docs/map-switch.png) | ![After the answer](docs/map-after.png) | ![Light colours](docs/map-light.png) |
 
 ## Options
 
@@ -58,6 +77,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `memoryPaths` | none | parts of a path that make a file a memory |
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only |
+| `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which follows the theme set in Claude Code when the session starts |
 
 For example, Russian labels and your own memory server:
 
@@ -72,6 +92,8 @@ Lists are written with commas.
 ## What it shows and what it keeps
 
 The mod makes no network requests, reads no files, runs no processes, calls no model and adds nothing to the conversation. Its rows live only for the session.
+
+It asks Claude Code for two things: how full the context window is, after each model step, and which theme is set, once at session start. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change.
 
 A label holds a name, never content:
 

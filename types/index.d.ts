@@ -14,6 +14,10 @@ export type Entry = {
   startedAt: number
   endedAt?: number
   status: Status
+  /** The subagent whose loop made the call; absent for the main loop. */
+  agentId?: string
+  /** A moment the map marks: the model changed, or the answer is ready. */
+  mark?: 'switch' | 'done'
 }
 
 export type Board = {
@@ -21,6 +25,18 @@ export type Board = {
   counts: Partial<Record<StationId, number>>
   model?: string
   step?: number
+  /** How many of the memory station's count a hook brought unasked. */
+  pushed?: number
+  /** Errors and refusals per station since the person's last message. */
+  faults?: Partial<Record<StationId, number>>
+  /** Subagents whose loops are still going. */
+  agents?: string[]
+  /** How full the context window is, 0 to 100. */
+  context?: number
+  /** When the model last changed. */
+  switchedAt?: number
+  /** The app's theme is a light one. */
+  light?: boolean
 }
 
 declare module 'claude-code' {

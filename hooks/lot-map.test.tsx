@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
-import { classify, drawMap, firstLine, formatMs, memoryIds, setupFrom } from './map'
+import type { Entry } from '../types'
+import { classify, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -138,7 +139,7 @@ test('the drawing stays within what Svg accepts at its fullest', () => {
     counts: { files: 12345 },
     entries: Array.from({ length: 80 }, (_, i) => ({
       id: String(i),
-      station: stations[i % stations.length],
+      station: stations[i % stations.length] as (typeof stations)[number],
       label: 'x'.repeat(70),
       from: 'core' as const,
       startedAt: now - 100 - i,
@@ -288,5 +289,178 @@ test('the end of a turn settles a call that never reported back', { options: OWN
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /ход прерван/ }))?.text).toContain('Ты')
   expect(await ui.find({ type: 'Text', text: /идёт/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+// ---- what the second version added ---------------------------------------------------------------
+
+const entry = (station: Entry['station'], startedAt: number, more: Partial<Entry> = {}): Entry => ({
+  id: `${station}${startedAt}`,
+  station,
+  label: station,
+  from: 'core',
+  startedAt,
+  endedAt: startedAt + 10,
+  status: 'ok',
+  ...more,
+})
+
+test('the route is the main loop\'s stations in order, repeats and model steps left out', () => {
+  const entries = [
+    entry('you', 1, { from: 'inbound' }),
+    entry('model', 2),
+    entry('memory', 3),
+    entry('memory', 4),
+    entry('model', 5),
+    entry('files', 6),
+    entry('shell', 7, { from: 'agents', agentId: 'a1' }),
+    entry('shell', 8),
+  ]
+  expect(routeOf(entries).map(stop => stop.station)).toEqual(['you', 'memory', 'files', 'shell'])
+  expect(routeOf(entries)[1]?.at).toBe(4)
+  expect(routeOf(entries, 2).map(stop => stop.station)).toEqual(['files', 'shell'])
+
+  const svg = drawMap({ entries, counts: {} }, 5000, STRANGER)
+  expect(svg.split('<path d="M').length - 1).toBe(3)
+  expect(svg).toContain('stroke-dashoffset')
+})
+
+test('finished calls in a row at one station fold into one row, anything else stands alone', () => {
+  const rows = foldRows([
+    entry('files', 1),
+    entry('files', 20),
+    entry('files', 40),
+    entry('shell', 60, { status: 'err' }),
+    entry('shell', 80, { status: 'err' }),
+    entry('model', 100, { mark: 'switch' }),
+    entry('files', 120, { status: 'run', endedAt: undefined }),
+    entry('files', 140),
+  ])
+  expect(rows.map(row => `${row.entry.station} ${row.times} ${row.tookMs}`)).toEqual([
+    'files 1 10',
+    'files 1 0',
+    'model 1 10',
+    'shell 1 10',
+    'shell 1 10',
+    'files 3 30',
+  ])
+  expect(foldRows(Array.from({ length: 40 }, (_, i) => entry(i % 2 ? 'files' : 'shell', i * 20))).length).toBe(16)
+})
+
+test('a spoke wears in with use and memory has a colour of its own', () => {
+  const quiet = drawMap({ entries: [], counts: {} }, 1000, STRANGER)
+  const busy = drawMap({ entries: [], counts: { files: 200, memory: 9 }, pushed: 4 }, 1000, STRANGER)
+  expect(quiet).not.toContain('stroke-width="3.6"')
+  expect(busy).toContain('stroke-width="3.6"')
+  expect(busy).toContain('>5 <tspan fill="#62c7ba">↓4</tspan>')
+  expect(drawMap({ entries: [], counts: { memory: 4 }, pushed: 4 }, 1000, STRANGER)).toContain('><tspan fill="#62c7ba">↓4</tspan>')
+})
+
+test('a long call shows two clock hands, several at once a count, a fault a dot until the next message', () => {
+  const now = 1_000_000
+  const running = (startedAt: number): Entry => entry('shell', startedAt, { status: 'run', endedAt: undefined })
+  const one = drawMap({ entries: [running(now - 90_000)], counts: { shell: 1 } }, now, STRANGER)
+  expect(one).toContain('begin="-30.000s" dur="60.000s" repeatCount="indefinite"')
+  expect(one).toContain('begin="-90.000s" dur="600.000s" fill="freeze"')
+  expect(one).not.toContain('×')
+  const three = drawMap({ entries: [running(now - 300), running(now - 200), running(now - 100)], counts: { shell: 3 } }, now, STRANGER)
+  expect(three).toContain('>×3<')
+  expect(drawMap({ entries: [], counts: {}, faults: { shell: 2 } }, now, STRANGER)).toContain('font-weight="700" fill="#0a0c11">2<')
+  expect(drawMap({ entries: [], counts: {} }, now, STRANGER)).not.toContain('font-weight="700"')
+})
+
+test('the context ring, the crew, the model change and the light theme are drawn only when there is something to show', () => {
+  const now = 1_000_000
+  const bare = drawMap({ entries: [], counts: {} }, now, STRANGER)
+  expect(bare).not.toContain('pathLength="100"')
+  expect(bare).not.toContain('animateTransform')
+  expect(bare).toContain('#0a0c11')
+
+  const full = drawMap({ entries: [], counts: {}, model: 'claude-fable-5-2', context: 92.4, agents: ['a', 'b'], switchedAt: now - 2000 }, now, STRANGER)
+  expect(full).toContain('stroke="#e8654f" pathLength="100" stroke-dasharray="92 100"')
+  expect(full).toContain('>92%<')
+  expect(full.split('<animateTransform').length - 1).toBe(2)
+  expect(full).toContain('repeatCount="4" fill="freeze"')
+  expect(drawMap({ entries: [], counts: {}, switchedAt: now - 9000 }, now, STRANGER)).not.toContain('repeatCount="1" fill="freeze"')
+
+  expect(drawMap({ entries: [], counts: {}, light: true }, now, STRANGER)).toContain('#f5f2ea')
+  expect(drawMap({ entries: [], counts: {}, light: true }, now, setupFrom({ theme: 'dark' }))).toContain('#0a0c11')
+  expect(drawMap({ entries: [], counts: {} }, now, setupFrom({ theme: 'light' }))).toContain('#f5f2ea')
+})
+
+const stepOn = (model: string) => ({ turnId: 't1', index: 0, model, messageCount: 1 }) as const
+
+test('a model that changes mid-session is a row of its own, and the first model of a session is not', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.step', async function* () {
+    return { turnId: 't1', index: 0, answer: '', toolUses: [] } as never
+  })
+  for (const model of ['claude-opus-5-5', 'claude-opus-5-5', 'claude-fable-5-2']) {
+    for await (const _ of $.turn.step(stepOn(model))) void _
+  }
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const row = await ui.find({ type: 'Text', text: /→/ })
+  expect(row?.text).toContain('◆ Модель')
+  expect(row?.text).toContain('opus 5.5 → fable 5.2')
+  expect((await ui.find({ type: 'Text', text: /\+1/ }))?.text).toContain('opus 5.5 · шаг 1')
+  await ui.unmount()
+})
+
+test('a subagent circles the agents station until its loop ends, and its hanging call is settled then', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.step', async function* () {
+    yield { kind: 'text', index: 0, text: 'x' } as never
+    return { turnId: 't2', index: 0, answer: '', toolUses: [] } as never
+  })
+  const hanging = $.turn.step({ ...stepOn('claude-haiku-5-5'), turnId: 't2', agentId: 'a1' } as never)[Symbol.asyncIterator]()
+  await hanging.next()
+
+  let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /идёт/ }))?.text).toContain('субагент')
+  expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('animateTransform')
+  await ui.unmount()
+
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer', agentId: 'a1' } as never)
+
+  ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /идёт/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /ответ готов/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Svg' }))?.props.source).not.toContain('animateTransform')
+  await ui.unmount()
+})
+
+test('what goes wrong stays on its station until the next message; an interrupted turn is no fault', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
+  on('tool.call', () => ({ result: {}, isError: true }) as never)
+
+  await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: true, turnId: 't1', reason: 'aborted' } as never)
+
+  const dots = async (): Promise<number> => {
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+    await ui.unmount()
+    return source.split('font-weight="700"').length - 1
+  }
+  expect(await dots()).toBe(1)
+  await $.turn.start({ text: 'дальше', turnId: 't2' } as never)
+  expect(await dots()).toBe(0)
+})
+
+test('the context window shows as soon as the engine tells how full it is', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000, percent: 37 } } }) as never)
+  on('turn.step', async function* () {
+    return { turnId: 't1', index: 0, answer: '', toolUses: [] } as never
+  })
+  for await (const _ of $.turn.step(stepOn('claude-opus-5-5'))) void _
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('>37%<')
+  expect((await ui.find({ type: 'Text', text: /контекст 37%/ }))?.text).toContain('Сейчас ничего не выполняется')
   await ui.unmount()
 })

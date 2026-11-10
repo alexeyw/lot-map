@@ -26,6 +26,7 @@ export type Strings = {
   nothingYet: string
   noCounts: string
   idle: string
+  context: string
   andMore: (n: number) => string
   webSearch: string
   artifact: string
@@ -74,6 +75,7 @@ const en: Strings = {
   nothingYet: 'Nothing yet.',
   noCounts: 'No counts yet.',
   idle: 'Nothing is running.',
+  context: 'context',
   andMore: n => ` and ${n} more`,
   webSearch: 'web search',
   artifact: 'artifact',
@@ -122,6 +124,7 @@ const ru: Strings = {
   nothingYet: 'Пока ничего не было.',
   noCounts: 'Счётчики пусты.',
   idle: 'Сейчас ничего не выполняется.',
+  context: 'контекст',
   andMore: n => ` и ещё ${n}`,
   webSearch: 'поиск в сети',
   artifact: 'артефакт',
@@ -170,6 +173,7 @@ const es: Strings = {
   nothingYet: 'Todavía nada.',
   noCounts: 'Aún no hay recuentos.',
   idle: 'No hay nada en ejecución.',
+  context: 'contexto',
   andMore: n => ` y ${n} más`,
   webSearch: 'búsqueda web',
   artifact: 'artefacto',
@@ -218,6 +222,7 @@ const fr: Strings = {
   nothingYet: 'Rien pour le moment.',
   noCounts: 'Aucun compteur pour le moment.',
   idle: 'Rien en cours.',
+  context: 'contexte',
   andMore: n => ` et ${n} de plus`,
   webSearch: 'recherche web',
   artifact: 'artefact',
@@ -266,6 +271,7 @@ const de: Strings = {
   nothingYet: 'Noch nichts.',
   noCounts: 'Noch keine Zählerstände.',
   idle: 'Nichts läuft.',
+  context: 'Kontext',
   andMore: n => ` und ${n} weitere`,
   webSearch: 'Websuche',
   artifact: 'Artefakt',

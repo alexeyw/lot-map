@@ -1,6 +1,6 @@
 {
   "name": "lot-map",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
   "license": "MIT",
   "types": "./types/index.d.ts",
@@ -59,6 +59,17 @@
       "title": "Hooks add numbered records",
       "default": false,
       "description": "Turn on if a hook of yours adds memory records numbered like [#123]: the map then shows them on the Memory station, by number only."
+    },
+    "theme": {
+      "type": "string",
+      "title": "Colours",
+      "options": [
+        "auto",
+        "dark",
+        "light"
+      ],
+      "default": "auto",
+      "description": "The map's colours: dark, light, or auto to follow the theme set in Claude Code when the session starts."
     }
   }
 }
