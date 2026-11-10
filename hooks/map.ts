@@ -35,6 +35,8 @@ export type Setup = {
   memoryLabels: ReadonlyMap<string, string>
   hookRecords: boolean
   theme: 'auto' | 'dark' | 'light'
+  /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
+  layout: 'you-top' | 'you-bottom'
 }
 
 const list = (v: unknown): string[] =>
@@ -56,6 +58,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     memoryLabels,
     hookRecords: options.hookRecords === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
+    layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
   }
 }
 
@@ -281,7 +284,9 @@ const TRAIL_STOPS = 7
 
 type Point = { x: number; y: number }
 
-const turn = (i: number): number => (i * 2 * Math.PI) / STATIONS.length
+/** How many places the ring is turned. The stations keep their order, so the far side of the person is always the network. */
+let shift = 0
+const turn = (i: number): number => ((i + shift) * 2 * Math.PI) / STATIONS.length
 const at = (a: number, f = 1): Point => ({ x: CX + RX * f * Math.sin(a), y: CY - RY * f * Math.cos(a) })
 const place = (i: number): Point => at(turn(i))
 const indexOf = (id: StationId): number => STATIONS.findIndex(s => s.id === id)
@@ -475,6 +480,7 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
 
 export function drawMap(board: Board, now: number, setup: Setup): string {
   const c = setup.theme === 'light' ? LIGHT : DARK
+  shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
   const core: Point = { x: CX, y: CY }
   const recent = board.entries.slice(-40)
   const flights = recent.filter(e => now - e.startedAt < PULSE_MS + RIPPLE_MS).slice(-14)

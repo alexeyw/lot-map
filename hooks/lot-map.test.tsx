@@ -482,3 +482,17 @@ test('the context window shows as soon as the engine tells how full it is', { op
   expect((await ui.find({ type: 'Text', text: /контекст 37%/ }))?.text).toContain('Сейчас ничего не выполняется')
   await ui.unmount()
 })
+
+test('the ring can be turned so that the person is at the bottom and the network at the top', () => {
+  const heightOf = (svg: string, name: string): number => Number(new RegExp(`y="([\\d.]+)"[^>]*>${name}<`).exec(svg)?.[1])
+  const board: Board = { entries: [], counts: {} }
+  const usual = drawMap(board, 1000, setupFrom({ theme: 'dark' }))
+  const turned = drawMap(board, 1000, setupFrom({ theme: 'dark', layout: 'you-bottom' }))
+  expect(heightOf(usual, 'You')).toBeLessThan(heightOf(usual, 'Network'))
+  expect(heightOf(turned, 'You')).toBe(heightOf(usual, 'Network'))
+  expect(heightOf(turned, 'Network')).toBe(heightOf(usual, 'You'))
+  expect(heightOf(turned, 'Browser')).toBe(heightOf(usual, 'Model'))
+  // A turned map does not leak into the next one drawn, and nonsense counts as not set.
+  expect(drawMap(board, 1000, setupFrom({ theme: 'dark' }))).toBe(usual)
+  expect(drawMap(board, 1000, setupFrom({ theme: 'dark', layout: 'sideways' }))).toBe(usual)
+})

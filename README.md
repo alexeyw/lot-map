@@ -78,6 +78,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
+| `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 
 For example, Russian labels and your own memory server:
 
@@ -87,7 +88,9 @@ echo '{"language":"ru","memoryServers":"my-memory"}' | claude plugin configure l
 
 Lists are written with commas.
 
-<img src="docs/map-russian.png" width="320" alt="The map with Russian labels">
+| Russian labels | `layout` set to `you-bottom` |
+| --- | --- |
+| <img src="docs/map-russian.png" width="320" alt="The map with Russian labels"> | <img src="docs/map-turned.png" width="320" alt="The map turned, with the person at the bottom"> |
 
 ## What it shows and what it keeps
 
