@@ -260,6 +260,15 @@ const LIGHT: Palette = {
   memHot: '#136a62',
 }
 
+/**
+ * For `auto`: the drawing is made in the dark palette, and these rules repaint it where the surface around it is light.
+ * Every color on the map is one of the palette's, written as a plain attribute, so a rule per color reaches all of it;
+ * a surface that drops the rules shows the dark map, whole.
+ */
+const LIGHT_RULES = `<style>@media (prefers-color-scheme: light){${(Object.keys(DARK) as (keyof Palette)[])
+  .map(k => `[fill="${DARK[k]}"]{fill:${LIGHT[k]}}[stroke="${DARK[k]}"]{stroke:${LIGHT[k]}}`)
+  .join('')}}</style>`
+
 const FONT = 'font-family="SF Mono, ui-monospace, Menlo, monospace"'
 
 const PULSE_MS = 800
@@ -280,12 +289,6 @@ const indexOf = (id: StationId): number => STATIONS.findIndex(s => s.id === id)
 const n1 = (v: number): string => (Math.round(v * 10) / 10).toString()
 /** A moment on the drawing's own clock, which starts at zero each time it is drawn; a past moment is negative. */
 const clock = (ms: number): string => `${(ms / 1000).toFixed(3)}s`
-
-/** A color between two, `k` of the way from the first. */
-function mix(a: string, b: string, k: number): string {
-  const part = (s: string, i: number): number => parseInt(s.slice(1 + 2 * i, 3 + 2 * i), 16)
-  return `#${[0, 1, 2].map(i => Math.round(part(a, i) + (part(b, i) - part(a, i)) * k).toString(16).padStart(2, '0')).join('')}`
-}
 
 /** Where a straight line from `from` to `to` meets the circle of radius `r` around `from`. */
 function edge(from: Point, to: Point, r: number): Point {
@@ -428,17 +431,19 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
     under += hand(NODE + 4, 2.2, 60_000, false) + hand(NODE + 8, 1.2, 600_000, true)
   }
 
-  // A lit node holds its color while something runs, otherwise it cools down to the resting line.
-  const stroke = running.length > 0 ? color : c.line
+  // A lit node wears a ring of its color while something runs; afterwards the ring fades back to the resting line.
+  const lit = `<circle cx="${x}" cy="${y}" r="${NODE}" fill="none" stroke="${color}" stroke-width="1.2"`
   const cooling =
-    running.length === 0 && (isLit || isAlarm)
-      ? `<animate attributeName="stroke" values="${color};${c.line}" begin="${clock(-fade)}" dur="${clock(span)}" fill="freeze"/>`
-      : ''
+    running.length > 0
+      ? `${lit}/>`
+      : isLit || isAlarm
+        ? `${lit} opacity="0"><animate attributeName="opacity" values="1;0" begin="${clock(-fade)}" dur="${clock(span)}" fill="freeze"/></circle>`
+        : ''
   const glyphColor = isAlarm ? c.red : isLit ? hot : s.id === 'memory' && count > 0 ? main : c.ash
   // The words stand on a rim of the ground's own color, so a line that passes behind them never strikes them through.
   const rim = `paint-order="stroke" stroke="${c.ground}" stroke-width="3.5" stroke-linejoin="round"`
   let over =
-    `<circle cx="${x}" cy="${y}" r="${NODE}" fill="${c.raised}" stroke="${stroke}" stroke-width="1.2">${cooling}</circle>` +
+    `<circle cx="${x}" cy="${y}" r="${NODE}" fill="${c.raised}" stroke="${c.line}" stroke-width="1.2"/>${cooling}` +
     `<path transform="translate(${x} ${y})" d="${s.icon}" fill="none" stroke="${glyphColor}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>` +
     `<text x="${x}" y="${n1(p.y + NODE + 15)}" text-anchor="middle" ${FONT} font-size="11.5" ${rim} fill="${isLit || isAlarm ? c.bone : c.ash}">${names[s.id]}</text>`
 
@@ -467,12 +472,9 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
   return { under, over }
 }
 
-/** Which palette to draw in: the person's choice, or else what the app's theme said at session start. */
-const paletteOf = (board: Board, setup: Setup): Palette =>
-  setup.theme === 'light' || (setup.theme === 'auto' && board.light === true) ? LIGHT : DARK
 
 export function drawMap(board: Board, now: number, setup: Setup): string {
-  const c = paletteOf(board, setup)
+  const c = setup.theme === 'light' ? LIGHT : DARK
   const core: Point = { x: CX, y: CY }
   const recent = board.entries.slice(-40)
   const flights = recent.filter(e => now - e.startedAt < PULSE_MS + RIPPLE_MS).slice(-14)
@@ -497,8 +499,9 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
     const a = edge(core, p, HUB)
     const b = edge(p, core, NODE)
     const worn = Math.min(1, Math.log2(1 + (board.counts[s.id] ?? 0)) / 7)
-    const stroke = mix(c.spoke, s.id === 'memory' ? c.mem : c.accent, worn * 0.55)
-    body += `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke="${stroke}" stroke-width="${n1(1 + 2.6 * worn)}" stroke-linecap="round"/>`
+    const line = `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke-width="${n1(1 + 2.6 * worn)}" stroke-linecap="round"`
+    body += `${line} stroke="${c.spoke}"/>`
+    if (worn > 0) body += `${line} stroke="${s.id === 'memory' ? c.mem : c.accent}" opacity="${n1(worn * 0.55)}"/>`
   })
 
   const scene: Scene = { entries: recent, board, now, c, names: setup.t.stations }
@@ -602,7 +605,7 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
   }
 
   // Twice the viewBox, so the picture fills whatever room the pane gives it.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}">${body}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}">${setup.theme === 'auto' ? LIGHT_RULES : ''}${body}</svg>`
 }
 
 function escapeXml(text: string): string {

@@ -77,7 +77,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `memoryPaths` | none | parts of a path that make a file a memory |
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only |
-| `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which follows the theme set in Claude Code when the session starts |
+| `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 
 For example, Russian labels and your own memory server:
 
@@ -93,7 +93,7 @@ Lists are written with commas.
 
 The mod makes no network requests, reads no files, runs no processes, calls no model and adds nothing to the conversation. Its rows live only for the session.
 
-It asks Claude Code for two things: how full the context window is, after each model step, and which theme is set, once at session start. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change.
+It asks Claude Code for one thing: how full the context window is, after each model step. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change.
 
 A label holds a name, never content:
 

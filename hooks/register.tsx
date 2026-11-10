@@ -137,11 +137,6 @@ export const register: Register = (on, options) => {
       const kept = await $.store.get(modelKey)
       if (lastModel === undefined && typeof kept === 'string') lastModel = kept
     })
-    await quietly(async () => {
-      const theme = (await $.config.list()).find(row => row.key === 'theme')?.value
-      const isLight = typeof theme === 'string' && theme.toLowerCase().includes('light')
-      await update($, board, b => (b.light === isLight ? b : { ...b, light: isLight }))
-    })
     return next(e)
   })
 

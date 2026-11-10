@@ -35,8 +35,6 @@ export type Board = {
   context?: number
   /** When the model last changed. */
   switchedAt?: number
-  /** The app's theme is a light one. */
-  light?: boolean
 }
 
 declare module 'claude-code' {

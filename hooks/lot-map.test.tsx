@@ -152,6 +152,10 @@ test('the drawing stays within what Svg accepts at its fullest', () => {
   expect(svg).toContain('opus 5.5')
   expect(svg).not.toContain('xxxxx')
   expect(svg).not.toContain('NaN')
+  // Attributes are well formed: none empty, none run into the next.
+  expect(svg).not.toContain('=""')
+  expect(/"[a-z-]+="/.test(svg)).toBe(false)
+  expect(svg).toContain('font-family="SF Mono, ui-monospace, Menlo, monospace"')
   expect(svg).not.toContain('Infinity')
 })
 
@@ -383,9 +387,23 @@ test('the context ring, the crew, the model change and the light theme are drawn
   expect(full).toContain('repeatCount="4" fill="freeze"')
   expect(drawMap({ entries: [], counts: {}, switchedAt: now - 9000 }, now, STRANGER)).not.toContain('repeatCount="1" fill="freeze"')
 
-  expect(drawMap({ entries: [], counts: {}, light: true }, now, STRANGER)).toContain('#f5f2ea')
-  expect(drawMap({ entries: [], counts: {}, light: true }, now, setupFrom({ theme: 'dark' }))).toContain('#0a0c11')
-  expect(drawMap({ entries: [], counts: {} }, now, setupFrom({ theme: 'light' }))).toContain('#f5f2ea')
+  // Left to itself the map is drawn dark and carries the rules that repaint it on a light surface; a set theme carries none.
+  expect(bare).toContain('<style>@media (prefers-color-scheme: light){[fill="#0a0c11"]{fill:#f5f2ea}')
+  expect(bare).toContain('<rect width="460" height="430" rx="12" fill="#0a0c11"/>')
+  const dark = drawMap({ entries: [], counts: {} }, now, setupFrom({ theme: 'dark' }))
+  expect(dark).not.toContain('<style>')
+  expect(dark).not.toContain('#f5f2ea')
+  const light = drawMap({ entries: [], counts: {} }, now, setupFrom({ theme: 'light' }))
+  expect(light).not.toContain('<style>')
+  expect(light).toContain('<rect width="460" height="430" rx="12" fill="#f5f2ea"/>')
+  // Whatever is lit, every color the dark drawing uses is one the rules know.
+  const lit = drawMap(
+    { entries: [entry('memory', now - 100, { from: 'inbound' }), entry('shell', now - 50, { status: 'err' }), entry('files', now - 20, { status: 'run', endedAt: undefined })], counts: { files: 50, memory: 3 }, pushed: 1, faults: { shell: 1 }, context: 80, agents: ['a'], switchedAt: now - 10, model: 'claude-fable-5-2' },
+    now,
+    setupFrom({ theme: 'dark' }),
+  )
+  const known = new Set(['#0a0c11', '#12151c', '#272c36', '#1a1e27', '#ebe6dc', '#9ba1ab', '#6b7280', '#e1ac6e', '#f0c595', '#e8654f', '#62c7ba', '#a5e6dc'])
+  expect([...new Set(lit.match(/#[0-9a-f]{6}/g) ?? [])].filter(color => !known.has(color))).toEqual([])
 })
 
 const stepOn = (model: string) => ({ turnId: 't1', index: 0, model, messageCount: 1 }) as const
