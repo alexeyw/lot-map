@@ -88,7 +88,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `language` | `en` | `en`, `ru`, `es`, `fr` or `de` |
+| `language` | `en` | `en`, `ru`, `es`, `fr`, `de` or `it` |
 | `coreName` | `CLAUDE` | what the circle in the middle says, up to ten characters |
 | `memoryServers` | `memory` | MCP servers whose tools light Memory |
 | `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py` |
