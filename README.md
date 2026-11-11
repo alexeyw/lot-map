@@ -39,6 +39,8 @@ The pane opens by itself when a session starts. In a terminal it needs at least 
 | Skills | skills and tool search |
 | Hooks | settings hooks that refuse a call, ask for permission, add context or take a moment |
 
+On Windows the PowerShell tool is read the same way as Bash, with PowerShell's own names: `Get-Content` and `Select-String` light Files, `Invoke-WebRequest` lights Network. A program run by its full path is read by its name, also from a quoted path with a space, and `CURL.EXE` is `curl`.
+
 The shell stations go by the command's name, not by what it does: a script that opens a connection itself, such as `python -c "…"`, shows as Shell.
 
 A pulse flies out when something starts and returns when it ends. Refusals and errors turn red.

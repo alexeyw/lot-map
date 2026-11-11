@@ -595,3 +595,38 @@ test('the map paints its ground unless told to leave the surface showing', () =>
   // The setting does not leak into the next drawing.
   expect(drawMap(board, 0, SETUP)).toMatch(ground)
 })
+
+test('a quoted path with a space is one command, and a Windows program is read whatever its capitals', () => {
+  const at = (command: string) => classify('Bash', { command }, SETUP).station
+  const label = (command: string) => classify('Bash', { command }, SETUP).label
+  expect(at('"C:\\Program Files\\Git\\cmd\\git.exe" push origin main')).toBe('web')
+  expect(label('"C:\\Program Files\\Git\\cmd\\git.exe" status')).toBe('git')
+  expect(at("'/Applications/My Tools/bin/curl' -s https://a.b/x")).toBe('web')
+  expect(at('C:\\tools\\CURL.EXE -s https://a.b/x')).toBe('web')
+  expect(at('npm.cmd install')).toBe('web')
+  expect(at('NPM.CMD test')).toBe('shell')
+  // Without a Windows ending a name keeps its case: on other systems `Curl` is another program.
+  expect(at('Curl -s https://a.b/x')).toBe('shell')
+  // A quote left open does not swallow the line into nothing.
+  expect(label('grep "unfinished x.txt')).toBe('grep')
+  expect(at('cat "my notes.txt" | grep "two words"')).toBe('files')
+})
+
+test('the PowerShell tool is read like the shell: its description as the label, its commands by their own names', () => {
+  const ps = (command: string, description = '') => classify('PowerShell', { command, description }, SETUP)
+  expect(ps('Get-Content C:\\Users\\a\\private\\notes.txt', 'Read the notes').label).toBe('Read the notes')
+  expect(ps('Get-Content C:\\Users\\a\\private\\notes.txt').label).toBe('Get-Content')
+  expect(ps('Get-Content notes.txt | Select-String todo').station).toBe('files')
+  expect(ps('get-childitem -Recurse | Where-Object { $_.Length -gt 1kb } | Sort-Object Length').station).toBe('files')
+  expect(ps('$text = Get-Content notes.txt; Write-Host done').station).toBe('files')
+  expect(ps('Get-Content C:\\Users\\a\\.recall\\n.md').station).toBe('memory')
+  expect(ps('Invoke-WebRequest https://a.b/x -OutFile x.zip').station).toBe('web')
+  expect(ps('IRM https://a.b/x').station).toBe('web')
+  expect(ps('& "C:\\Program Files\\Git\\cmd\\git.exe" push origin main').station).toBe('web')
+  expect(ps('git status').station).toBe('shell')
+  expect(ps('Get-Process | Stop-Process').station).toBe('shell')
+  expect(ps('recall add private words').label).toBe('add')
+  expect(ps('Invoke-WebRequest https://user:private@a.b/secret?x=1').label).toBe('Invoke-WebRequest')
+  // The same names mean nothing to the Bash tool.
+  expect(classify('Bash', { command: 'Get-Content notes.txt' }, SETUP).station).toBe('shell')
+})

@@ -132,6 +132,11 @@ const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
 }
 const RUNNERS = new Set(['python', 'python3', 'bash', 'sh', 'zsh', 'node'])
 
+// PowerShell's own names for the same three kinds of command, in lower case: PowerShell does not tell cases apart.
+const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-content', 'out-file', 'get-childitem', 'gci', 'dir', 'get-item', 'gi', 'select-string', 'sls', 'copy-item', 'cpi', 'copy', 'move-item', 'mi', 'move', 'rename-item', 'rni', 'ren', 'new-item', 'ni', 'md', 'test-path', 'resolve-path', 'get-filehash'])
+const PS_NEUTRAL_WORDS = new Set(['write-host', 'write-output', 'set-location', 'sl', 'get-location', 'gl', 'start-sleep', 'select-object', 'select', 'where-object', 'where', '?', 'foreach-object', 'foreach', '%', 'sort-object', 'measure-object', 'measure', 'format-table', 'ft', 'format-list', 'fl', 'out-string', 'out-null'])
+const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'test-connection', 'test-netconnection', 'resolve-dnsname', 'start-bitstransfer'])
+
 /**
  * The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument.
  * `deep` also cuts at `$(…)`, backticks and brackets, to find a command run inside another; the pieces around it are then no commands.
@@ -139,7 +144,8 @@ const RUNNERS = new Set(['python', 'python3', 'bash', 'sh', 'zsh', 'node'])
 function segments(command: string, deep = false): string[][] {
   return command
     .split(deep ? /&&|\|\||;|\||\n|\$\(|`|\(|\)/ : /&&|\|\||;|\||\n/)
-    .map(part => part.trim().split(/\s+/).filter(Boolean))
+    // Cut at spaces outside quotes, so that "C:\Program Files\Git\cmd\git.exe" stays one word.
+    .map(part => part.match(/(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g) ?? [])
     .map(words => {
       let i = 0
       while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i] ?? '')) i++
@@ -148,8 +154,14 @@ function segments(command: string, deep = false): string[][] {
     .filter(words => words.length > 0)
 }
 
-/** A command's own name: no quotes, no folder before it, and no `.exe` after it, so `C:\tools\curl.exe` is `curl`. */
-const base = (word = ''): string => (slashes(word.replace(/["']/g, '')).split('/').pop() ?? word).replace(/\.exe$/i, '')
+/**
+ * A command's own name: no quotes and no folder before it. A Windows program loses `.exe`, `.cmd` or `.bat` and its
+ * capitals with it, since Windows does not tell `CURL.EXE` from `curl`; any other name keeps its case.
+ */
+const base = (word = ''): string => {
+  const name = slashes(word.replace(/["']/g, '')).split('/').pop() ?? word
+  return /\.(?:exe|cmd|bat)$/i.test(name) ? name.replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase() : name
+}
 
 /** A script's name without its ending: `recall-sync.py` is `recall-sync`. */
 const stem = (name: string): string => name.replace(/\.[a-z0-9]+$/i, '')
@@ -168,22 +180,35 @@ function memoryLabel(words: string[], setup: Setup): string {
   return setup.memorySubcommands.has(sub) ? sub : head
 }
 
-function classifyBash(command: string, description: string, setup: Setup): Classified {
-  const lines = segments(command)
+/** The line of a shell tool. `powershell` adds PowerShell's own command names and reads every name in lower case. */
+function classifyShell(command: string, description: string, setup: Setup, powershell = false): Classified {
+  const name = (word?: string): string => (powershell ? base(word).toLowerCase() : base(word))
+  // PowerShell runs a quoted path with `&` and keeps results in `$name = ...`: neither is the command.
+  const own = (words: string[]): string[] => {
+    if (!powershell) return words
+    let i = 0
+    if (/^\$[\w:]+$/.test(words[0] ?? '') && words[1] === '=') i = 2
+    if (words[i] === '&' || words[i] === '.') i++
+    return words.slice(i)
+  }
+  const lines = segments(command).map(own).filter(words => words.length > 0)
   const label = description.trim() || base(lines[0]?.[0] ?? 'shell')
   for (const words of lines) {
-    const head = base(words[0])
+    const head = name(words[0])
     const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
     if (setup.memoryCommands.some(c => named(head, c) || named(script, c))) {
       return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
-  for (const words of segments(command, true)) {
-    const head = base(words[0])
-    if (NET_WORDS.has(head) || NET_SUBCOMMANDS[head]?.has(words[1] ?? '') === true) return { station: 'web', label }
+  for (const words of segments(command, true).map(own)) {
+    const head = name(words[0])
+    const sub = words[1] ?? ''
+    if (NET_WORDS.has(head) || (powershell && PS_NET_WORDS.has(head)) || NET_SUBCOMMANDS[head]?.has(sub) === true) return { station: 'web', label }
   }
-  const real = lines.filter(words => !NEUTRAL_WORDS.has(base(words[0])))
-  if (real.length > 0 && real.every(words => FILE_WORDS.has(base(words[0])))) {
+  const isNeutral = (head: string): boolean => NEUTRAL_WORDS.has(head) || (powershell && PS_NEUTRAL_WORDS.has(head))
+  const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
+  const real = lines.filter(words => !isNeutral(name(words[0])))
+  if (real.length > 0 && real.every(words => isFile(name(words[0])))) {
     return { station: isMemoryPath(command, setup) ? 'memory' : 'files', label }
   }
   return { station: 'shell', label }
@@ -203,7 +228,9 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'Glob':
       return { station: 'files', label: tool }
     case 'Bash':
-      return classifyBash(str(input.command), str(input.description), setup)
+      return classifyShell(str(input.command), str(input.description), setup)
+    case 'PowerShell':
+      return classifyShell(str(input.command), str(input.description), setup, true)
     case 'WebFetch':
       return { station: 'web', label: hostOf(str(input.url)) }
     case 'WebSearch':
