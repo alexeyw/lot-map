@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { TEXT_MAP_WIDTH, classify, clean, drawMap, drawTextMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -567,4 +567,67 @@ test('the ring can be turned so that the person is at the bottom and the network
   // A turned map does not leak into the next one drawn, and nonsense counts as not set.
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark' }))).toBe(usual)
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark', layout: 'sideways' }))).toBe(usual)
+})
+
+test('the map in characters has every station once, the one at work lit, and fits its width in every language', () => {
+  const entry = (station: string, status: string, id: string) => ({ id, station, label: 'x', from: 'core', startedAt: 1, status, ...(status === 'run' ? {} : { endedAt: 2 }) })
+  const board = {
+    entries: [entry('files', 'ok', 'a'), entry('hooks', 'block', 'b'), entry('memory', 'ok', 'c'), entry('shell', 'run', 'd')],
+    counts: { files: 123, hooks: 1, memory: 2, shell: 1 },
+    faults: { hooks: 1 },
+    model: 'claude-opus-5-5',
+  } as never
+  const rows = drawTextMap(board, SETUP)
+  const flat = rows.flat()
+  const tone = (name: string) => flat.find(c => c.text.includes(name))?.tone
+  expect(rows.length).toBe(7)
+  expect(tone('Терминал')).toBe('hot')
+  expect(tone('Хуки')).toBe('fault')
+  expect(tone('Файлы')).toBe('plain')
+  expect(tone('Память')).toBe('plain')
+  expect(tone('Браузер')).toBe('dim')
+  expect(flat.find(c => c.text.includes('ДОМ'))?.text).toBe('( ДОМ · opus 5.5 )')
+  expect(rows[0]?.map(c => c.text).join('')).toContain('Ты')
+  expect(rows[6]?.map(c => c.text).join('')).toContain('Сеть')
+
+  // With nothing running, the station the work last went to stays marked.
+  const settled = { ...(board as object), entries: [entry('files', 'ok', 'a'), entry('memory', 'ok', 'c')], faults: {} } as never
+  expect(drawTextMap(settled, SETUP).flat().find(c => c.text.includes('Память'))?.tone).toBe('last')
+
+  const turned = drawTextMap(board, setupFrom({ ...OWN, layout: 'you-bottom' }))
+  expect(turned[6]?.map(c => c.text).join('')).toContain('Ты')
+  expect(turned[0]?.map(c => c.text).join('')).toContain('Сеть')
+
+  const full = { entries: [], counts: Object.fromEntries(['you', 'model', 'memory', 'files', 'shell', 'web', 'browser', 'agents', 'skills', 'hooks'].map(s => [s, 9999])) } as never
+  for (const language of LANGUAGES) {
+    const drawn = drawTextMap(full, setupFrom({ language, coreName: 'ЖЖЖЖЖЖЖЖЖЖ' }))
+    for (const row of drawn) expect(row.map(c => c.text).join('').length).toBeLessThanOrEqual(TEXT_MAP_WIDTH)
+    for (const name of Object.values(stringsFor(language).stations)) expect(drawn.flat().filter(c => c.text.includes(name)).length).toBeGreaterThanOrEqual(1)
+  }
+})
+
+test('a terminal gets the map in characters, and only rows of text with terminalMap off', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/content.py' })
+
+  const terminal = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await terminal.find({ type: 'Text', text: /\( ДОМ/ }))?.text).toContain('ДОМ')
+  expect(await terminal.find({ type: 'Text', text: /Файлы 1/ })).toBeDefined()
+  await terminal.unmount()
+
+  const desktop = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await desktop.find({ type: 'Text', text: /\( ДОМ/ })).toBeUndefined()
+  await desktop.unmount()
+})
+
+test('with terminalMap off a terminal shows the counts in one line', { options: { ...OWN, terminalMap: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/content.py' })
+
+  const terminal = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await terminal.find({ type: 'Text', text: /\( ДОМ/ })).toBeUndefined()
+  expect(await terminal.find({ type: 'Text', text: /^Файлы 1$/ })).toBeDefined()
+  await terminal.unmount()
 })

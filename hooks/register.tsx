@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, drawTextMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -305,6 +305,28 @@ export const register: Register = (on, options) => {
     const current = <Text mono size="footnote">{describeNow(state, t)}</Text>
 
     if (e.surface === 'terminal') {
+      if (setup.terminalMap) {
+        const map = drawTextMap(state, setup).map(cells => (
+          <Box flexDirection="row">
+            {cells.map(cell => (
+              <Text
+                color={cell.tone === 'hot' ? 'claude' : cell.tone === 'fault' ? 'error' : undefined}
+                bold={cell.tone === 'hot' || cell.tone === 'last'}
+                dimColor={cell.tone === 'dim'}
+              >
+                {cell.text}
+              </Text>
+            ))}
+          </Box>
+        ))
+        return (
+          <Box flexDirection="column">
+            {map}
+            {current}
+            {feed}
+          </Box>
+        )
+      }
       const tally = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0).map(s => `${t.stations[s.id]} ${state.counts[s.id]}`).join(' · ')
       return (
         <Box flexDirection="column">

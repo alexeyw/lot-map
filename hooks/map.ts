@@ -41,6 +41,8 @@ export type Setup = {
   theme: 'auto' | 'dark' | 'light'
   /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
   layout: 'you-top' | 'you-bottom'
+  /** Whether a terminal, which draws no picture, gets the map made of characters above its rows. */
+  terminalMap: boolean
 }
 
 const list = (v: unknown): string[] =>
@@ -65,6 +67,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     hookReasons: options.hookReasons === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
+    terminalMap: options.terminalMap !== false,
   }
 }
 
@@ -701,4 +704,74 @@ export function describeNow(board: Board, t: Strings): string {
   const top = running[running.length - 1]
   if (top === undefined) return `${t.idle}${context}`
   return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}${context}`
+}
+
+// ---- the map in characters --------------------------------------------------------------------
+
+/** A piece of a row of the character map. `hot` is at work now, `last` is where the work last went, `fault` holds an error or a refusal. */
+export type Cell = { text: string; tone: 'hot' | 'last' | 'plain' | 'dim' | 'fault' }
+
+/** The widest a row can get, with the longest names and four-digit counts. A side pane of a terminal is about fifty columns wide, and everyday rows stay within that. */
+export const TEXT_MAP_WIDTH = 56
+const MIDDLE = 25
+
+/**
+ * Where each place of the ring sits on seven rows: the row, and the column its text is centred on, ends at or starts at.
+ * Place 0 is the top and the places go clockwise, as on the drawing.
+ */
+const PLACES: { row: number; at: number; align: 'centre' | 'end' | 'start' }[] = [
+  { row: 0, at: MIDDLE, align: 'centre' },
+  { row: 1, at: MIDDLE + 6, align: 'start' },
+  { row: 2, at: MIDDLE + 11, align: 'start' },
+  { row: 4, at: MIDDLE + 11, align: 'start' },
+  { row: 5, at: MIDDLE + 6, align: 'start' },
+  { row: 6, at: MIDDLE, align: 'centre' },
+  { row: 5, at: MIDDLE - 6, align: 'end' },
+  { row: 4, at: MIDDLE - 11, align: 'end' },
+  { row: 2, at: MIDDLE - 11, align: 'end' },
+  { row: 1, at: MIDDLE - 6, align: 'end' },
+]
+
+/**
+ * The map for a surface that draws no picture: the ten stations in a ring of text around the agent.
+ * A station at work is `hot`, the one the work last went to is `last`, one with an error or a refusal is `fault`,
+ * one never used is `dim`. There are no pulses and no spokes: text cannot carry them.
+ */
+export function drawTextMap(board: Board, setup: Setup): Cell[][] {
+  const { t } = setup
+  const turned = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
+  const running = new Set(board.entries.filter(e => e.status === 'run').map(e => e.station))
+  const latest = board.entries[board.entries.length - 1]?.station
+  const rows: { from: number; cell: Cell }[][] = Array.from({ length: 7 }, () => [])
+
+  STATIONS.forEach((station, i) => {
+    const place = PLACES[(i + turned) % STATIONS.length]
+    if (place === undefined) return
+    const count = board.counts[station.id] ?? 0
+    const faults = board.faults?.[station.id] ?? 0
+    const tone: Cell['tone'] = faults > 0 ? 'fault' : running.has(station.id) ? 'hot' : count === 0 ? 'dim' : station.id === latest ? 'last' : 'plain'
+    const mark = tone === 'fault' ? '✕' : tone === 'hot' || tone === 'last' ? '●' : tone === 'dim' ? '·' : '○'
+    const name = `${t.stations[station.id]}${count > 0 ? ` ${count}` : ''}`
+    // On the left the mark stands after the name, so that the marks themselves make the ring.
+    const text = place.align === 'end' ? `${name} ${mark}` : `${mark} ${name}`
+    const from = place.align === 'start' ? place.at : place.align === 'end' ? place.at + 1 - text.length : place.at - Math.floor(text.length / 2)
+    rows[place.row]?.push({ from: Math.max(0, from), cell: { text, tone } })
+  })
+
+  const model = board.model === undefined ? '' : ` · ${shortModel(board.model)}`
+  const core = `( ${setup.core}${model} )`
+  rows[3]?.push({ from: Math.max(0, MIDDLE - Math.floor(core.length / 2)), cell: { text: core, tone: running.has('model') ? 'hot' : 'plain' } })
+
+  return rows.map(row => {
+    const cells: Cell[] = []
+    let at = 0
+    for (const { from, cell } of row.sort((a, b) => a.from - b.from)) {
+      // Two names that would run into each other keep one space between them.
+      const gap = Math.max(at === 0 ? 0 : 1, from - at)
+      if (gap > 0) cells.push({ text: ' '.repeat(gap), tone: 'plain' })
+      cells.push(cell)
+      at += gap + cell.text.length
+    }
+    return cells
+  })
 }

@@ -22,7 +22,7 @@ claude plugin install lot-map --marketplace alexeyw/lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns and draws text only; otherwise type `/lot-map`. Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
+The pane opens by itself when a session starts. In a terminal it opens by itself in a window of at least 144 columns; in a narrower one type `/lot-map`. A terminal draws no picture, so there the map is [made of characters](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
 
 ## What lights up
 
@@ -66,6 +66,33 @@ Below the map are the current action with the context percentage, and the last 1
 | --- | --- | --- |
 | ![A change of model](docs/map-switch.png) | ![After the answer](docs/map-after.png) | ![Light colours](docs/map-light.png) |
 
+## In a terminal
+
+Claude Code gives a mod a picture only in the desktop app and in VS Code. In a terminal the pane holds the same map made of characters, with the rows of calls under it:
+
+```text
+                      ○ You 2
+           Hooks 2 ✕           ○ Model 14
+     Skills 1 ○                     ○ Memory 5
+               ( CLAUDE · opus 5.5 )
+       Agents ·                     ○ Files 9
+           Browser ·           ● Shell 6
+                    ○ Network 3
+Shell: Run the tests · context 41%
+● Shell    Run the tests  running
+· Model    opus 5.5 · step 14  2.3 s
+```
+
+| Mark | Meaning |
+| --- | --- |
+| `●` in colour | at work now |
+| `●` | where the work last went |
+| `○` | used in this session; the number is how many times |
+| `·` | not used yet |
+| `✕` | an error or a refusal since your last message |
+
+There are no pulses, spokes or route here: text cannot carry them. The map is seven rows high and up to 56 columns wide. Set `terminalMap` to `false` to keep only the rows of text.
+
 ## Options
 
 The install offers them on a screen. Later, use `/config` in a terminal or `claude plugin configure`, then restart the session.
@@ -82,6 +109,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
 | `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
+| `terminalMap` | `true` | in a terminal, draw the map with characters above the rows; `false` leaves the rows and one line of counts |
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 
 For example, Russian labels and your own memory server:
