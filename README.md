@@ -35,6 +35,8 @@ claude plugin update lot-map@lot-map
 
 Then start a new session. The first command is needed: without it the second one reports the installed version as the latest.
 
+What each version changed is in [CHANGELOG.md](CHANGELOG.md).
+
 ## What lights up
 
 | Station | When |
