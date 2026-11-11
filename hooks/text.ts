@@ -20,8 +20,6 @@ export type Strings = {
   atStart: string
   records: (n: number, shown: string) => string
   stopped: (tool: string) => string
-  askedPermission: (tool: string) => string
-  checkBefore: (tool: string) => string
   running: string
   nothingYet: string
   noCounts: string
@@ -69,8 +67,6 @@ const en: Strings = {
   atStart: 'at session start',
   records: (n, shown) => `${n} record${n === 1 ? '' : 's'}: ${shown}`,
   stopped: tool => `stopped ${tool}`,
-  askedPermission: tool => `asked permission: ${tool}`,
-  checkBefore: tool => `check before ${tool}`,
   running: 'running',
   nothingYet: 'Nothing yet.',
   noCounts: 'No counts yet.',
@@ -118,8 +114,6 @@ const ru: Strings = {
   atStart: 'при старте',
   records: (n, shown) => `записей ${n}: ${shown}`,
   stopped: tool => `остановил ${tool}`,
-  askedPermission: tool => `спросил разрешение: ${tool}`,
-  checkBefore: tool => `проверка перед ${tool}`,
   running: 'идёт',
   nothingYet: 'Пока ничего не было.',
   noCounts: 'Счётчики пусты.',
@@ -167,8 +161,6 @@ const es: Strings = {
   atStart: 'al iniciar la sesión',
   records: (n, shown) => `${n} registro${n === 1 ? '' : 's'}: ${shown}`,
   stopped: tool => `detuvo ${tool}`,
-  askedPermission: tool => `pidió permiso: ${tool}`,
-  checkBefore: tool => `comprobación antes de ${tool}`,
   running: 'en curso',
   nothingYet: 'Todavía nada.',
   noCounts: 'Aún no hay recuentos.',
@@ -216,8 +208,6 @@ const fr: Strings = {
   atStart: 'au démarrage de la session',
   records: (n, shown) => `${n} enregistrement${n > 1 ? 's' : ''} : ${shown}`,
   stopped: tool => `${tool} arrêté`,
-  askedPermission: tool => `autorisation demandée : ${tool}`,
-  checkBefore: tool => `vérification avant ${tool}`,
   running: 'en cours',
   nothingYet: 'Rien pour le moment.',
   noCounts: 'Aucun compteur pour le moment.',
@@ -265,8 +255,6 @@ const de: Strings = {
   atStart: 'beim Sitzungsstart',
   records: (n, shown) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'}: ${shown}`,
   stopped: tool => `${tool} gestoppt`,
-  askedPermission: tool => `um Erlaubnis gefragt: ${tool}`,
-  checkBefore: tool => `Prüfung vor ${tool}`,
   running: 'läuft',
   nothingYet: 'Noch nichts.',
   noCounts: 'Noch keine Zählerstände.',
@@ -314,8 +302,6 @@ const it: Strings = {
   atStart: "all'avvio della sessione",
   records: (n, shown) => `${n} ${n === 1 ? 'voce' : 'voci'}: ${shown}`,
   stopped: tool => `${tool} fermato`,
-  askedPermission: tool => `permesso chiesto: ${tool}`,
-  checkBefore: tool => `controllo prima di ${tool}`,
   running: 'in corso',
   nothingYet: 'Ancora niente.',
   noCounts: 'Ancora nessun conteggio.',

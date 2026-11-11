@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, hookRefusal, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -148,10 +148,6 @@ export const register: Register = (on, options) => {
   // The feed's second column fits the longest station name of the language.
   const column = Math.max(8, ...Object.values(t.stations).map(name => name.length))
 
-  // Calls a settings hook refused, so that the tool's own row reads as blocked and not as an error.
-  // Loses nothing across a reload that matters: a reload never lands in the middle of a call.
-  const refused = new Set<string>()
-
   // The model the main loop last ran on: in this session, or else in the last session in this folder.
   // The one thing the map keeps between sessions, and only its name.
   let lastModel: string | undefined
@@ -255,7 +251,10 @@ export const register: Register = (on, options) => {
     })
     try {
       const ran = await next(e)
-      const wasRefused = ran.deny !== undefined || (e.tool_use_id !== undefined && refused.delete(e.tool_use_id))
+      // A settings hook's refusal reaches here as the call's error; the hook itself is left alone.
+      const reason = ran.isError === true ? hookRefusal(ran.text) : undefined
+      const wasRefused = ran.deny !== undefined || reason !== undefined
+      if (reason !== undefined) await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(reason) : '') || t.stopped(e.tool), status: 'block' })
       const task = wasRefused || ran.isError === true ? undefined : taskOf(ran.result)
       if (task !== undefined) {
         await background($, id, task)
@@ -267,22 +266,6 @@ export const register: Register = (on, options) => {
       await finish($, id, 'err')
       throw failure
     }
-  })
-
-  on('classic.PreToolUse', async ($, e, next) => {
-    const startedAt = (await quietly(() => $.clock.now())) ?? 0
-    const decided = await next(e)
-    const endedAt = (await quietly(() => $.clock.now())) ?? startedAt
-    if (decided.deny !== undefined) {
-      if (e.tool_use_id !== undefined) refused.add(e.tool_use_id)
-      await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(decided.deny) : '') || t.stopped(e.tool), status: 'block', startedAt })
-    } else if (decided.ask !== undefined) {
-      await begin($, { station: 'hooks', label: t.askedPermission(e.tool), status: 'ok', startedAt, endedAt })
-    } else if (endedAt - startedAt >= 400) {
-      // A check that took a moment is worth seeing; the instant ones are not.
-      await begin($, { station: 'hooks', label: t.checkBefore(e.tool), status: 'ok', startedAt, endedAt })
-    }
-    return decided
   })
 
   // A notification delivered into a running turn starts no turn of its own; this is where it is seen.

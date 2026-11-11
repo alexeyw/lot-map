@@ -270,10 +270,12 @@ test('a call shows on the pane, on every surface', { options: OWN }, async ($, o
   }
 })
 
+// A settings hook's refusal as the engine hands it to a tool.call hook: the call's error, worded by the engine.
+const REFUSAL = (reason: string): string => `PreToolUse:Bash hook error: [bash "$HOME/.claude/hooks/judge.sh"]: ${reason}`
+
 test('a call a settings hook refused reads as blocked, with the hook lit and its words kept back', { options: OWN }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
-  on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
-  on('tool.call', () => ({ result: {} }))
+  on('tool.call', () => ({ result: {}, isError: true, text: REFUSAL('JUDGE: found key sk-private\nCommand: secret') }))
 
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
 
@@ -286,14 +288,25 @@ test('a call a settings hook refused reads as blocked, with the hook lit and its
 
 test('with hookReasons on, the first line of a refusal shows and the rest does not', { options: { ...OWN, hookReasons: true } }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
-  on('classic.PreToolUse', () => ({ deny: 'JUDGE: нельзя\nCommand: secret' }))
-  on('tool.call', () => ({ result: {} }))
+  on('tool.call', () => ({ result: {}, isError: true, text: REFUSAL('JUDGE: нельзя\nCommand: secret') }))
 
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /JUDGE/ }))?.text).toContain('Хуки')
   expect(await ui.find({ type: 'Text', text: /secret/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('an error of the tool itself is no refusal: the hooks station stays dark', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {}, isError: true, text: 'Exit code 1\nls: /nowhere: No such file or directory' }))
+
+  await $.tool.call({ tool: 'Bash', command: 'ls /nowhere', description: 'Показать папку' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /остановил Bash/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /Показать папку/ }))?.text).toContain('✕')
   await ui.unmount()
 })
 

@@ -2,6 +2,12 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.4.0 (2026-11-11)
+
+- The mod no longer has a hook on permission checks. A settings hook's refusal is read from the error the refused call returns, so a refused call and the hook that stopped it still show, with the first line of the reason when `hookReasons` is on.
+- Gone with that hook: the rows for a hook that asked for permission and for a check that took a moment.
+- The README says what each of the mod's hooks does.
+
 ## 0.3.9 (2026-11-11)
 
 - What a plugin catalogue shows about the mod: an icon, the author, and links to this repository. The map itself is unchanged.
