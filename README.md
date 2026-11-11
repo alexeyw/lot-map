@@ -24,6 +24,17 @@ In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add 
 
 The pane opens by itself when a session starts. In a terminal it needs at least 144 columns and draws text only; otherwise type `/lot-map`. Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
 
+## Updating
+
+From a shell:
+
+```bash
+claude plugin marketplace update lot-map
+claude plugin update lot-map@lot-map
+```
+
+Then start a new session. The first command is needed: without it the second one reports the installed version as the latest.
+
 ## What lights up
 
 | Station | When |
