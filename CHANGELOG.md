@@ -2,6 +2,10 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.3.8 (2026-11-11)
+
+- Italian labels: `language` takes `it`. Contributed by kesi26. (#20)
+
 ## 0.3.7 (2026-11-11)
 
 - Background work stays on the map until it ends: a command sent to the background, a monitor, a background subagent or a workflow keeps its row open, and the row closes when the task reports back. A task that failed leaves a fault on its station. (#17)
