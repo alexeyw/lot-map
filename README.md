@@ -1,5 +1,9 @@
 # lot-map
 
+> **Prototype branch.** This branch adds a map made of characters for terminal sessions. It is not part of the released plugin and will not be merged: the map takes seven rows of the terminal and has none of the motion the drawing has. It stays here for anyone who wants to try it or build on it.
+>
+> To try it for one session: `git clone -b terminal-map https://github.com/alexeyw/lot-map`, then `claude --plugin-dir ./lot-map`. The released plugin is on [`main`](https://github.com/alexeyw/lot-map).
+
 A mod for Claude Code: a live map of the work, in a pane beside the chat. Every tool call, model step, hook and skill sends a pulse from the centre to its station, so you see memory, files, shell, web and agents at work instead of reading a list of commands.
 
 ![The map during a work session](docs/demo.gif)
