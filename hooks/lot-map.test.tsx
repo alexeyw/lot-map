@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom, taskNotice, taskOf } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -696,4 +696,72 @@ test('colors of your own replace their places in the palette, and nothing but a 
   expect(new Set(Object.values(COLOR_NAMES)).size).toBe(13)
   // The setting does not leak into the next drawing.
   expect(draw({ theme: 'dark' })).toContain('#e1ac6e')
+})
+
+const NOTICE = (id: string, status: string): string =>
+  `<task-notification>\n<task-id>${id}</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<output-file>/tmp/secret-place/${id}.output</output-file>\n<status>${status}</status>\n<summary>Background command "private words" ${status}</summary>\n</task-notification>`
+
+test('a background task is read from the answer that started it, and its notification for the id and the ending alone', () => {
+  expect(taskOf({ stdout: '', backgroundTaskId: 'bqf7movxe' })).toBe('bqf7movxe')
+  expect(taskOf({ status: 'async_launched', agentId: 'a1', description: 'x' })).toBe('a1')
+  expect(taskOf({ status: 'async_launched', taskId: 'w1' })).toBe('w1')
+  expect(taskOf({ taskId: 'm1', timeoutMs: 300000 })).toBe('m1')
+  expect(taskOf({ stdout: 'done' })).toBeUndefined()
+  expect(taskOf({ taskId: 'x', status: 'completed' })).toBeUndefined()
+  expect(taskOf({ backgroundTaskId: 'a b <c>' })).toBeUndefined()
+  expect(taskOf(undefined)).toBeUndefined()
+
+  expect(taskNotice(NOTICE('b1', 'completed'))).toEqual({ id: 'b1', status: 'ok' })
+  expect(taskNotice(NOTICE('b1', 'killed'))).toEqual({ id: 'b1', status: 'ok' })
+  expect(taskNotice(NOTICE('b1', 'failed'))).toEqual({ id: 'b1', status: 'err' })
+  expect(taskNotice('<task-notification>\n<task-id>m1</task-id>\n<summary>line</summary>\n</task-notification>')).toEqual({ id: 'm1' })
+  expect(taskNotice('please read <task-notification><task-id>b1</task-id>')).toBeUndefined()
+  expect(taskNotice('привет')).toBeUndefined()
+})
+
+test('a command sent to the background stays on the map until its task reports back', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' } }) as never)
+
+  await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Ждать сборку', run_in_background: true })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+
+  const seen = async (): Promise<{ running: boolean; text: string }> => {
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const running = (await ui.find({ type: 'Text', text: /Ждать сборку/ })) !== undefined && (await ui.find({ type: 'Text', text: /идёт/ })) !== undefined
+    const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+    await ui.unmount()
+    return { running, text: source }
+  }
+  // The turn is over and the command is not.
+  expect((await seen()).running).toBe(true)
+
+  // Another task's notification leaves it alone.
+  await $.turn.start({ text: NOTICE('other', 'completed'), turnId: 't2' } as never)
+  expect((await seen()).running).toBe(true)
+
+  await $.turn.start({ text: NOTICE('b1', 'completed'), turnId: 't3' } as never)
+  const after = await seen()
+  expect(after.running).toBe(false)
+  // Nothing of the notification but the fact gets onto the map, and it is not read as the person's message.
+  expect(after.text).not.toContain('private words')
+  expect(after.text).not.toContain('secret-place')
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /новое сообщение/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /private words/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a background task that failed leaves a fault on its station', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b2' } }) as never)
+  await $.tool.call({ tool: 'Bash', command: 'make', description: 'Сборка', run_in_background: true })
+  await $.turn.start({ text: NOTICE('b2', 'failed'), turnId: 't2' } as never)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+  await ui.unmount()
+  expect(source.split('font-weight="700"').length - 1).toBe(1)
 })

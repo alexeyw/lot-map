@@ -16,6 +16,8 @@ export type Entry = {
   status: Status
   /** The subagent whose loop made the call; absent for the main loop. */
   agentId?: string
+  /** The background task the call started; the row stays open until that task reports back. */
+  task?: string
   /** A moment the map marks: the model changed, or the answer is ready. */
   mark?: 'switch' | 'done'
 }

@@ -1,6 +1,6 @@
 // What the map knows: which station an action belongs to, what to call it, and how to draw the board.
 // Nothing here touches the engine.
-import type { Board, Entry, StationId } from '../types'
+import type { Board, Entry, StationId, Status } from '../types'
 import { stringsFor } from './text'
 import type { Strings } from './text'
 
@@ -242,6 +242,8 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
       return { station: 'web', label: t.artifact }
     case 'Agent':
       return { station: 'agents', label: str(input.description) || t.subagent }
+    case 'Monitor':
+      return { station: 'shell', label: str(input.description) || tool }
     case 'Workflow':
       return { station: 'agents', label: t.workflow }
     case 'SendMessage':
@@ -782,6 +784,31 @@ export function foldRows(entries: readonly Entry[], max = 16): Row[] {
     rows.push({ entry: e, times: 1, tookMs: took })
   }
   return rows
+}
+
+/**
+ * The id of the background task a tool's answer started, if it started one: a shell command sent to the
+ * background, a subagent or workflow launched to run on, a monitor.
+ */
+export function taskOf(result: unknown): string | undefined {
+  if (typeof result !== 'object' || result === null) return undefined
+  const r = result as Record<string, unknown>
+  const id = (v: unknown): string | undefined => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : undefined)
+  if (r.status === 'async_launched' || r.status === 'remote_launched') return id(r.agentId) ?? id(r.taskId)
+  return id(r.backgroundTaskId) ?? (typeof r.timeoutMs === 'number' ? id(r.taskId) : undefined)
+}
+
+/**
+ * A background task's notification, read for the task's id and how it ended and for nothing else:
+ * its summary and output never reach the map. No status: the task spoke and goes on (a monitor's event).
+ */
+export function taskNotice(text: string): { id: string; status?: Status } | undefined {
+  if (!text.trimStart().startsWith('<task-notification>')) return undefined
+  const id = /<task-id>([\w-]{1,64})<\/task-id>/.exec(text)?.[1]
+  if (id === undefined) return undefined
+  const word = /<status>(\w+)<\/status>/.exec(text)?.[1]
+  if (word === undefined) return { id }
+  return { id, status: word === 'failed' ? 'err' : 'ok' }
 }
 
 export function describeNow(board: Board, t: Strings): string {

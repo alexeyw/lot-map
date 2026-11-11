@@ -50,6 +50,7 @@ A pulse flies out when something starts and returns when it ends. Refusals and e
 - **The route.** A thin line joins the last few stations the main loop went through, in order, and its newest leg draws itself. A leg stays for 40 seconds and then fades over 20, so a minute after the work stops only the spokes are left; their thickness keeps where the work went. Model steps are left out, or every leg would pass through Model.
 - **Worn spokes.** A spoke grows thicker and brighter the more its station is used, so at the end of a session the map shows where the work went.
 - **How long.** Two clock hands grow around a station while a call runs: the inner one goes round in a minute, the outer one in ten.
+- **Background work.** A command sent to the background, a monitor, a background subagent or a workflow stays lit on its station after the turn that started it is over, with the clock hands growing, until the task reports that it ended. A task that failed leaves the red dot. The report itself is not shown as a message of yours.
 - **Several at once.** Calls that start together fly side by side, and the station carries their number, such as `×3`.
 - **What went wrong.** A red dot with a count stays on a station from an error or a refusal until your next message.
 - **Memory.** It has a colour of its own. A solid pulse is a memory Claude asked for; a hollow one on a dashed line is what a hook brought unasked. Under the station, the plain number counts the first and `↓` the second.
@@ -141,6 +142,7 @@ A label holds a name, never content:
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
 - a subagent: the short description it was started with;
+- a background task's report: that the task ended and whether it failed, never its summary or its output;
 - a hook's refusal: the name of the tool it stopped. Its first line shows only with `hookReasons` on, because a refusal may quote what the hook found.
 
 Control characters are taken out of every label before it is drawn.

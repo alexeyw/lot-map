@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -10,7 +10,7 @@ const KEEP = 80
 const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
-const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-2' })
+const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-3' })
 
 const newId = (now: number): string => `${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`
 
@@ -37,6 +37,12 @@ type Start = {
   patch?: Partial<Pick<Board, 'model' | 'step' | 'switchedAt'>>
 }
 
+/** The newest rows, and beside them every background task still going, however long ago it started. */
+const kept = (entries: Entry[]): Entry[] => {
+  const from = entries.length - KEEP
+  return from <= 0 ? entries : entries.filter((e, i) => i >= from || (e.status === 'run' && e.task !== undefined))
+}
+
 const isFault = (status: Status): boolean => status === 'err' || status === 'block'
 
 const oneMore = (faults: Board['faults'], station: StationId): Board['faults'] => ({ ...faults, [station]: (faults?.[station] ?? 0) + 1 })
@@ -58,7 +64,7 @@ async function begin($: EngineInterface, start: Start): Promise<string | undefin
     await update($, board, b => ({
       ...b,
       ...start.patch,
-      entries: [...b.entries, entry].slice(-KEEP),
+      entries: kept([...b.entries, entry]),
       counts: start.uncounted ? b.counts : { ...b.counts, [entry.station]: (b.counts[entry.station] ?? 0) + 1 },
       // What a hook brought to memory unasked is counted apart from what was asked for.
       ...(entry.station === 'memory' && entry.from === 'inbound' && !start.uncounted ? { pushed: (b.pushed ?? 0) + 1 } : {}),
@@ -83,6 +89,28 @@ async function finish($: EngineInterface, id: string | undefined, status: Status
         ...patch,
         entries: b.entries.map(e => (e === open ? { ...e, status, endedAt: now } : e)),
         ...(open !== undefined && isFault(status) ? { faults: oneMore(b.faults, open.station) } : {}),
+      }
+    })
+  })
+}
+
+/** The call started work that goes on after it answered: its row stays open under the task's id. */
+async function background($: EngineInterface, id: string | undefined, task: string): Promise<void> {
+  if (id === undefined) return
+  await quietly(() => update($, board, b => ({ ...b, entries: b.entries.map(e => (e.id === id && e.status === 'run' ? { ...e, task } : e)) })))
+}
+
+/** A background task ended: its row closes, as a fault when the task failed. */
+async function settle($: EngineInterface, task: string, status: Status): Promise<void> {
+  await quietly(async () => {
+    const now = await $.clock.now()
+    await update($, board, b => {
+      const open = b.entries.find(e => e.task === task && e.status === 'run')
+      if (open === undefined) return b
+      return {
+        ...b,
+        entries: b.entries.map(e => (e === open ? { ...e, status, endedAt: now } : e)),
+        ...(isFault(status) ? { faults: oneMore(b.faults, open.station) } : {}),
       }
     })
   })
@@ -146,7 +174,11 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.start', async ($, e, next) => {
-    if (e.agentId === undefined && e.text !== '') {
+    const notice = e.agentId === undefined ? taskNotice(e.text) : undefined
+    if (notice !== undefined) {
+      // A background task reporting back is no message of the person's.
+      if (notice.status !== undefined) await settle($, notice.id, notice.status)
+    } else if (e.agentId === undefined && e.text !== '') {
       // A new message clears what went wrong on the way to the last answer.
       await quietly(() => update($, board, b => (b.faults === undefined ? b : { ...b, faults: {} })))
       await begin($, { station: 'you', label: t.newMessage, from: 'inbound', status: 'ok' })
@@ -194,7 +226,7 @@ export const register: Register = (on, options) => {
         await update($, board, b => ({
           ...b,
           agents: (b.agents ?? []).filter(id => id !== agentId),
-          entries: b.entries.map(x => (x.status === 'run' && x.agentId === agentId ? { ...x, status: 'ok' as const, endedAt: now } : x)),
+          entries: b.entries.map(x => (x.status === 'run' && (x.agentId === agentId || x.task === agentId) ? { ...x, status: 'ok' as const, endedAt: now } : x)),
         }))
       })
     } else {
@@ -209,7 +241,7 @@ export const register: Register = (on, options) => {
         const now = await $.clock.now()
         await update($, board, b => ({
           ...b,
-          entries: b.entries.map(x => (x.status === 'run' && x.from === 'core' ? { ...x, status: 'ok' as const, endedAt: now } : x)),
+          entries: b.entries.map(x => (x.status === 'run' && x.from === 'core' && x.task === undefined ? { ...x, status: 'ok' as const, endedAt: now } : x)),
         }))
       })
     }
@@ -224,6 +256,11 @@ export const register: Register = (on, options) => {
     try {
       const ran = await next(e)
       const wasRefused = ran.deny !== undefined || (e.tool_use_id !== undefined && refused.delete(e.tool_use_id))
+      const task = wasRefused || ran.isError === true ? undefined : taskOf(ran.result)
+      if (task !== undefined) {
+        await background($, id, task)
+        return ran
+      }
       await finish($, id, wasRefused ? 'block' : ran.isError === true ? 'err' : 'ok')
       return ran
     } catch (failure) {
@@ -246,6 +283,16 @@ export const register: Register = (on, options) => {
       await begin($, { station: 'hooks', label: t.checkBefore(e.tool), status: 'ok', startedAt, endedAt })
     }
     return decided
+  })
+
+  // A notification delivered into a running turn starts no turn of its own; this is where it is seen.
+  on('prompt.submit', async ($, e, next) => {
+    await quietly(async () => {
+      if (e.origin?.kind !== 'task-notification') return
+      const notice = taskNotice(e.text)
+      if (notice?.status !== undefined) await settle($, notice.id, notice.status)
+    })
+    return next(e)
   })
 
   on('classic.UserPromptSubmit', async ($, e, next) => {
