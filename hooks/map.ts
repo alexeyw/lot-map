@@ -72,7 +72,10 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
 
 export type Classified = { station: StationId; label: string }
 
-const lastTwo = (path: string): string => path.split('/').filter(Boolean).slice(-2).join('/')
+/** A path with Windows separators written as `/`, so that one rule reads paths from every system. */
+const slashes = (path: string): string => path.replace(/\\/g, '/')
+
+const lastTwo = (path: string): string => slashes(path).split('/').filter(Boolean).slice(-2).join('/')
 
 const HOST = /^(?:[\p{L}\p{N}.-]+|\[[0-9a-f:.]+\])(?::\d+)?$/iu
 
@@ -101,8 +104,10 @@ export function clean(label: string, max = 120): string {
 }
 
 /** Claude Code's own memory folder counts for everyone; anything else is the person's to name. */
-const isMemoryPath = (path: string, setup: Setup): boolean =>
-  /\/\.claude\/projects\/[^/]+\/memory\//.test(path) || setup.memoryPaths.some(part => path.includes(part))
+const isMemoryPath = (path: string, setup: Setup): boolean => {
+  const p = slashes(path)
+  return /\/\.claude\/projects\/[^/]+\/memory\//.test(p) || setup.memoryPaths.some(part => p.includes(slashes(part)))
+}
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way. */
@@ -140,7 +145,8 @@ function segments(command: string, deep = false): string[][] {
     .filter(words => words.length > 0)
 }
 
-const base = (word = ''): string => word.replace(/["']/g, '').split('/').pop() ?? word
+/** A command's own name: no quotes, no folder before it, and no `.exe` after it, so `C:\tools\curl.exe` is `curl`. */
+const base = (word = ''): string => (slashes(word.replace(/["']/g, '')).split('/').pop() ?? word).replace(/\.exe$/i, '')
 
 /** A script's name without its ending: `recall-sync.py` is `recall-sync`. */
 const stem = (name: string): string => name.replace(/\.[a-z0-9]+$/i, '')

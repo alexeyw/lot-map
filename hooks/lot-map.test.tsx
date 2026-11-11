@@ -95,6 +95,21 @@ test('a password never reaches a label, even with a slash, a question mark or a 
   expect(label('https://bad host/x')).toBe('https')
 })
 
+test('a Windows path is read like any other: the last two parts, memory folders, command names', () => {
+  const label = (tool: string, input: Record<string, unknown>) => classify(tool, input, SETUP).label
+  const at = (tool: string, input: Record<string, unknown>, setup = SETUP) => classify(tool, input, setup).station
+  expect(label('Read', { file_path: 'C:\\Users\\a\\private\\c\\content.py' })).toBe('c/content.py')
+  expect(label('Edit', { file_path: 'C:\\Users\\a\\b/mixed\\n.md' })).toBe('mixed/n.md')
+  expect(at('Read', { file_path: 'C:\\Users\\a\\.claude\\projects\\C--Users-a-p\\memory\\n.md' }, STRANGER)).toBe('memory')
+  expect(at('Read', { file_path: 'C:\\Users\\a\\.recall\\n.md' })).toBe('memory')
+  expect(at('Read', { file_path: 'C:\\Users\\a\\recall\\n.md' })).toBe('files')
+  expect(at('Bash', { command: 'C:\\tools\\curl.exe -s https://a.b/list' })).toBe('web')
+  expect(at('Bash', { command: 'C:\\Git\\cmd\\git.exe push origin main' })).toBe('web')
+  expect(at('Bash', { command: 'C:\\tools\\grep.exe x C:\\Users\\a\\.recall\\n.md' })).toBe('memory')
+  expect(label('Bash', { command: 'C:\\Users\\a\\private\\python.exe build.py' })).toBe('python')
+  expect(label('Bash', { command: 'C:\\Users\\a\\private\\recall.exe add private words' })).toBe('add')
+})
+
 test('a memory command shows a word after it only when that word is a listed subcommand', () => {
   const label = (command: string) => classify('Bash', { command }, SETUP).label
   expect(label('recall add private words')).toBe('add')
