@@ -2,6 +2,11 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.3.9 (2026-11-11)
+
+- What a plugin catalogue shows about the mod: an icon, the author, and links to this repository. The map itself is unchanged.
+- The MP4 copy of the demo is no longer in the repository; the GIF in the README shows the same session.
+
 ## 0.3.8 (2026-11-11)
 
 - Italian labels: `language` takes `it`. Contributed by kesi26. (#20)

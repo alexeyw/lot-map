@@ -4,7 +4,7 @@ A mod for Claude Code: a live map of the work, in a pane beside the chat. Every 
 
 ![The map during a work session](docs/demo.gif)
 
-*A made-up session replayed through the mod's own drawing code. [Video (MP4)](docs/demo.mp4).*
+*A made-up session replayed through the mod's own drawing code.*
 
 ## Install
 
