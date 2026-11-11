@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -489,7 +489,7 @@ test('the context ring, the crew, the model change and the light theme are drawn
     now,
     setupFrom({ theme: 'dark' }),
   )
-  const known = new Set(['#0a0c11', '#12151c', '#272c36', '#1a1e27', '#ebe6dc', '#9ba1ab', '#6b7280', '#e1ac6e', '#f0c595', '#e8654f', '#62c7ba', '#a5e6dc'])
+  const known = new Set(['#0a0c11', '#12151c', '#272c36', '#1a1e27', '#ebe6dc', '#9ba1ab', '#6b7280', '#e1ac6e', '#f0c595', '#e8654f', '#62c7ba', '#a5e6dc', '#ebe6dd'])
   expect([...new Set(lit.match(/#[0-9a-f]{6}/g) ?? [])].filter(color => !known.has(color))).toEqual([])
 })
 
@@ -629,4 +629,36 @@ test('the PowerShell tool is read like the shell: its description as the label, 
   expect(ps('Invoke-WebRequest https://user:private@a.b/secret?x=1').label).toBe('Invoke-WebRequest')
   // The same names mean nothing to the Bash tool.
   expect(classify('Bash', { command: 'Get-Content notes.txt' }, SETUP).station).toBe('shell')
+})
+
+test('the route is soft on a light surface and each leg fades by itself after a while', () => {
+  const walk = [entry('you', 1000, { from: 'inbound' }), entry('memory', 2000), entry('files', 3000), entry('shell', 4000)]
+  const legs = (svg: string) => svg.split('<path d="M').length - 1
+  const fresh = 5000
+
+  // Three legs, each carrying the animation that takes it away: it starts when the hold is over.
+  const dark = drawMap({ entries: walk, counts: {} }, fresh, setupFrom({ theme: 'dark' }))
+  expect(legs(dark)).toBe(3)
+  expect(dark.split('attributeName="opacity" values="').length - 1).toBeGreaterThanOrEqual(3)
+  expect(dark).toContain(`begin="${((TRAIL_HOLD_MS - (fresh - 4000)) / 1000).toFixed(3)}s" dur="${(TRAIL_FADE_MS / 1000).toFixed(3)}s"`)
+  expect(dark).toContain('stroke="#ebe6dd"')
+
+  // On a light surface the route is a grey of its own, not the ink of the words.
+  const light = drawMap({ entries: walk, counts: {} }, fresh, setupFrom({ theme: 'light' }))
+  expect(light).toContain('stroke="#9c978b"')
+  expect(light).not.toMatch(/<path d="M[^>]*stroke="#1f2228"[^>]*stroke-linecap="round" opacity=/)
+  // Left to itself the map repaints the route with the rest.
+  expect(drawMap({ entries: walk, counts: {} }, fresh, STRANGER)).toContain('[stroke="#ebe6dd"]{stroke:#9c978b}')
+
+  // A leg in the middle of its fading starts the animation in the past, so it is drawn part-way gone.
+  // The two older legs are gone by then; the newest has a second left.
+  const almost = 3000 + TRAIL_HOLD_MS + TRAIL_FADE_MS
+  const fading = drawMap({ entries: walk, counts: {} }, almost, setupFrom({ theme: 'dark' }))
+  expect(legs(fading)).toBe(1)
+  expect(fading).toContain(`begin="${((TRAIL_HOLD_MS - (almost - 4000)) / 1000).toFixed(3)}s"`)
+
+  // After the hold and the fade nothing of the route is left; the spokes still say where the work went.
+  const later = drawMap({ entries: walk, counts: { shell: 1 } }, 4000 + TRAIL_HOLD_MS + TRAIL_FADE_MS, setupFrom({ theme: 'dark' }))
+  expect(legs(later)).toBe(0)
+  expect(later).not.toContain('stroke="#ebe6dd"')
 })

@@ -47,7 +47,7 @@ A pulse flies out when something starts and returns when it ends. Refusals and e
 
 ## Reading the map
 
-- **The route.** A thin line joins the last few stations the main loop went through, in order, and its newest leg draws itself. Model steps are left out, or every leg would pass through Model.
+- **The route.** A thin line joins the last few stations the main loop went through, in order, and its newest leg draws itself. A leg stays for 40 seconds and then fades over 20, so a minute after the work stops only the spokes are left; their thickness keeps where the work went. Model steps are left out, or every leg would pass through Model.
 - **Worn spokes.** A spoke grows thicker and brighter the more its station is used, so at the end of a session the map shows where the work went.
 - **How long.** Two clock hands grow around a station while a call runs: the inner one goes round in a minute, the outer one in ten.
 - **Several at once.** Calls that start together fly side by side, and the station carries their number, such as `×3`.

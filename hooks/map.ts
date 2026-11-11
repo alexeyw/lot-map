@@ -318,6 +318,8 @@ type Palette = {
   red: string
   mem: string
   memHot: string
+  /** The route between stations: as light as the words on a dark ground, a soft grey on a light one, where a thin dark line weighs much more. */
+  trail: string
 }
 
 const DARK: Palette = {
@@ -333,6 +335,8 @@ const DARK: Palette = {
   red: '#e8654f',
   mem: '#62c7ba',
   memHot: '#a5e6dc',
+  // One step away from `bone`, so that the light rules can give the route a color of its own.
+  trail: '#ebe6dd',
 }
 
 const LIGHT: Palette = {
@@ -348,6 +352,7 @@ const LIGHT: Palette = {
   red: '#c5402b',
   mem: '#1c8c81',
   memHot: '#136a62',
+  trail: '#9c978b',
 }
 
 /**
@@ -368,6 +373,9 @@ const ALARM_MS = 6000
 const SWITCH_MS = 8000
 const DONE_MS = 1100
 const TRAIL_STOPS = 7
+/** A leg of the route stays for a while after it was drawn, then fades: the route shows where the work is going, and the spokes keep where it went. */
+export const TRAIL_HOLD_MS = 40_000
+export const TRAIL_FADE_MS = 20_000
 
 type Point = { x: number; y: number }
 
@@ -466,16 +474,21 @@ function trail(entries: readonly Entry[], now: number, c: Palette): string {
     if (from === undefined || to === undefined) continue
     const { path, end } = leg(indexOf(from.station), indexOf(to.station))
     const isHead = k === stops.length - 1
+    const age = now - to.at
+    if (age >= TRAIL_HOLD_MS + TRAIL_FADE_MS) continue
     const opacity = n1(0.12 + (0.5 * k) / (stops.length - 1))
+    // The fading is written into the drawing, so a leg goes out on time even when nothing redraws the map.
+    const fade = `<animate attributeName="opacity" values="${opacity};0" begin="${clock(TRAIL_HOLD_MS - age)}" dur="${clock(TRAIL_FADE_MS)}" fill="freeze"/>`
     // The newest leg draws itself; the rest are already there.
     const drawing = isHead
-      ? ` pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" values="1;0" begin="${clock(to.at - now)}" dur=".5s" fill="freeze"/></path>`
-      : '/>'
-    out += `<path d="${path}" fill="none" stroke="${c.bone}" stroke-width="${isHead ? 1.5 : 1.1}" stroke-linecap="round" opacity="${opacity}"${drawing}`
+      ? ` pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" values="1;0" begin="${clock(to.at - now)}" dur=".5s" fill="freeze"/>`
+      : '>'
+    out += `<path d="${path}" fill="none" stroke="${c.trail}" stroke-width="${isHead ? 1.5 : 1.1}" stroke-linecap="round" opacity="${opacity}"${drawing}${fade}</path>`
     if (isHead) {
       out +=
-        `<circle cx="${n1(end.x)}" cy="${n1(end.y)}" r="2.4" fill="${c.bone}" opacity="0">` +
-        `<animate attributeName="opacity" values="0;.85" begin="${clock(to.at - now + 400)}" dur=".15s" fill="freeze"/></circle>`
+        `<circle cx="${n1(end.x)}" cy="${n1(end.y)}" r="2.4" fill="${c.trail}" opacity="0">` +
+        `<animate attributeName="opacity" values="0;.85" begin="${clock(to.at - now + 400)}" dur=".15s" fill="freeze"/>` +
+        `<animate attributeName="opacity" values=".85;0" begin="${clock(TRAIL_HOLD_MS - age)}" dur="${clock(TRAIL_FADE_MS)}" fill="freeze"/></circle>`
     }
   }
   return out
