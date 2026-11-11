@@ -39,6 +39,8 @@ export type Setup = {
   /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
   hookReasons: boolean
   theme: 'auto' | 'dark' | 'light'
+  /** Whether the map paints its own ground, or leaves the surface it lies on showing through. */
+  background: 'solid' | 'transparent'
   /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
   layout: 'you-top' | 'you-bottom'
 }
@@ -64,6 +66,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     hookRecords: options.hookRecords === true,
     hookReasons: options.hookReasons === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
+    background: options.background === 'transparent' ? 'transparent' : 'solid',
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
   }
 }
@@ -542,7 +545,8 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
   const isBad = (e: Entry): boolean => e.status === 'block' || e.status === 'err'
   const tone = (e: Entry): [string, string] => (e.station === 'memory' ? [c.mem, c.memHot] : [c.accent, c.hot])
 
-  let body = `<rect width="${W}" height="${H}" rx="12" fill="${c.ground}"/>`
+  // Without its ground the map keeps the rim around its words, in the ground's color: a faint halo on a surface of another shade.
+  let body = setup.background === 'transparent' ? '' : `<rect width="${W}" height="${H}" rx="12" fill="${c.ground}"/>`
 
   // Contours around the core.
   for (const [rx, ry] of [[66, 62], [104, 97], [142, 132]]) {

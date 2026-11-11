@@ -1,6 +1,6 @@
 {
   "name": "lot-map",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
   "license": "MIT",
   "types": "./types/index.d.ts",
@@ -83,6 +83,16 @@
       ],
       "default": "auto",
       "description": "The map's colours: dark, light, or auto, which is dark on a dark surface and light on a light one."
+    },
+    "background": {
+      "type": "string",
+      "title": "Background",
+      "options": [
+        "solid",
+        "transparent"
+      ],
+      "default": "solid",
+      "description": "The map's own background, or transparent, which lets the pane behind it show through."
     },
     "layout": {
       "type": "string",

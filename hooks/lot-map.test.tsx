@@ -568,3 +568,15 @@ test('the ring can be turned so that the person is at the bottom and the network
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark' }))).toBe(usual)
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark', layout: 'sideways' }))).toBe(usual)
 })
+
+test('the map paints its ground unless told to leave the surface showing', () => {
+  const board = { entries: [], counts: {} } as never
+  const ground = /<rect width="460" height="430" rx="12"/
+  expect(drawMap(board, 0, SETUP)).toMatch(ground)
+  expect(drawMap(board, 0, setupFrom({ ...OWN, background: 'clear' }))).toMatch(ground)
+  const bare = drawMap(board, 0, setupFrom({ ...OWN, background: 'transparent' }))
+  expect(bare).not.toMatch(ground)
+  expect(bare).toContain('ДОМ')
+  // The setting does not leak into the next drawing.
+  expect(drawMap(board, 0, SETUP)).toMatch(ground)
+})
