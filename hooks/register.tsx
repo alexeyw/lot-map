@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -47,7 +47,7 @@ async function begin($: EngineInterface, start: Start): Promise<string | undefin
     const entry: Entry = {
       id: newId(now),
       station: start.station,
-      label: start.label,
+      label: clean(start.label),
       from: start.from ?? 'core',
       startedAt: start.startedAt ?? now,
       status: start.status ?? 'run',
@@ -238,7 +238,7 @@ export const register: Register = (on, options) => {
     const endedAt = (await quietly(() => $.clock.now())) ?? startedAt
     if (decided.deny !== undefined) {
       if (e.tool_use_id !== undefined) refused.add(e.tool_use_id)
-      await begin($, { station: 'hooks', label: firstLine(decided.deny) || t.stopped(e.tool), status: 'block', startedAt })
+      await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(decided.deny) : '') || t.stopped(e.tool), status: 'block', startedAt })
     } else if (decided.ask !== undefined) {
       await begin($, { station: 'hooks', label: t.askedPermission(e.tool), status: 'ok', startedAt, endedAt })
     } else if (endedAt - startedAt >= 400) {

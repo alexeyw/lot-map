@@ -1,6 +1,6 @@
 {
   "name": "lot-map",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
   "license": "MIT",
   "types": "./types/index.d.ts",
@@ -38,7 +38,14 @@
       "multiple": true,
       "title": "Memory commands",
       "default": [],
-      "description": "Shell commands or scripts that light the Memory station, matched by how the name starts."
+      "description": "Shell commands or scripts that light the Memory station. A name counts when it is the command itself or begins with it and a hyphen, an underscore or a dot."
+    },
+    "memorySubcommands": {
+      "type": "string",
+      "multiple": true,
+      "title": "Memory subcommands",
+      "default": [],
+      "description": "Words after a memory command that the map may show, such as add or search. Without them a memory command goes by its own name, because the word after it may be content."
     },
     "memoryPaths": {
       "type": "string",
@@ -58,7 +65,13 @@
       "type": "boolean",
       "title": "Hooks add numbered records",
       "default": false,
-      "description": "Turn on if a hook of yours adds memory records numbered like [#123]: the map then shows them on the Memory station, by number only."
+      "description": "Turn on if a hook of yours adds memory records numbered like [#123]: the map then shows them on the Memory station, by number only. It counts such numbers in the text of any hook, not only a memory one."
+    },
+    "hookReasons": {
+      "type": "boolean",
+      "title": "Show why a hook refused",
+      "default": false,
+      "description": "Show the first line of a hook's refusal, up to 72 characters. Off, the map says only which tool was stopped: a refusal may quote what the hook found."
     },
     "theme": {
       "type": "string",

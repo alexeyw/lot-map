@@ -31,13 +31,15 @@ The pane opens by itself when a session starts. In a terminal it needs at least 
 | You | your messages, questions and files sent to you |
 | Model | each model request, context compaction |
 | Memory | Claude Code's memory folder, plus whatever you name in the options |
-| Files | Read, Write, Edit, Grep, Glob, and shell commands that only look at or move files |
+| Files | Read, Write, Edit, Grep, Glob, and shell commands that work on files and nothing else: they read, search, move, delete or edit in place (`cat`, `grep`, `mv`, `sed -i`, `tee`, `find … -delete`) |
 | Shell | every other shell command |
-| Network | web fetch and search, `curl`, `gh`, `git push` and the like, MCP servers |
+| Network | web fetch and search, MCP servers, and shell commands known to reach the network: `curl`, `gh`, `ssh`, `rsync`, `git push`, `npm install`, `docker pull` and the like, also inside `$(…)` |
 | Browser | browser tools |
 | Agents | subagents and workflows; their own calls start from this station |
 | Skills | skills and tool search |
 | Hooks | settings hooks that refuse a call, ask for permission, add context or take a moment |
+
+The shell stations go by the command's name, not by what it does: a script that opens a connection itself, such as `python -c "…"`, shows as Shell.
 
 A pulse flies out when something starts and returns when it ends. Refusals and errors turn red.
 
@@ -73,10 +75,12 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `language` | `en` | `en`, `ru`, `es`, `fr` or `de` |
 | `coreName` | `CLAUDE` | what the circle in the middle says, up to ten characters |
 | `memoryServers` | `memory` | MCP servers whose tools light Memory |
-| `memoryCommands` | none | shell commands or scripts that light Memory, matched by how the name starts |
+| `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py` |
+| `memorySubcommands` | none | words after a memory command that the map may show, such as `add` or `search`; without them the command goes by its own name |
 | `memoryPaths` | none | parts of a path that make a file a memory |
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
-| `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only |
+| `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
+| `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 
@@ -96,16 +100,21 @@ Lists are written with commas.
 
 The mod makes no network requests, reads no files, runs no processes, calls no model and adds nothing to the conversation. Its rows live only for the session.
 
-It asks Claude Code for one thing: how full the context window is, after each model step. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change.
+Like any mod that follows tool calls, it is handed every call's whole input, including command lines and the text written to files. It takes names from that and nothing else; the code that does so is `classify` in `hooks/map.ts`. A marketplace added from this repository follows its `main` branch, so an update brings whatever is there: read the diff before updating if that matters to you.
+
+It asks Claude Code for one thing: how full the context window is, after each model step. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change. Each is stored under the folder's full path, in Claude Code's own store for the plugin.
 
 A label holds a name, never content:
 
 - a file: the last two parts of its path;
-- a web address: the host alone, without a login, path or query;
+- a web address: the host alone, without a login, password, path or query; an address that can be read two ways shows only its scheme;
 - a shell command: the short description Claude wrote for it, or the command's name, never the command line;
-- a memory call: the tool's name and a record number, never the text or the query;
+- a memory call: the tool's name and a record number or short identifier, never the text or the query;
+- a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
 - a subagent: the short description it was started with;
-- a hook's refusal: its first line, up to 72 characters.
+- a hook's refusal: the name of the tool it stopped. Its first line shows only with `hookReasons` on, because a refusal may quote what the hook found.
+
+Control characters are taken out of every label before it is drawn.
 
 A fault on the map never reaches a tool call or a model turn.
 

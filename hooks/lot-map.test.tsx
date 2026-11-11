@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { classify, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -18,6 +18,7 @@ const OWN = {
   coreName: 'ДОМ',
   memoryServers: ['recall'],
   memoryCommands: ['recall', 'check_recall'],
+  memorySubcommands: ['add', 'memory'],
   memoryPaths: ['/.recall/'],
   memoryLabels: ['search=поиск', 'get_note=чтение записи'],
   hookRecords: true,
@@ -65,6 +66,7 @@ test('labels never carry what was written or searched', () => {
   expect(label('Bash', { command: 'recall add "private text" --category journal' })).toBe('add')
   expect(label('Bash', { command: 'recall memory journal --last 30' })).toBe('memory')
   expect(label('Bash', { command: 'recall add private words here' })).toBe('add')
+  expect(label('Bash', { command: 'recall private words here' })).toBe('recall')
   expect(label('Bash', { command: 'recall "private text"' })).toBe('recall')
   expect(label('mcp__recall__search', { query: 'private' })).toBe('поиск')
   expect(label('mcp__recall__get_note', { id: 7 })).toBe('чтение записи #7')
@@ -75,6 +77,63 @@ test('labels never carry what was written or searched', () => {
   expect(label('mcp__Claude_Browser__navigate', { url: 'https://user:private@a.b/x' })).toBe('a.b')
   expect(label('Grep', { pattern: 'private' })).toBe('Grep')
   expect(label('WebSearch', { query: 'private' })).toBe('поиск в сети')
+})
+
+test('a password never reaches a label, even with a slash, a question mark or a hash in it', () => {
+  const label = (url: string) => classify('WebFetch', { url }, SETUP).label
+  expect(label('https://user:pa/ss@host.com/x')).toBe('host.com')
+  expect(label('https://user:pa?ss@host.com')).toBe('host.com')
+  expect(label('https://user:p#w@host.com')).toBe('host.com')
+  expect(label('https://u:p%40ss@h.com')).toBe('h.com')
+  expect(label('postgres://admin:hunter2@db.internal:5432/prod')).toBe('db.internal:5432')
+  // A number after the colon may be a port or a password: neither reading is shown.
+  expect(label('https://user:12345/x@host.com')).toBe('https')
+  expect(label('https://host.com:8080/x?mail=a@b.com')).toBe('https')
+  expect(label('https://host.com/x?mail=a@b.com')).toBe('host.com')
+  expect(label('https://[::1]:8080/x')).toBe('[::1]:8080')
+  expect(label('https://пример.рф/x')).toBe('пример.рф')
+  expect(label('https://bad host/x')).toBe('https')
+})
+
+test('a memory command shows a word after it only when that word is a listed subcommand', () => {
+  const label = (command: string) => classify('Bash', { command }, SETUP).label
+  expect(label('recall add private words')).toBe('add')
+  expect(label('recall hello world')).toBe('recall')
+  expect(label('recall search private')).toBe('recall')
+  expect(classify('mcp__recall__get_note', { id: 'note-7' }, SETUP).label).toBe('чтение записи #note-7')
+  expect(classify('mcp__recall__get_note', { id: 'private words under id' }, SETUP).label).toBe('чтение записи')
+})
+
+test('a memory command is matched by its whole name, not by how any name starts', () => {
+  const short = setupFrom({ memoryCommands: ['m', 'recall'] })
+  const at = (command: string) => classify('Bash', { command }, short).station
+  expect(at('mv a b')).toBe('files')
+  expect(at('mkdir x')).toBe('files')
+  expect(at('make all')).toBe('shell')
+  expect(at('recallable --now')).toBe('shell')
+  expect(at('m note')).toBe('memory')
+  expect(at('recall-sync.py --apply')).toBe('memory')
+  expect(at('python3 scripts/recall_check.py')).toBe('memory')
+})
+
+test('commands that reach the network light Network, also from inside another command', () => {
+  const at = (command: string) => classify('Bash', { command }, SETUP).station
+  expect(at('rsync -a a/ host:b/')).toBe('web')
+  expect(at('nc -z host 80')).toBe('web')
+  expect(at('npm install')).toBe('web')
+  expect(at('npm test')).toBe('shell')
+  expect(at('docker pull image')).toBe('web')
+  expect(at('docker ps')).toBe('shell')
+  expect(at('cat $(curl -s https://a.b/list)')).toBe('web')
+  expect(at('cat `curl -s https://a.b/list`')).toBe('web')
+  expect(at('cat "$(dirname x)/a"')).toBe('files')
+})
+
+test('a label loses what a terminal would act on', () => {
+  expect(clean('a\u001b[31mred\u0007 b')).toBe('a [31mred b')
+  expect(clean('line\nnext\ttab')).toBe('line next tab')
+  expect(clean('x\u202egnp.exe')).toBe('x gnp.exe')
+  expect(clean('я'.repeat(200)).length).toBe(120)
 })
 
 test('hook helpers', () => {
@@ -196,7 +255,21 @@ test('a call shows on the pane, on every surface', { options: OWN }, async ($, o
   }
 })
 
-test('a call a settings hook refused reads as blocked, with the hook lit', { options: OWN }, async ($, on) => {
+test('a call a settings hook refused reads as blocked, with the hook lit and its words kept back', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
+  on('tool.call', () => ({ result: {} }))
+
+  await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /остановил Bash/ }))?.text).toContain('Хуки')
+  expect((await ui.find({ type: 'Text', text: /Показать статус/ }))?.text).toContain('✕')
+  expect(await ui.find({ type: 'Text', text: /JUDGE|sk-private|secret/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('with hookReasons on, the first line of a refusal shows and the rest does not', { options: { ...OWN, hookReasons: true } }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('classic.PreToolUse', () => ({ deny: 'JUDGE: нельзя\nCommand: secret' }))
   on('tool.call', () => ({ result: {} }))
@@ -205,7 +278,6 @@ test('a call a settings hook refused reads as blocked, with the hook lit', { opt
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /JUDGE/ }))?.text).toContain('Хуки')
-  expect((await ui.find({ type: 'Text', text: /Показать статус/ }))?.text).toContain('✕')
   expect(await ui.find({ type: 'Text', text: /secret/ })).toBeUndefined()
   await ui.unmount()
 })

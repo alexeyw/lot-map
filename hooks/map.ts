@@ -31,9 +31,13 @@ export type Setup = {
   core: string
   memoryServers: ReadonlySet<string>
   memoryCommands: readonly string[]
+  /** The words after a memory command that may be shown. Any other word could be content. */
+  memorySubcommands: ReadonlySet<string>
   memoryPaths: readonly string[]
   memoryLabels: ReadonlyMap<string, string>
   hookRecords: boolean
+  /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
+  hookReasons: boolean
   theme: 'auto' | 'dark' | 'light'
   /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
   layout: 'you-top' | 'you-bottom'
@@ -54,9 +58,11 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     core: core === '' ? 'CLAUDE' : core,
     memoryServers: new Set(list(options.memoryServers)),
     memoryCommands: list(options.memoryCommands),
+    memorySubcommands: new Set(list(options.memorySubcommands)),
     memoryPaths: list(options.memoryPaths),
     memoryLabels,
     hookRecords: options.hookRecords === true,
+    hookReasons: options.hookReasons === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
   }
@@ -68,10 +74,30 @@ export type Classified = { station: StationId; label: string }
 
 const lastTwo = (path: string): string => path.split('/').filter(Boolean).slice(-2).join('/')
 
-/** Only the host: a login, a password, a path or a query never reach a label. */
+const HOST = /^(?:[\p{L}\p{N}.-]+|\[[0-9a-f:.]+\])(?::\d+)?$/iu
+
+/**
+ * Only the host: a login, a password, a path or a query never reach a label.
+ * A password may hold `/`, `?` or `#` unencoded, so the first of them is not always where the host ends:
+ * `user:pa/ss@host` reads as the host `host`, and an address that can be read both ways gives its scheme alone.
+ */
 function hostOf(url: string): string {
   const [, scheme = '', rest = ''] = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
-  return ((rest.split(/[/?#]/)[0] ?? '').split('@').pop() ?? '').slice(0, 40) || scheme
+  const end = rest.search(/[/?#]/)
+  const first = end < 0 ? rest : rest.slice(0, end)
+  const beyond = end < 0 ? '' : rest.slice(end)
+  let host = first.split('@').pop() ?? ''
+  if (!first.includes('@') && first.includes(':') && beyond.includes('@')) {
+    // `name:word` before an `@` further on: a port if the word is a number, or else a login and a password.
+    host = /:\d+$/.test(first) ? '' : (rest.slice(rest.lastIndexOf('@') + 1).split(/[/?#]/)[0] ?? '')
+  }
+  return HOST.test(host) ? host.slice(0, 40) : scheme
+}
+
+/** A label as it may be shown: no control characters, which a terminal would act on, and no direction marks. */
+export function clean(label: string, max = 120): string {
+  const text = label.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g, ' ').replace(/ {2,}/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
 /** Claude Code's own memory folder counts for everyone; anything else is the person's to name. */
@@ -79,17 +105,32 @@ const isMemoryPath = (path: string, setup: Setup): boolean =>
   /\/\.claude\/projects\/[^/]+\/memory\//.test(path) || setup.memoryPaths.some(part => path.includes(part))
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
-/** Commands that only look at or move files. echo, cd and the like say nothing either way. */
+/** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way. */
 const FILE_WORDS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg', 'find', 'ls', 'wc', 'cp', 'mv', 'mkdir', 'touch', 'diff', 'cmp', 'sort', 'uniq', 'cut', 'tr', 'awk', 'tee', 'stat', 'file', 'du', 'tree', 'ln', 'basename', 'dirname', 'realpath', 'jq'])
 const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'set', 'pwd', 'sleep', 'which', 'test', '['])
-const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'ping', 'dig', 'nslookup'])
-const NET_GIT = new Set(['push', 'pull', 'fetch', 'clone', 'ls-remote'])
+const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup'])
+/** Commands that reach the network only with some of their subcommands. */
+const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
+  git: new Set(['push', 'pull', 'fetch', 'clone', 'ls-remote']),
+  npm: new Set(['install', 'i', 'ci', 'add', 'update', 'publish', 'view', 'audit']),
+  pnpm: new Set(['install', 'i', 'add', 'update', 'publish']),
+  yarn: new Set(['install', 'add', 'upgrade', 'publish']),
+  bun: new Set(['install', 'add', 'update', 'publish']),
+  pip: new Set(['install', 'download']),
+  pip3: new Set(['install', 'download']),
+  docker: new Set(['pull', 'push', 'login']),
+  brew: new Set(['install', 'update', 'upgrade', 'fetch']),
+  cargo: new Set(['install', 'fetch', 'publish', 'update']),
+}
 const RUNNERS = new Set(['python', 'python3', 'bash', 'sh', 'zsh', 'node'])
 
-/** The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument. */
-function segments(command: string): string[][] {
+/**
+ * The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument.
+ * `deep` also cuts at `$(…)`, backticks and brackets, to find a command run inside another; the pieces around it are then no commands.
+ */
+function segments(command: string, deep = false): string[][] {
   return command
-    .split(/&&|\|\||;|\||\n/)
+    .split(deep ? /&&|\|\||;|\||\n|\$\(|`|\(|\)/ : /&&|\|\||;|\||\n/)
     .map(part => part.trim().split(/\s+/).filter(Boolean))
     .map(words => {
       let i = 0
@@ -101,12 +142,21 @@ function segments(command: string): string[][] {
 
 const base = (word = ''): string => word.replace(/["']/g, '').split('/').pop() ?? word
 
-/** The name a memory command goes by: the one word after the command, never an argument behind it. */
-function memoryLabel(words: string[], commands: readonly string[]): string {
+/** A script's name without its ending: `recall-sync.py` is `recall-sync`. */
+const stem = (name: string): string => name.replace(/\.[a-z0-9]+$/i, '')
+
+/** A name is the command itself or begins with it and a separator: `recall` names `recall-sync.py`, never `recallable`. */
+const named = (name: string, command: string): boolean => {
+  const s = stem(name)
+  return s === command || (s.startsWith(command) && /^[-_.]/.test(s.slice(command.length)))
+}
+
+/** The name a memory command goes by: its own, or the word after it when the person listed that word as a subcommand. */
+function memoryLabel(words: string[], setup: Setup): string {
   const head = base(words[0])
-  if (!commands.includes(head)) return base(RUNNERS.has(head) && words[1] ? words[1] : words[0]).replace(/\.py$/, '')
+  if (!setup.memoryCommands.includes(head)) return stem(base(RUNNERS.has(head) && words[1] ? words[1] : words[0]))
   const sub = words[1] ?? ''
-  return /^[a-z][a-z-]*$/.test(sub) ? sub : head
+  return setup.memorySubcommands.has(sub) ? sub : head
 }
 
 function classifyBash(command: string, description: string, setup: Setup): Classified {
@@ -115,13 +165,13 @@ function classifyBash(command: string, description: string, setup: Setup): Class
   for (const words of lines) {
     const head = base(words[0])
     const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
-    if (setup.memoryCommands.some(c => head.startsWith(c) || script.startsWith(c))) {
-      return { station: 'memory', label: memoryLabel(words, setup.memoryCommands) }
+    if (setup.memoryCommands.some(c => named(head, c) || named(script, c))) {
+      return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
-  for (const words of lines) {
+  for (const words of segments(command, true)) {
     const head = base(words[0])
-    if (NET_WORDS.has(head) || (head === 'git' && NET_GIT.has(words[1] ?? ''))) return { station: 'web', label }
+    if (NET_WORDS.has(head) || NET_SUBCOMMANDS[head]?.has(words[1] ?? '') === true) return { station: 'web', label }
   }
   const real = lines.filter(words => !NEUTRAL_WORDS.has(base(words[0])))
   if (real.length > 0 && real.every(words => FILE_WORDS.has(base(words[0])))) {
@@ -171,7 +221,8 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
   if (mcp === null) return { station: 'shell', label: tool }
   const [, server = '', name = ''] = mcp
   if (setup.memoryServers.has(server)) {
-    const id = typeof input.id === 'number' || typeof input.id === 'string' ? ` #${input.id}` : ''
+    // A number, or a short identifier: a longer string under `id` could be anything.
+    const id = typeof input.id === 'number' || (typeof input.id === 'string' && /^[\w-]{1,24}$/.test(input.id)) ? ` #${input.id}` : ''
     return { station: 'memory', label: (setup.memoryLabels.get(name) ?? name.replace(/_/g, ' ')) + id }
   }
   if (server === 'Claude_Browser' || server === 'claude-in-chrome') {
