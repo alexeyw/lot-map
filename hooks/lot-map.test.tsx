@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -661,4 +661,39 @@ test('the route is soft on a light surface and each leg fades by itself after a 
   const later = drawMap({ entries: walk, counts: { shell: 1 } }, 4000 + TRAIL_HOLD_MS + TRAIL_FADE_MS, setupFrom({ theme: 'dark' }))
   expect(legs(later)).toBe(0)
   expect(later).not.toContain('stroke="#ebe6dd"')
+})
+
+test('colors of your own replace their places in the palette, and nothing but a hex color gets into the drawing', () => {
+  const board = { entries: [entry('you', 1000, { from: 'inbound' }), entry('files', 2000), entry('shell', 3000)], counts: { files: 1, shell: 1 } }
+  const draw = (options: Record<string, unknown>) => drawMap(board, 4000, setupFrom(options))
+
+  const own = draw({ theme: 'dark', colors: ['accent=#FF9900', 'background = #123', 'route=#00ff88'] })
+  expect(own).toContain('#ff9900')
+  expect(own).not.toContain('#e1ac6e')
+  expect(own).toContain('<rect width="460" height="430" rx="12" fill="#112233"/>')
+  expect(own).toContain('stroke="#00ff88"')
+  // The rest of the palette is as it was.
+  expect(own).toContain('#ebe6dc')
+
+  // Written as one line with commas, as `claude plugin configure` takes lists.
+  expect(setupFrom({ colors: 'accent=#ff9900, text=#ffffff' }).colors).toEqual({ accent: '#ff9900', bone: '#ffffff' })
+
+  // Anything that is not a hex color, and any unknown name, counts as not set.
+  const hostile = ['accent="/><script>alert(1)</script>', 'accent=red', 'accent=#12345', 'accent=#1234567', 'accent=url(#x)', 'accent=#ff9900"', 'nonsense=#ffffff', '=#ffffff', 'accent', 'text=rgb(1,2,3)']
+  expect(setupFrom({ colors: hostile }).colors).toEqual({})
+  expect(draw({ theme: 'dark', colors: hostile })).toBe(draw({ theme: 'dark' }))
+  expect(draw({ theme: 'dark', colors: 12 })).toBe(draw({ theme: 'dark' }))
+
+  // Left on `auto`, a color of your own holds on a light surface too; the rest is still repainted.
+  const auto = draw({ colors: ['accent=#ff9900'] })
+  expect(auto).not.toContain('[fill="#ff9900"]')
+  expect(auto).not.toContain('[fill="#e1ac6e"]')
+  expect(auto).toContain('[fill="#0a0c11"]{fill:#f5f2ea}')
+  // A color that takes the value of another place keeps that place from being repainted with it.
+  expect(draw({ colors: ['accent=#ebe6dc'] })).not.toContain('[fill="#ebe6dc"]')
+
+  // Every place of the palette has a name, and no two names share a place.
+  expect(new Set(Object.values(COLOR_NAMES)).size).toBe(13)
+  // The setting does not leak into the next drawing.
+  expect(draw({ theme: 'dark' })).toContain('#e1ac6e')
 })

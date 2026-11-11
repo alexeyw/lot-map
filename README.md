@@ -85,6 +85,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 | `background` | `solid` | the map's own background, or `transparent`, which lets the pane behind it show through. The rim around the labels keeps the background's colour, so on a surface of another shade it shows as a faint halo |
+| `colors` | none | colours of your own, each as `name=#rrggbb`; see [Colours of your own](#colours-of-your-own) |
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 
 For example, Russian labels and your own memory server:
@@ -98,6 +99,31 @@ Lists are written with commas.
 | Russian labels | `layout` set to `you-bottom` |
 | --- | --- |
 | <img src="docs/map-russian.png" width="320" alt="The map with Russian labels"> | <img src="docs/map-turned.png" width="320" alt="The map turned, with the person at the bottom"> |
+
+## Colours of your own
+
+`colors` replaces the map's colours one by one. Set one, a few, or all thirteen; what you leave out stays as it is.
+
+```bash
+echo '{"theme":"dark","colors":"accent=#7fb4ff,active=#b8d6ff,text=#e6edf7"}' | claude plugin configure lot-map@lot-map --values-stdin
+```
+
+| Name | What it colours |
+| --- | --- |
+| `background` | the map's ground, and the rim around the labels |
+| `node` | the inside of a station and of the centre |
+| `line`, `spoke` | the dashed contours and the idle spokes |
+| `text`, `label`, `faint` | the name in the centre and lit labels, the other labels, the counts |
+| `accent`, `active` | the main colour, and a station at work |
+| `error` | errors and refusals |
+| `memory`, `memoryActive` | the Memory station and its spoke |
+| `route` | the route between stations |
+
+<img src="docs/map-colors.png" width="640" alt="The map in two palettes of one's own: a cool blue one and a green one">
+
+- Only `#rgb` and `#rrggbb` are taken. Anything else, and any other name, counts as not set.
+- With `theme` left on `auto`, a colour of your own holds on a light surface as well, and the rest is repainted as before. With a whole palette of your own, set `theme` to `dark` or `light`.
+- With `background` set to `transparent`, still give `background` here the colour of your pane: the rim around the labels takes it, and the halo is gone.
 
 ## What it shows and what it keeps
 

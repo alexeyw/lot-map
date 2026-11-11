@@ -41,6 +41,8 @@ export type Setup = {
   theme: 'auto' | 'dark' | 'light'
   /** Whether the map paints its own ground, or leaves the surface it lies on showing through. */
   background: 'solid' | 'transparent'
+  /** Colors the person set, by their place in the palette. They hold on any surface; the rest follows the theme. */
+  colors: Partial<Palette>
   /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
   layout: 'you-top' | 'you-bottom'
 }
@@ -67,6 +69,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     hookReasons: options.hookReasons === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     background: options.background === 'transparent' ? 'transparent' : 'solid',
+    colors: colorsFrom(options.colors),
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
   }
 }
@@ -360,9 +363,45 @@ const LIGHT: Palette = {
  * Every color on the map is one of the palette's, written as a plain attribute, so a rule per color reaches all of it;
  * a surface that drops the rules shows the dark map, whole.
  */
-const LIGHT_RULES = `<style>@media (prefers-color-scheme: light){${(Object.keys(DARK) as (keyof Palette)[])
-  .map(k => `[fill="${DARK[k]}"]{fill:${LIGHT[k]}}[stroke="${DARK[k]}"]{stroke:${LIGHT[k]}}`)
-  .join('')}}</style>`
+const lightRules = (own: Partial<Palette> = {}): string =>
+  `<style>@media (prefers-color-scheme: light){${(Object.keys(DARK) as (keyof Palette)[])
+    // A color the person set stays as it is, and so does anything that shares its value with one.
+    .filter(k => own[k] === undefined && !Object.values(own).includes(DARK[k]))
+    .map(k => `[fill="${DARK[k]}"]{fill:${LIGHT[k]}}[stroke="${DARK[k]}"]{stroke:${LIGHT[k]}}`)
+    .join('')}}</style>`
+
+/** The names a person writes for the places of the palette. */
+export const COLOR_NAMES: Record<string, keyof Palette> = {
+  background: 'ground',
+  node: 'raised',
+  line: 'line',
+  spoke: 'spoke',
+  text: 'bone',
+  label: 'ash',
+  faint: 'dim',
+  accent: 'accent',
+  active: 'hot',
+  error: 'red',
+  memory: 'mem',
+  memoryActive: 'memHot',
+  route: 'trail',
+}
+
+/**
+ * `accent=#ff9900, background=#101418` made into palette entries. A color goes into the drawing as it is written,
+ * so only `#rgb` and `#rrggbb` pass; an unknown name or anything else counts as not set.
+ */
+function colorsFrom(v: unknown): Partial<Palette> {
+  const out: Partial<Palette> = {}
+  for (const pair of list(v)) {
+    const at = pair.indexOf('=')
+    const key = COLOR_NAMES[pair.slice(0, at).trim()]
+    const hex = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.exec(pair.slice(at + 1).trim())?.[0].toLowerCase()
+    if (at < 1 || key === undefined || hex === undefined) continue
+    out[key] = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex
+  }
+  return out
+}
 
 const FONT = 'font-family="SF Mono, ui-monospace, Menlo, monospace"'
 
@@ -579,7 +618,7 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
 
 
 export function drawMap(board: Board, now: number, setup: Setup): string {
-  const c = setup.theme === 'light' ? LIGHT : DARK
+  const c: Palette = { ...(setup.theme === 'light' ? LIGHT : DARK), ...setup.colors }
   shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
   const core: Point = { x: CX, y: CY }
   const recent = board.entries.slice(-40)
@@ -712,7 +751,7 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
   }
 
   // Twice the viewBox, so the picture fills whatever room the pane gives it.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}">${setup.theme === 'auto' ? LIGHT_RULES : ''}${body}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}">${setup.theme === 'auto' ? lightRules(setup.colors) : ''}${body}</svg>`
 }
 
 function escapeXml(text: string): string {
