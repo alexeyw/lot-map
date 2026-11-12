@@ -1,0 +1,38 @@
+# Every pull request and every push to main: the plugin validates and its tests pass.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # The version the tests are known to pass on. Raise it together with the README's "Built and tested on".
+      CLAUDE_CODE_VERSION: 2.1.321
+      DISABLE_AUTOUPDATER: 1
+      DISABLE_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      # Neither command needs an account: they read the folder and run the tests locally.
+      - name: Validate
+        run: claude plugin validate .
+      - name: Test
+        run: claude plugin test .
