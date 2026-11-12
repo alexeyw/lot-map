@@ -79,7 +79,9 @@ A pulse flies out when something starts and returns when it ends. Refusals and e
 - **Subagents.** Each one still at work circles the Agents station as a small dot, and its calls start from there.
 - **The answer.** One wide ring leaves the centre when the answer is ready.
 
-Below the map are the current action with the context percentage, and the last 16 rows: `●` running, `·` done, `✕` failed or blocked, `◆` a change of model. Finished calls that follow one another at one station fold into one row, marked `+2` for the two it stands for besides the one named.
+Below the map are a line that says what runs now, and the last 16 rows: `●` running, `·` done, `✕` failed or blocked, `◆` a change of model. Finished calls that follow one another at one station fold into one row, marked `+2` for the two it stands for besides the one named.
+
+Each row is one line. Its words are cut at the pane's edge; its time stands in a column at the right, with a dash for what took none, such as a message arriving, and on the answer's row the length of the whole turn. A row with a long label has a `▸` before its time: press it to read the row whole, and again to close it. One row is open at a time. In a terminal the line of now also holds the context percentage and the model at its right, since no drawing is there to show them.
 
 | At work | Subagents | A hook refuses |
 | --- | --- | --- |
@@ -119,6 +121,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `colors` | none | colours of your own, each as `name=#rrggbb`; see [Colours of your own](#colours-of-your-own) |
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
+| `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
 | `terminalView` | `text` | how the map looks in a terminal: `text`, the rows alone, or `picture`, the map's picture above them in a terminal that shows pictures; see [In a terminal](#in-a-terminal) |
 | `cellShape` | `2.4` | for the terminal picture: how many times taller a terminal cell is than it is wide, from 1.2 to 4, so that the picture fills its box; see [In a terminal](#in-a-terminal) |
 
