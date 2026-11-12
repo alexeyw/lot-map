@@ -49,6 +49,8 @@ export type Setup = {
   layout: 'you-top' | 'you-bottom'
   /** With `reduced` nothing on the map flies, spreads or spins: what changes only fades. */
   motion: 'full' | 'reduced'
+  /** The size of the words under the map, a step on the surface's own scale. A terminal has one size. */
+  textSize: 'caption' | 'footnote' | 'body'
   /** How the map looks in a terminal: the rows alone, as always, or the map's picture above them. */
   terminalView: 'text' | 'picture'
   /** How many times taller a terminal cell is than it is wide: what sizes the picture's box of cells. The engine does not say. */
@@ -88,6 +90,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     colors: colorsFrom(options.colors),
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
     motion: options.motion === 'reduced' ? 'reduced' : 'full',
+    textSize: options.textSize === 'caption' || options.textSize === 'body' ? options.textSize : 'footnote',
     terminalView: options.terminalView === 'picture' ? 'picture' : 'text',
     cellShape: cellShapeFrom(options.cellShape),
   }

@@ -611,7 +611,8 @@ test('a subagent circles the agents station until its loop ends, and its hanging
   await hanging.next()
 
   let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /идёт/ }))?.text).toContain('субагент')
+  // The row is running: its mark says so, and its time column holds the word, which the second mount below sees gone.
+  expect(await ui.find({ type: 'Text', text: /^● .*субагент/ })).toBeDefined()
   expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('animateTransform')
   await ui.unmount()
 
@@ -926,4 +927,31 @@ test('the idle status line shows the model name when one is known', () => {
   expect(describeNow(withModel, t)).toBe(`${t.idle} · ${shortModel('claude-sonnet-4-5-20250514')}`)
   expect(describeNow(withContext, t)).toContain(shortModel('claude-sonnet-4-5-20250514'))
   expect(describeNow(withContext, t)).toContain('42%')
+})
+
+test('a row is one line: its words are cut at the edge, its time has a column, and a long one opens on a press', { options: { textSize: 'body' } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {} }))
+  const long = 'Run the plugin tests and then the validator on the whole folder'
+  await $.tool.call({ tool: 'Bash', command: 'make', description: long })
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/content.py' })
+
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const row = await ui.find({ type: 'Text', text: /Run the plugin tests/ })
+    expect(row?.text).toContain(long)
+    expect(row?.props.wrap).toBe('truncate-end')
+    expect(row?.props.size).toBe('body')
+    // A short label has nothing to open; the long one has one control, and a press turns its row to wrapping and back.
+    const controls = await ui.findAll({ type: 'Button' })
+    expect(controls.length).toBe(1)
+    const key = String(controls[0]?.props.key)
+    await ui.press({ key })
+    expect((await ui.find({ type: 'Text', text: /Run the plugin tests/ }))?.props.wrap).toBe('wrap')
+    expect((await ui.find({ type: 'Text', text: /content\.py/ }))?.props.wrap).toBe('truncate-end')
+    await ui.press({ key })
+    expect((await ui.find({ type: 'Text', text: /Run the plugin tests/ }))?.props.wrap).toBe('truncate-end')
+    await ui.unmount()
+  }
+  expect(setupFrom({ textSize: 'huge' }).textSize).toBe('footnote')
 })

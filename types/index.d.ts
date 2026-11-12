@@ -37,6 +37,8 @@ export type Board = {
   context?: number
   /** When the model last changed. */
   switchedAt?: number
+  /** The row of the feed the person opened to read whole: its entry's id. */
+  open?: string
 }
 
 declare module 'claude-code' {

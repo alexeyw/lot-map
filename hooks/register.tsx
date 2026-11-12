@@ -8,6 +8,10 @@ import { drawPicture, terminalPicture } from './terminal'
 
 const PANE = 'lot-map'
 const KEEP = 80
+/** A label longer than this may not fit a docked pane, so its row gets a control that opens it. */
+const LONG_LABEL = 28
+/** The cells the time takes at the end of a row: `1 min 5 s`, or the word for a call still running. */
+const TIME_COLUMN = 9
 const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
@@ -338,7 +342,8 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const state = await read($, board)
     const now = await $.clock.now()
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const size = setup.textSize
 
     const rows = foldRows(state.entries).map(({ entry, times, tookMs }) => {
       const isSwitch = entry.mark === 'switch'
@@ -346,15 +351,44 @@ export const register: Register = (on, options) => {
       const took = entry.endedAt === undefined ? t.running : tookMs > 0 ? formatMs(tookMs, t) : ''
       // Theme keys, so the rows read on a light theme as well as on a dark one.
       const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
-      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}${took === '' ? '' : `  ${took}`}`
+      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}`
+      const isDim = entry.status === 'ok' && !isSwitch
+      // One row of the pane a row of the feed: the words are cut at the edge, the time keeps a column of its own at the
+      // right, so a long label neither wraps nor pushes the time about. A long one can be opened, one at a time.
+      const isLong = entry.label.length > LONG_LABEL
+      const isOpen = isLong && state.open === entry.id
       return (
-        <Text mono size="footnote" color={color} dimColor={entry.status === 'ok' && !isSwitch}>
-          {line}
-        </Text>
+        <Box flexDirection="row" gap={1}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text mono size={size} color={color} dimColor={isDim} wrap={isOpen ? 'wrap' : 'truncate-end'}>
+              {line}
+            </Text>
+          </Box>
+          {isLong
+            ? [
+                <Button
+                  key={`open-${entry.id}`}
+                  plain
+                  dimColor
+                  label={isOpen ? '▾' : '▸'}
+                  onPress={() => void quietly(() => update($, board, b => ({ ...b, open: isOpen ? undefined : entry.id })))}
+                />,
+              ]
+            : []}
+          <Box flexShrink={0} minWidth={TIME_COLUMN} justifyContent="flex-end">
+            <Text mono tabular size={size} color={color} dimColor={isDim} wrap="truncate-end">
+              {took}
+            </Text>
+          </Box>
+        </Box>
       )
     })
     const feed = rows.length > 0 ? rows : [<Text dimColor>{t.nothingYet}</Text>]
-    const current = <Text mono size="footnote">{describeNow(state, t)}</Text>
+    const current = (
+      <Text mono size={size} wrap="truncate-end">
+        {describeNow(state, t)}
+      </Text>
+    )
 
     if (e.surface === 'terminal') {
       const tally = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0).map(s => `${t.stations[s.id]} ${state.counts[s.id]}`).join(' · ')

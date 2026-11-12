@@ -133,6 +133,17 @@
       "default": "full",
       "description": "With reduced, nothing on the map flies, spreads or spins: a call lights its station and its spoke, and what changes only fades."
     },
+    "textSize": {
+      "type": "string",
+      "title": "Text size",
+      "options": [
+        "caption",
+        "footnote",
+        "body"
+      ],
+      "default": "footnote",
+      "description": "The size of the rows under the map: caption is smaller, body larger. A terminal has one size and ignores it."
+    },
     "terminalView": {
       "type": "string",
       "title": "Terminal view",
