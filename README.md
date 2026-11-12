@@ -154,6 +154,7 @@ A label holds a name, never content:
 - a file: the last two parts of its path;
 - a web address: the host alone, without a login, password, path or query; an address that can be read two ways shows only its scheme;
 - a shell command: the short description Claude wrote for it, or the command's name, never the command line. The description is the model's own words, and the mod shows them as written;
+- a search: the tool's name for `Grep` and `Glob`, the words `web search` for a web search and `loading tools` for a tool search, in the map's language, never the pattern or the query;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
 - a subagent: the short description it was started with;
