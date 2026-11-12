@@ -1,4 +1,4 @@
-<!-- Read CONTRIBUTING.md first. One thing per pull request. -->
+<!-- Read CONTRIBUTING.md first. One thing per pull request, opened against `next`, not `main`. -->
 
 ## What and why
 

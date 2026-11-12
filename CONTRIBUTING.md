@@ -43,6 +43,7 @@ CI runs the first two on every pull request. On your first one a maintainer has 
 
 ## A pull request
 
+- **Open it against `next`, not `main`.** Installs follow `main`, so it changes only at a release; `next` collects what the next release will hold. Branch from `next` too.
 - **One thing per pull request.** A fix and a feature are two.
 - **A test for what you changed.** Tests here state behaviour in their names (`a password never reaches a label…`); add yours the same way, and for a bug, one that fails without the fix.
 - **Say what you checked and what you did not:** the commands, the Claude Code version, the system, and whether you saw it in the desktop app or a terminal.
