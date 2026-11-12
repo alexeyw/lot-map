@@ -2,6 +2,10 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.4.2 (2026-11-11)
+
+- A privacy page, [PRIVACY.md](PRIVACY.md): what the mod is handed, what it keeps and what it does not do. `plugin.json` links to it. The map itself is unchanged.
+
 ## 0.4.1 (2026-11-11)
 
 - More for a plugin catalogue's listing: a support link to this repository's issues, and keywords. The map itself is unchanged.
