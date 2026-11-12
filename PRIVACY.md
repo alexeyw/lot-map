@@ -37,7 +37,7 @@ To remove what it keeps, uninstall the plugin.
 - With `terminalView` set to `picture`, in a terminal that shows pictures it paints the map's picture itself, from the same rows, and hands it to Claude Code to draw in the pane. The picture holds nothing the map does not show.
 - It changes no tool call, result, prompt or context. It sees what your settings hooks decide about a call, hands that decision on as it was, and decides nothing about permissions itself.
 
-The code that takes names from a call is `classify` in [`hooks/map.ts`](hooks/map.ts); the hooks are in [`hooks/register.tsx`](hooks/register.tsx).
+The code that takes names from a call is `classify` in [`hooks/classify.ts`](hooks/classify.ts); the hooks are in [`hooks/register.tsx`](hooks/register.tsx).
 
 ## Where the code comes from
 
