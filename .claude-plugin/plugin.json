@@ -1,6 +1,6 @@
 {
   "name": "lot-map",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
   "author": {
     "name": "Aleksei Volodin",
@@ -8,6 +8,8 @@
   },
   "homepage": "https://github.com/alexeyw/lot-map",
   "repository": "https://github.com/alexeyw/lot-map",
+  "supportUrl": "https://github.com/alexeyw/lot-map/issues",
+  "keywords": ["mod", "map", "visualization", "activity", "tool calls", "hooks", "subagents", "memory"],
   "license": "MIT",
   "icon": "./.claude-plugin/icon.png",
   "types": "./types/index.d.ts",
