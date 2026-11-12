@@ -4,6 +4,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Board, Entry } from '../types'
 import { TRAIL_FADE_MS, TRAIL_HOLD_MS, drawMap, setupFrom } from './map'
 import { ENDLESS_FOR_MS, FASTEST_MS, MAX_IMAGE_BYTES, endlessEvery, fromBase64, imageSource, nextChangeIn, paint, parseMap, valueAt } from './raster'
+import { schemeFrom } from './terminal'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -413,5 +414,59 @@ test('a terminal that shows no pictures gets the rows alone', { options: PICTURE
   await clock.advance(100)
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Nothing yet/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the terminal background is read from COLORFGBG, light or dark, and nothing else counts', () => {
+  expect(schemeFrom('0;15')).toBe('light')
+  expect(schemeFrom('0;7')).toBe('light')
+  expect(schemeFrom('0;default;15')).toBe('light')
+  expect(schemeFrom('15;0')).toBe('dark')
+  expect(schemeFrom('7;8')).toBe('dark')
+  expect(schemeFrom('15;default;0')).toBe('dark')
+  expect(schemeFrom(undefined)).toBeUndefined()
+  expect(schemeFrom('')).toBeUndefined()
+  expect(schemeFrom('15;default')).toBeUndefined()
+  expect(schemeFrom('x;y')).toBeUndefined()
+})
+
+const LIGHT_INK = 150
+const DARK_INK = 100
+
+/** How bright what the picture draws is, its see-through background left out: high for the light map, low for the dark one. */
+async function inkOf(ui: { find: (q: { type: 'Image' }) => Promise<{ props: Record<string, unknown> } | undefined> }): Promise<number> {
+  const { rgba } = unpng(fromBase64(((await ui.find({ type: 'Image' }))?.props.source as { png: string }).png))
+  let sum = 0
+  let count = 0
+  for (let i = 0; i < rgba.length; i += 4) {
+    if ((rgba[i + 3] ?? 0) < 200) continue
+    sum += ((rgba[i] ?? 0) + (rgba[i + 1] ?? 0) + (rgba[i + 2] ?? 0)) / 3
+    count++
+  }
+  return count === 0 ? 0 : sum / count
+}
+
+for (const [what, variables, isLight] of [
+  ['a light terminal gets the light picture', { COLORFGBG: '0;15' }, true],
+  ['a dark terminal gets the dark picture', { COLORFGBG: '15;0' }, false],
+  ['a terminal that says nothing gets the dark picture', {}, false],
+] as const) {
+  test(`with theme auto, ${what}`, { options: PICTURE }, async ($, on) => {
+    on('clock.now', () => ({ value: 1_000_000 }))
+    mock.env(on, variables)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const ink = await inkOf(ui)
+    // The light map's nodes are white and the dark map's nearly black.
+    if (isLight) expect(ink).toBeGreaterThan(LIGHT_INK)
+    else expect(ink).toBeLessThan(DARK_INK)
+    await ui.unmount()
+  })
+}
+
+test('a theme set in the options wins over the terminal', { options: { ...PICTURE, theme: 'dark' } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  mock.env(on, { COLORFGBG: '0;15' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await inkOf(ui)).toBeLessThan(DARK_INK)
   await ui.unmount()
 })

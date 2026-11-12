@@ -95,7 +95,7 @@ A terminal shows the rows alone. With `terminalView` set to `picture`, a termina
 
 The mod paints the picture itself, from the same drawing as the desktop app's, with letters from the X.Org misc-fixed bitmap fonts, which are in the public domain; [FONTS.md](FONTS.md) says where they come from. It paints up to thirty frames a second while anything on the map moves. The core breathes in the picture only while something runs, smoothly for ten minutes after the map last changed and then a frame every five seconds; at rest the picture stands still once the trails have faded.
 
-A terminal does not say whether it is dark or light, so with `theme` on `auto` the picture is dark; on a light terminal, set `theme` to `light`. The picture has no background of its own, so the terminal's shows through it; in iTerm2 that is a shade off the pane's grey, which leaves a faint box around the map. `colors` with `background=#rrggbb` gives the picture a background of its own.
+With `theme` on `auto` the picture is light or dark by the terminal's `COLORFGBG`, which iTerm2, rxvt and Konsole set; where nothing says, it is dark, and on a light terminal that does not say, set `theme` to `light`. The picture has no background of its own, so the terminal's shows through it; in iTerm2 that is a shade off the pane's grey, which leaves a faint box around the map. `colors` with `background=#rrggbb` gives the picture a background of its own.
 
 Nor does a terminal say how tall its cells are. `cellShape` does: how many times taller a cell is than it is wide, 2.4 by default, as iTerm2 draws Monaco 12, and about 2 for Menlo in kitty. If the picture leaves an empty band below it, raise it; if the band is at its right, lower it.
 

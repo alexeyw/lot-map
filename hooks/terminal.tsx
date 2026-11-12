@@ -18,6 +18,19 @@ const FEED_ROWS = 6
 /** How soon after the first picture the loop tries a frame, to learn whether this terminal shows pictures. */
 const PROBE_MS = 100
 
+/** The ANSI background indexes that are light: white (7) and the bright colours but bright black (9–15). */
+const LIGHT_BACKGROUNDS = new Set([7, 9, 10, 11, 12, 13, 14, 15])
+
+/**
+ * The terminal's background from `COLORFGBG` (`fg;bg` or `fg;default;bg`, as iTerm2, rxvt and Konsole set it),
+ * or undefined when it says nothing usable.
+ */
+export function schemeFrom(colorFgBg: string | undefined): 'light' | 'dark' | undefined {
+  const last = (colorFgBg ?? '').trim().split(';').pop() ?? ''
+  if (!/^\d{1,3}$/.test(last)) return undefined
+  return LIGHT_BACKGROUNDS.has(Number(last)) ? 'light' : 'dark'
+}
+
 /** Only while something runs do the endless animations get frames. */
 const isBusy = (board: Board): boolean => board.entries.some(x => x.status === 'run') || (board.agents ?? []).length > 0
 
@@ -29,6 +42,8 @@ export type Picture = {
   timer: { cancel: () => void } | undefined
   /** Whether this terminal shows pictures: unknown until the first frame, false once it drew the words instead. */
   showsPictures: boolean | undefined
+  /** Under `auto`, until the first drawing has asked the terminal whether it is light or dark. */
+  isSchemeUnknown: boolean
 }
 
 function schedule($: EngineInterface, picture: Picture, delay: number | undefined): void {
@@ -46,18 +61,28 @@ function schedule($: EngineInterface, picture: Picture, delay: number | undefine
 /** The terminal's picture for this setup, or none while `terminalView` is `text`. A reload starts afresh; the engine cancels the old timer. */
 export function terminalPicture(setup: Setup): Picture | undefined {
   if (setup.terminalView !== 'picture') return undefined
-  // A terminal does not say whether it is dark, so `auto` is dark. No ground unless the person set a background colour.
+  // Under `auto` the first drawing asks the terminal, through COLORFGBG; until then, or where it says nothing, dark.
+  // No ground unless the person set a background colour.
   const pictureSetup: Setup = {
     ...setup,
     theme: setup.theme === 'auto' ? 'dark' : setup.theme,
     background: setup.colors.ground === undefined ? 'transparent' : setup.background,
   }
-  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined }
+  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto' }
 }
 
 /** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures. */
 export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, picture: Picture): Promise<RenderElement | undefined> {
   if (picture.showsPictures === false) return undefined
+  if (picture.isSchemeUnknown) {
+    picture.isSchemeUnknown = false
+    try {
+      const scheme = schemeFrom(await $.env.get('COLORFGBG'))
+      if (scheme !== undefined) picture.setup = { ...picture.setup, theme: scheme }
+    } catch {
+      // Nothing to read: the picture stays dark, which is no reason to lose it.
+    }
+  }
   const { setup } = picture
   const { Image } = $.ui.resolve(e)
   const scene = parseMap(drawMap(board, now, setup))
