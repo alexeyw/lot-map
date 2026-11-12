@@ -18,7 +18,7 @@ const FEED_ROWS = 6
 /** How soon after the first picture the loop tries a frame, to learn whether this terminal shows pictures. */
 const PROBE_MS = 100
 
-/** While something runs, endless animations keep getting frames after the first ten minutes. */
+/** Only while something runs do the endless animations get frames. */
 const isBusy = (board: Board): boolean => board.entries.some(x => x.status === 'run') || (board.agents ?? []).length > 0
 
 /** The picture on show in a terminal, and the loop that keeps it moving between drawings. */

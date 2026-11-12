@@ -123,6 +123,8 @@ test('every drawing the map makes is one the painter can paint whole', () => {
   }
   // Something it does not know is said, not guessed at.
   expect(parseMap('<svg viewBox="0 0 10 10"><polygon points="0 0 1 1"/><circle r="1" fill="#fff" filter="x"/></svg>').unknown).toEqual(['<polygon>', 'circle filter'])
+  // A root that tells screen readers it is an image is one it knows.
+  expect(parseMap('<svg role="img" viewBox="0 0 10 10"></svg>').unknown).toEqual([])
 })
 
 test('a group turned once carries the shapes in it, as the subagents stand with reduced motion', () => {
@@ -156,20 +158,19 @@ test('the painter keeps time as SVG does', () => {
   expect(near(at(two, 2500))).toBe(0.425)
 })
 
-test('the picture is painted again only while something moves, and the core breathes for ten minutes after the map last changed', () => {
+test('the picture is painted again only while something moves, and the core breathes only while something runs', () => {
   const now = 1_000_000
   const rest = parseMap(drawMap({ entries: [], counts: {} }, now, setupFrom({})))
   // At rest only the core breathes, and that alone is no reason to paint unless endless animations count.
   expect(nextChangeIn(rest, 0)).toBeUndefined()
   expect(nextChangeIn(rest, 0, 500)).toBeGreaterThanOrEqual(500)
-  // They count at thirty frames a second for ten minutes, at rest as while something runs;
-  // then a task still running gets a frame every five seconds, and a map at rest waits for the next change.
-  expect(endlessEvery(0, false)).toBe(FASTEST_MS)
+  // They count only while something runs: at thirty frames a second for ten minutes, then every five seconds.
+  // A map at rest waits for the next change.
+  expect(endlessEvery(0, true)).toBe(FASTEST_MS)
   expect(endlessEvery(ENDLESS_FOR_MS - 1, true)).toBe(FASTEST_MS)
-  expect(nextChangeIn(rest, 120_000, endlessEvery(120_000, false))).toBe(FASTEST_MS)
   expect(endlessEvery(ENDLESS_FOR_MS, true)).toBe(5000)
-  expect(endlessEvery(ENDLESS_FOR_MS, false)).toBeUndefined()
-  expect(nextChangeIn(rest, ENDLESS_FOR_MS, endlessEvery(ENDLESS_FOR_MS, false))).toBeUndefined()
+  expect(endlessEvery(0, false)).toBeUndefined()
+  expect(nextChangeIn(rest, 0, endlessEvery(0, false))).toBeUndefined()
   const busy = parseMap(drawMap(BUSY(now), now, setupFrom({})))
   expect(nextChangeIn(busy, 0)).toBe(FASTEST_MS)
   // What runs breathes and beats smoothly when asked to, long after everything else has settled.
@@ -218,19 +219,22 @@ test('what never moves is painted once a drawing, and the frames come out as if 
   const now = 1_000_000
   // An animation of nothing makes every shape one that moves, so the painter paints the drawing whole, frame after frame.
   const nothing = { kind: 'value', attr: 'nothing', values: [0], keyTimes: undefined, begin: 0, dur: 1, repeat: 1, freeze: false }
+  const times = [0, 333, 1500, 45_000]
   for (const options of [{ theme: 'dark', background: 'transparent' }, { theme: 'dark' }, { theme: 'light' }]) {
     const scene = parseMap(drawMap(BUSY(now), now, setupFrom(options)))
     const whole = { ...scene, shapes: scene.shapes.map(s => ({ ...s, animations: [...s.animations, nothing] })) } as typeof scene
-    for (const t of [0, 333, 1500, 45_000]) {
-      const layered = paint(scene, t, 1.5).rgba.slice()
-      const direct = paint(whole, t, 1.5).rgba
+    // All of one drawing's frames, then the other's: the painter keeps the still shapes of one drawing at a time.
+    const frames = times.map(t => paint(scene, t, 1).rgba.slice())
+    for (const [k, t] of times.entries()) {
+      const layered = frames[k] as Uint8Array
+      const direct = paint(whole, t, 1).rgba
       // What shows: each color weighted by its opacity, and the opacity, within two steps of rounding out of 255.
       let worst = 0
       for (let i = 0; i < layered.length; i += 4) {
-        const a = (layered[i + 3] as number) / 255
-        const b = (direct[i + 3] as number) / 255
-        worst = Math.max(worst, Math.abs(a - b) * 255)
-        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs((layered[i + c] as number) * a - (direct[i + c] as number) * b))
+        const a = layered[i + 3] as number
+        const b = direct[i + 3] as number
+        worst = Math.max(worst, Math.abs(a - b))
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs((layered[i + c] as number) * a - (direct[i + c] as number) * b) / 255)
       }
       expect(worst).toBeLessThanOrEqual(2)
     }
@@ -375,7 +379,7 @@ test('a background colour of the person\'s own gives the terminal picture its gr
   await ui.unmount()
 })
 
-test('the picture moves while something moves, and the core goes on breathing at rest', { options: PICTURE, timeoutMs: 15_000 }, async ($, on) => {
+test('the picture moves while something moves, and stands still at rest', { options: PICTURE, timeoutMs: 15_000 }, async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
   const frames: { requestId: string; key: string }[] = []
   on('ui.blit', (_, e) => {
@@ -393,12 +397,11 @@ test('the picture moves while something moves, and the core goes on breathing at
   // The pulse flies out and back: thirty frames a second.
   await clock.advance(1000)
   expect(frames.length).toBeGreaterThanOrEqual(probed + 28)
-  // Nothing runs now, and once the station's glow has faded (3.2 s) the core goes on breathing as smoothly.
-  // When it stops is endlessEvery's, above: ten minutes of frames would make this test slow.
+  // Nothing runs, so once the station's glow has faded (3.2 s) the core's breath alone sends no frames.
   await clock.advance(3000)
   const landed = frames.length
   await clock.advance(1000)
-  expect(frames.length).toBeGreaterThanOrEqual(landed + 28)
+  expect(frames.length).toBe(landed)
   await ui.unmount()
 })
 
