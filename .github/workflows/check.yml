@@ -1,10 +1,10 @@
-# Every pull request and every push to main: the plugin validates and its tests pass.
+# Every pull request and every push to main or next: the plugin validates and its tests pass.
 name: check
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, next]
 
 permissions:
   contents: read
