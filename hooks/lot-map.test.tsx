@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
@@ -655,9 +655,14 @@ test('the context window shows as soon as the engine tells how full it is', { op
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('>37%<')
-  // The figure stands at the right of the line of now, apart from the words, so the words can be cut and it cannot.
-  expect((await ui.find({ type: 'Text', text: /^37%/ }))?.text).toMatch(/^37%/)
+  // Beside the drawing the line of now says only what runs: the drawing has the figure and the model already.
+  expect((await ui.find({ type: 'Text', text: /Ожидание/ }))?.text).toBe('Ожидание')
   await ui.unmount()
+
+  // A terminal has no drawing, so the figure and the model stand at the right of that line, apart from the words.
+  const term = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await term.find({ type: 'Text', text: /^37%/ }))?.text).toBe('37% · opus 5.5')
+  await term.unmount()
 })
 
 test('the ring can be turned so that the person is at the bottom and the network at the top', () => {
@@ -972,4 +977,15 @@ test('the time stays on a row\'s first line, a moment holds a dash, and the answ
   const rows = (await ui.findAll({ type: 'Box' })).filter(b => b.props.flexDirection === 'row')
   expect(rows.length > 0 && rows.every(b => b.props.alignItems === 'flex-start')).toBe(true)
   await ui.unmount()
+})
+
+test('the line of now names the model once: not at its right while a model step is what runs', () => {
+  const t = stringsFor('en')
+  const step: Entry = { id: 's', station: 'model', label: 'opus 5.5 · step 1', from: 'core', startedAt: 1, status: 'run' }
+  const call: Entry = { id: 'c', station: 'shell', label: 'make', from: 'core', startedAt: 2, status: 'run' }
+  const board: Board = { entries: [], counts: {}, model: 'claude-opus-5-5', context: 8 }
+  expect(nowParts(board, t)).toEqual({ what: t.idle, meter: '8% · opus 5.5' })
+  expect(nowParts({ ...board, entries: [step] }, t)).toEqual({ what: 'Model: opus 5.5 · step 1', meter: '8%' })
+  expect(nowParts({ ...board, entries: [step, call] }, t).meter).toBe('8% · opus 5.5')
+  expect(stringsFor('ru').idle).toBe('Ожидание')
 })

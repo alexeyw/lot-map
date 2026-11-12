@@ -53,12 +53,15 @@ export function taskNotice(text: string): { id: string; status?: Status } | unde
   return { id, status: word === 'failed' ? 'err' : 'ok' }
 }
 
-/** The same in two parts, for a line that keeps its figures at the right: what runs now, and how full the context is with the model's name. */
+/**
+ * The same in two parts, for a line that keeps its figures at the right: what runs now, and how full the context is with
+ * the model's name. The model is left out while the line itself names a model step, so it is not said twice.
+ */
 export function nowParts(board: Board, t: Strings): { what: string; meter: string } {
   const running = board.entries.filter(e => e.status === 'run')
   const top = running[running.length - 1]
   const what = top === undefined ? t.idle : `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}`
-  const figures = [board.context === undefined ? '' : `${Math.round(board.context)}%`, board.model === undefined ? '' : shortModel(board.model)]
+  const figures = [board.context === undefined ? '' : `${Math.round(board.context)}%`, board.model === undefined || top?.station === 'model' ? '' : shortModel(board.model)]
   return { what, meter: figures.filter(Boolean).join(' · ') }
 }
 

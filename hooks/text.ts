@@ -123,7 +123,7 @@ const ru: Strings = {
   running: 'идёт',
   nothingYet: 'Пока ничего не было.',
   noCounts: 'Счётчики пусты.',
-  idle: 'Сейчас ничего не выполняется.',
+  idle: 'Ожидание',
   context: 'контекст',
   andMore: n => ` и ещё ${n}`,
   webSearch: 'поиск в сети',

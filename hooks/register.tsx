@@ -10,8 +10,8 @@ const PANE = 'lot-map'
 const KEEP = 80
 /** A label longer than this may not fit a docked pane, so its row gets a control that opens it. */
 const LONG_LABEL = 28
-/** The cells the time takes at the end of a row: `1 min 5 s`, or the word for a call still running. */
-const TIME_COLUMN = 9
+/** The least the time takes at the end of a row, so that short times line up: `107 ms`. A longer one widens its own row. */
+const TIME_COLUMN = 6
 const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
@@ -398,8 +398,11 @@ export const register: Register = (on, options) => {
       )
     })
     const feed = rows.length > 0 ? rows : [<Text dimColor>{t.nothingYet}</Text>]
-    // What runs now at the left, cut if it must be; the context and the model at the right, where they stay whole.
-    const { what, meter } = nowParts(state, t)
+    // What runs now at the left, cut if it must be. Where there is no drawing to say them, the context and the model
+    // stand at the right, whole; beside the drawing they would be said a second time.
+    const now2 = nowParts(state, t)
+    const what = now2.what
+    const meter = e.surface === 'terminal' ? now2.meter : ''
     const current = (
       <Box flexDirection="row" gap={1} alignItems="flex-start">
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
