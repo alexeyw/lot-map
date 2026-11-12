@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 import { drawPicture, terminalPicture } from './terminal'
 
@@ -345,10 +345,24 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const size = setup.textSize
 
+    // How long each answer took, from the person's message to it: the one time a row of the moment has to show.
+    const turnMs = new Map<string, number>()
+    let askedAt: number | undefined
+    for (const x of state.entries) {
+      if (x.station === 'you' && x.from === 'inbound' && x.mark === undefined) askedAt = x.startedAt
+      if (x.mark === 'done' && askedAt !== undefined) {
+        turnMs.set(x.id, x.startedAt - askedAt)
+        askedAt = undefined
+      }
+    }
+
     const rows = foldRows(state.entries).map(({ entry, times, tookMs }) => {
       const isSwitch = entry.mark === 'switch'
       const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
-      const took = entry.endedAt === undefined ? t.running : tookMs > 0 ? formatMs(tookMs, t) : ''
+      const whole = turnMs.get(entry.id)
+      // A row of one moment (a message, what a hook added) took no time: its place in the column holds a dash.
+      const took = entry.endedAt === undefined ? t.running : whole !== undefined && whole > 0 ? formatMs(whole, t) : tookMs > 0 ? formatMs(tookMs, t) : '—'
+      const isMoment = took === '—'
       // Theme keys, so the rows read on a light theme as well as on a dark one.
       const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
       const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}`
@@ -358,7 +372,7 @@ export const register: Register = (on, options) => {
       const isLong = entry.label.length > LONG_LABEL
       const isOpen = isLong && state.open === entry.id
       return (
-        <Box flexDirection="row" gap={1}>
+        <Box flexDirection="row" gap={1} alignItems="flex-start">
           <Box flexGrow={1} flexShrink={1} minWidth={0}>
             <Text mono size={size} color={color} dimColor={isDim} wrap={isOpen ? 'wrap' : 'truncate-end'}>
               {line}
@@ -376,7 +390,7 @@ export const register: Register = (on, options) => {
               ]
             : []}
           <Box flexShrink={0} minWidth={TIME_COLUMN} justifyContent="flex-end">
-            <Text mono tabular size={size} color={color} dimColor={isDim} wrap="truncate-end">
+            <Text mono tabular size={size} color={isMoment ? undefined : color} dimColor={isDim || isMoment} wrap="truncate-end">
               {took}
             </Text>
           </Box>
@@ -384,10 +398,25 @@ export const register: Register = (on, options) => {
       )
     })
     const feed = rows.length > 0 ? rows : [<Text dimColor>{t.nothingYet}</Text>]
+    // What runs now at the left, cut if it must be; the context and the model at the right, where they stay whole.
+    const { what, meter } = nowParts(state, t)
     const current = (
-      <Text mono size={size} wrap="truncate-end">
-        {describeNow(state, t)}
-      </Text>
+      <Box flexDirection="row" gap={1} alignItems="flex-start">
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Text mono size={size} wrap="truncate-end">
+            {what}
+          </Text>
+        </Box>
+        {meter === ''
+          ? []
+          : [
+              <Box flexShrink={0}>
+                <Text mono tabular size={size} dimColor>
+                  {meter}
+                </Text>
+              </Box>,
+            ]}
+      </Box>
     )
 
     if (e.surface === 'terminal') {

@@ -655,7 +655,8 @@ test('the context window shows as soon as the engine tells how full it is', { op
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('>37%<')
-  expect((await ui.find({ type: 'Text', text: /контекст 37%/ }))?.text).toContain('Сейчас ничего не выполняется')
+  // The figure stands at the right of the line of now, apart from the words, so the words can be cut and it cannot.
+  expect((await ui.find({ type: 'Text', text: /^37%/ }))?.text).toMatch(/^37%/)
   await ui.unmount()
 })
 
@@ -954,4 +955,21 @@ test('a row is one line: its words are cut at the edge, its time has a column, a
     await ui.unmount()
   }
   expect(setupFrom({ textSize: 'huge' }).textSize).toBe('footnote')
+})
+
+test('the time stays on a row\'s first line, a moment holds a dash, and the answer row says how long the turn took', { options: OWN }, async ($, on) => {
+  let clock = 1_000_000
+  on('clock.now', () => ({ value: clock }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
+  await $.turn.start({ text: 'привет', turnId: 't1' } as never)
+  clock += 42_000
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /^42([.,]0)? с$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^—$/ })).toBeDefined()
+  const rows = (await ui.findAll({ type: 'Box' })).filter(b => b.props.flexDirection === 'row')
+  expect(rows.length > 0 && rows.every(b => b.props.alignItems === 'flex-start')).toBe(true)
+  await ui.unmount()
 })
