@@ -342,7 +342,9 @@ export const register: Register = (on, options) => {
       const took = entry.endedAt === undefined ? t.running : tookMs > 0 ? formatMs(tookMs, t) : ''
       // Theme keys, so the rows read on a light theme as well as on a dark one.
       const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
-      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}${took === '' ? '' : `  ${took}`}`
+      const fold = times > 1 ? `  +${times - 1}` : ''
+      const elapsed = took === '' ? '' : `  ${took}`
+      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${fold}${elapsed}`
       return (
         <Text mono size="footnote" color={color} dimColor={entry.status === 'ok' && !isSwitch}>
           {line}

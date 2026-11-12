@@ -164,6 +164,60 @@ Control characters are taken out of every label before it is drawn.
 
 A fault on the map never reaches a tool call or a model turn.
 
+## Multi-host support
+
+The visualization is separate from event collection. Each host has its own adapter in `adapters/` that translates platform-specific events into a shared format (`adapters/types.ts`). The map consumes events without knowing which host produced them.
+
+### Claude Code
+
+The existing plugin. Install and use it as described above — nothing changes.
+
+### Antigravity
+
+`adapters/antigravity.ts` maps Antigravity's plugin hooks (`agent.tool.invoke`, `agent.step.start`, `agent.message`, etc.) to the shared event format. To use it:
+
+```ts
+import { createAntigravityAdapter } from './adapters'
+
+// In your Antigravity plugin's init:
+const adapter = createAntigravityAdapter(antigravity.hooks)
+const stop = adapter.subscribe(event => {
+  // Feed events to the visualization layer
+})
+```
+
+The adapter observes activity without changing tool execution or permissions. Labels carry tool names and short descriptions only — never prompts, file contents, or command arguments. Model identity and context-window usage are available when Antigravity supplies them.
+
+### VS Code
+
+`adapters/vscode.ts` defines the adapter interface and documents what provider-specific work is still needed.
+
+**Current status (November 2026):** no VS Code AI extension exposes a public event API for observing tool calls. Checked: GitHub Copilot (no public tool-call stream), Continue (internal event bus, not stable), Cline (output channel only, no structured events). The adapter interface is ready; a concrete implementation requires one of:
+
+- An extension that fires `onDidStartToolCall` / `onDidEndToolCall` events through its exported API, or
+- A shared MCP server the AI extension connects to, letting the adapter observe the stream, or
+- A structured log parser for a specific extension (fragile).
+
+When `hasModelInfo` or `hasContextInfo` is `false`, the map marks those fields as unavailable rather than showing placeholder values.
+
+### Writing a new adapter
+
+Implement the `HostAdapter` interface from `adapters/types.ts`:
+
+```ts
+interface HostAdapter {
+  readonly host: string
+  readonly hasModelInfo: boolean
+  readonly hasContextInfo: boolean
+  subscribe(emit: (event: MapEvent) => void): Unsubscribe
+}
+```
+
+Safety rules for every adapter:
+- Labels carry names only (file basenames, hostnames, tool names). Never prompts, file contents, or full command arguments.
+- All data stays on the device. Do not send events to external services.
+- Observe activity without changing tool execution, permissions, or agent decisions.
+
 ## Developing
 
 ```bash

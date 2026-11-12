@@ -451,7 +451,7 @@ const lightRules = (own: Partial<Palette> = {}): string =>
     // A color the person set stays as it is, and so does anything that shares its value with one.
     .filter(k => own[k] === undefined && !Object.values(own).includes(DARK[k]))
     .map(k => `[fill="${DARK[k]}"]{fill:${LIGHT[k]}}[stroke="${DARK[k]}"]{stroke:${LIGHT[k]}}`)
-    .join('')}}</style>`
+    .join('')}}@media(prefers-reduced-motion:reduce){animate,animateMotion,animateTransform{display:none}}</style>`
 
 /** The names a person writes for the places of the palette. */
 export const COLOR_NAMES: Record<string, keyof Palette> = {
@@ -834,7 +834,9 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
   }
 
   // Twice the viewBox, so the picture fills whatever room the pane gives it.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}">${setup.theme === 'auto' ? lightRules(setup.colors) : ''}${body}</svg>`
+  // Reduced-motion and light-mode rules share the auto theme's style block; an explicit theme carries no CSS,
+  // so the drawing works on surfaces that strip <style> tags — the SMIL runs but the picture is whole.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * 2}" height="${H * 2}" role="img">${setup.theme === 'auto' ? lightRules(setup.colors) : ''}${body}</svg>`
 }
 
 function escapeXml(text: string): string {
@@ -895,7 +897,8 @@ export function taskNotice(text: string): { id: string; status?: Status } | unde
 export function describeNow(board: Board, t: Strings): string {
   const running = board.entries.filter(e => e.status === 'run')
   const context = board.context === undefined ? '' : ` · ${t.context} ${Math.round(board.context)}%`
+  const model = board.model !== undefined ? ` · ${shortModel(board.model)}` : ''
   const top = running[running.length - 1]
-  if (top === undefined) return `${t.idle}${context}`
+  if (top === undefined) return `${t.idle}${context}${model}`
   return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}${context}`
 }
