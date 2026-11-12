@@ -22,7 +22,7 @@ claude plugin install lot-map --marketplace alexeyw/lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns and draws text only; otherwise type `/lot-map`. Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
+The pane opens by itself when a session starts. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map's picture: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
 
 ## Updating
 
@@ -82,6 +82,16 @@ Below the map are the current action with the context percentage, and the last 1
 | --- | --- | --- |
 | ![A change of model](docs/map-switch.png) | ![After the answer](docs/map-after.png) | ![Light colours](docs/map-light.png) |
 
+## In a terminal
+
+A terminal shows the rows alone. With `terminalView` set to `picture`, a terminal that shows pictures, such as iTerm2 3.5 and later, kitty or Ghostty, gets the map as a picture above the rows, moving as it does in the desktop app. Claude Code must draw in fullscreen, as it does unless `CLAUDE_CODE_NO_FLICKER=0` is set; inside tmux, set `allow-passthrough on` and `focus-events on`. Any other terminal shows the rows alone, as before, and so does a pane narrower than 24 columns.
+
+The mod paints the picture itself, from the same drawing as the desktop app's, with letters from the X.Org misc-fixed bitmap fonts, which are in the public domain; [FONTS.md](FONTS.md) says where they come from. It paints up to thirty frames a second while anything on the map moves, the core's breath included, and stops ten minutes after the map last changed; a task still running then gets a frame every five seconds.
+
+A terminal does not say whether it is dark or light, so with `theme` on `auto` the picture is dark; on a light terminal, set `theme` to `light`. The picture has no background of its own, so the terminal's shows through it; in iTerm2 that is a shade off the pane's grey, which leaves a faint box around the map. `colors` with `background=#rrggbb` gives the picture a background of its own.
+
+Nor does a terminal say how tall its cells are. `cellShape` does: how many times taller a cell is than it is wide, 2.4 by default, as iTerm2 draws Monaco 12, and about 2 for Menlo in kitty. If the picture leaves an empty band below it, raise it; if the band is at its right, lower it.
+
 ## Options
 
 The install offers them on a screen. Later, use `/config` in a terminal or `claude plugin configure`, then restart the session.
@@ -102,6 +112,8 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `colors` | none | colours of your own, each as `name=#rrggbb`; see [Colours of your own](#colours-of-your-own) |
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
+| `terminalView` | `text` | how the map looks in a terminal: `text`, the rows alone, or `picture`, the map's picture above them in a terminal that shows pictures; see [In a terminal](#in-a-terminal) |
+| `cellShape` | `2.4` | for the terminal picture: how many times taller a terminal cell is than it is wide, from 1.2 to 4, so that the picture fills its box; see [In a terminal](#in-a-terminal) |
 
 For example, Russian labels and your own memory server:
 
@@ -174,6 +186,8 @@ claude plugin validate .
 ```
 
 Words live in `hooks/text.ts`; a new language is one more table there and one more value of `language` in `.claude-plugin/plugin.json`.
+
+The terminal picture is painted by `hooks/raster.ts`, which reads the drawing `drawMap` makes. A test paints every kind of drawing and fails on anything the painter does not know, so a change to the drawing that needs more of SVG shows there first. Another, `the terminal picture's font has every letter the map writes, in every language`, names the letters a new language needs added to `hooks/font.ts`; [FONTS.md](FONTS.md) says how to make that file again.
 
 Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md).
 

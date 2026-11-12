@@ -47,6 +47,18 @@ export type Setup = {
   layout: 'you-top' | 'you-bottom'
   /** With `reduced` nothing on the map flies, spreads or spins: what changes only fades. */
   motion: 'full' | 'reduced'
+  /** How the map looks in a terminal: the rows alone, as always, or the map's picture above them. */
+  terminalView: 'text' | 'picture'
+  /** How many times taller a terminal cell is than it is wide: what sizes the picture's box of cells. The engine does not say. */
+  cellShape: number
+}
+
+/** Cell height over width as iTerm2 draws Monaco 12: the default. */
+const CELL_SHAPE = 2.4
+
+function cellShapeFrom(value: unknown): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
+  return Number.isFinite(n) && n >= 1.2 && n <= 4 ? n : CELL_SHAPE
 }
 
 const list = (v: unknown): string[] =>
@@ -74,6 +86,8 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     colors: colorsFrom(options.colors),
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
     motion: options.motion === 'reduced' ? 'reduced' : 'full',
+    terminalView: options.terminalView === 'picture' ? 'picture' : 'text',
+    cellShape: cellShapeFrom(options.cellShape),
   }
 }
 

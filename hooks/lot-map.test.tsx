@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Board } from '../types'
 import type { Entry } from '../types'
 import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -242,6 +243,12 @@ test('every language has every word, in a table of its own', () => {
   }
   expect(new Set(LANGUAGES.map(language => stringsFor(language).title)).size).toBe(LANGUAGES.length)
   expect(stringsFor('constructor').title).toBe(en.title)
+})
+
+test('the terminal picture\'s font has every letter the map writes, in every language', () => {
+  const words = LANGUAGES.flatMap(language => Object.values(stringsFor(language).stations))
+  const missing = [...new Set([...words.join(''), ...'0123456789%×↓→·…◆+ abcdefghijklmnopqrstuvwxyz.CLAUDE'])].filter(ch => !hasGlyph(ch))
+  expect(missing).toEqual([])
 })
 
 for (const [language, row] of [['es', 'Archivos  b/content.py'], ['fr', 'Fichiers   b/content.py'], ['de', 'Dateien    b/content.py'], ['it', 'File      b/content.py'], ['pt', 'Ficheiros b/content.py']] as const) {

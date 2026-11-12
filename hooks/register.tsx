@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Entry, StationId, Status } from '../types'
 import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
+import { drawPicture, terminalPicture } from './terminal'
 
 const PANE = 'lot-map'
 const KEEP = 80
@@ -156,6 +157,9 @@ export const register: Register = (on, options) => {
   // The one thing the map keeps between sessions, and only its name.
   let lastModel: string | undefined
   let modelKey = 'model'
+
+  // In a terminal, the map's picture above the rows, for a person who asked for it.
+  const picture = terminalPicture(setup)
 
   on('session.start', async ($, e, next) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
@@ -354,8 +358,10 @@ export const register: Register = (on, options) => {
 
     if (e.surface === 'terminal') {
       const tally = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0).map(s => `${t.stations[s.id]} ${state.counts[s.id]}`).join(' · ')
+      const map = picture === undefined ? undefined : await quietly(() => drawPicture($, e, state, now, picture))
       return (
         <Box flexDirection="column">
+          {map !== undefined ? [map] : []}
           {current}
           <Text dimColor>{tally === '' ? t.noCounts : tally}</Text>
           {feed}

@@ -132,6 +132,22 @@
       ],
       "default": "full",
       "description": "With reduced, nothing on the map flies, spreads or spins: a call lights its station and its spoke, and what changes only fades."
+    },
+    "terminalView": {
+      "type": "string",
+      "title": "Terminal view",
+      "options": [
+        "text",
+        "picture"
+      ],
+      "default": "text",
+      "description": "How the map looks in a terminal: text, the rows alone, or picture, the map itself above them, painted by the mod, in a terminal that shows pictures such as iTerm2, kitty or Ghostty."
+    },
+    "cellShape": {
+      "type": "number",
+      "title": "Terminal cell shape",
+      "default": 2.4,
+      "description": "For the terminal picture: how many times taller a terminal cell is than it is wide, so that the picture fills its box. About 2.4 for iTerm2's Monaco 12, about 2 for Menlo in kitty. Raise it if the map leaves an empty band below it or looks stretched tall; lower it if the band is at its right or the map looks squashed. From 1.2 to 4."
     }
   }
 }
