@@ -909,3 +909,9 @@ test('with reduced motion nothing flies, spreads or spins, and a call still show
   expect(still.split('transform="rotate(').length - 1).toBe(full.split('transform="rotate(').length - 1 + 2)
   expect(setupFrom({ motion: 'none' }).motion).toBe('full')
 })
+
+test('the SVG root carries role="img" for screen readers', () => {
+  const board: Board = { entries: [], counts: {} }
+  const svg = drawMap(board, 0, SETUP)
+  expect(svg).toMatch(/^<svg[^>]+role="img"/)
+})
