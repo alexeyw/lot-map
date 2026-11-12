@@ -122,6 +122,16 @@
       ],
       "default": "you-top",
       "description": "Where you are on the map: at the top, or at the bottom with the network and the browser at the top."
+    },
+    "motion": {
+      "type": "string",
+      "title": "Motion",
+      "options": [
+        "full",
+        "reduced"
+      ],
+      "default": "full",
+      "description": "With reduced, nothing on the map flies, spreads or spins: a call lights its station and its spoke, and what changes only fades."
     }
   }
 }

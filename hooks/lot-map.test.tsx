@@ -874,3 +874,38 @@ test('a typed slash command keeps a background task that is older than the rows 
   expect(await after.find({ type: 'Text', text: /идёт/ })).toBeUndefined()
   await after.unmount()
 })
+
+test('with reduced motion nothing flies, spreads or spins, and a call still shows', () => {
+  const now = 1_000_000
+  const board: Board = {
+    entries: [
+      { id: 'a', station: 'files', label: 'a.py', from: 'core', startedAt: now - 5000, endedAt: now - 4000, status: 'ok' },
+      { id: 'b', station: 'shell', label: 'make', from: 'core', startedAt: now - 300, status: 'run' },
+      { id: 'c', station: 'web', label: 'x.y', from: 'core', startedAt: now - 200, endedAt: now - 100, status: 'err' },
+      { id: 'd', station: 'you', label: 'done', from: 'core', startedAt: now - 50, endedAt: now - 50, status: 'ok', mark: 'done' },
+    ],
+    counts: { files: 1, shell: 1, web: 1 },
+    agents: ['x', 'y'],
+    model: 'claude-opus-5-5',
+    switchedAt: now - 500,
+  }
+  const full = drawMap(board, now, setupFrom())
+  const still = drawMap(board, now, setupFrom({ motion: 'reduced' }))
+
+  // The default is the drawing as it was.
+  expect(full).toContain('<animateMotion')
+  expect(full).toContain('<animateTransform')
+  expect(full).toContain('attributeName="r"')
+
+  expect(still).not.toContain('<animateMotion')
+  expect(still).not.toContain('<animateTransform')
+  expect(still).not.toContain('attributeName="r"')
+  // What is left changes opacity, or is a clock hand; nothing repeats but the minute hand.
+  const kinds = new Set([...still.matchAll(/<animate attributeName="([^"]+)"/g)].map(m => m[1]))
+  expect([...kinds].sort()).toEqual(['opacity', 'stroke-dashoffset'])
+  expect(still.split('repeatCount="indefinite"').length - 1).toBe(1)
+  // The call is still there to see: its spoke flashes, the running station wears its ring, each subagent has a place.
+  expect(still).toContain('values=".75;0"')
+  expect(still.split('transform="rotate(').length - 1).toBe(full.split('transform="rotate(').length - 1 + 2)
+  expect(setupFrom({ motion: 'none' }).motion).toBe('full')
+})
