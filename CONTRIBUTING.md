@@ -37,7 +37,7 @@ Neither needs an account. To see your change live, point Claude Code at your che
 claude --plugin-dir .
 ```
 
-It takes the place of an installed lot-map for that session and starts with the default options.
+It takes the place of an installed lot-map for that session and starts with the default options. Afterwards you may find the engine's types in `.claude-plugin/types/` and a `tsconfig.json` beside them, for your editor; both are ignored by git.
 
 CI runs the first two on every pull request. On your first one a maintainer has to approve the run, so it may wait a little.
 
