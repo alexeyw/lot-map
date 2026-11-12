@@ -313,9 +313,10 @@ export const register: Register = (on, options) => {
     await quietly(async () => {
       const now = await $.clock.now()
       await update($, board, b => {
-        if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === e.skill)) return b
-        const entry: Entry = { id: newId(now), station: 'skills', label: e.skill, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
-        return { ...b, entries: [...b.entries, entry].slice(-KEEP), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
+        const label = clean(e.skill)
+        if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === label)) return b
+        const entry: Entry = { id: newId(now), station: 'skills', label, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
+        return { ...b, entries: kept([...b.entries, entry]), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
       })
     })
     return result

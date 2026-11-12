@@ -2,7 +2,7 @@
 
 lot-map is a mod for Claude Code that draws a map of the work in a pane beside the chat. It runs inside Claude Code on your computer. There is no lot-map service, no account and no server: nothing the mod sees leaves your machine through it.
 
-This page describes version 0.5.2. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
+This page describes version 0.5.3. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
 
 ## What the mod is handed
 
@@ -15,6 +15,7 @@ The mod does not look for personal data and has no use for it. It takes a name f
 - a shell command: the short description Claude wrote for it, or the command's name, never the command line;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a subagent: the short description it was started with;
+- those two descriptions are written by the model, and the mod shows them as written, up to 120 characters: it does not check what they say;
 - a background task's report: that it ended and whether it failed;
 - a hook's refusal: the name of the tool it stopped, and its first line only if you turn `hookReasons` on;
 - context a hook added: that it was added, and record numbers only if you turn `hookRecords` on.

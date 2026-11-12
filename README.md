@@ -44,7 +44,7 @@ What each version changed is in [CHANGELOG.md](CHANGELOG.md).
 | You | your messages, questions and files sent to you |
 | Model | each model request, context compaction |
 | Memory | Claude Code's memory folder, plus whatever you name in the options |
-| Files | Read, Write, Edit, Grep, Glob, and shell commands that work on files and nothing else: they read, search, move, delete or edit in place (`cat`, `grep`, `mv`, `sed -i`, `tee`, `find … -delete`) |
+| Files | Read, Write, Edit, Grep, Glob, and shell commands that work on files and nothing else: they read, search, move, delete or edit in place (`cat`, `grep`, `mv`, `rm`, `sed`, `tee`, `find … -delete`) |
 | Shell | every other shell command |
 | Network | web fetch and search, MCP servers, and shell commands known to reach the network: `curl`, `gh`, `ssh`, `rsync`, `git push`, `npm install`, `docker pull` and the like, also inside `$(…)` |
 | Browser | browser tools |
@@ -54,7 +54,7 @@ What each version changed is in [CHANGELOG.md](CHANGELOG.md).
 
 On Windows the PowerShell tool is read the same way as Bash, with PowerShell's own names: `Get-Content` and `Select-String` light Files, `Invoke-WebRequest` lights Network. A program run by its full path is read by its name, also from a quoted path with a space, and `CURL.EXE` is `curl`.
 
-The shell stations go by the command's name, not by what it does: a script that opens a connection itself, such as `python -c "…"`, shows as Shell.
+The shell stations go by the command's name, not by what it does: a script that opens a connection itself, such as `python -c "…"`, shows as Shell. A command behind `sudo`, `env`, `timeout`, `nohup`, `xargs` and the like is read as the command it runs, and `find … -exec` as the command it is told to run. `npx` counts as Network only with `-y`, since without it it mostly runs what is installed already.
 
 A pulse flies out when something starts and returns when it ends. Refusals and errors turn red.
 
@@ -153,7 +153,7 @@ A label holds a name, never content:
 
 - a file: the last two parts of its path;
 - a web address: the host alone, without a login, password, path or query; an address that can be read two ways shows only its scheme;
-- a shell command: the short description Claude wrote for it, or the command's name, never the command line;
+- a shell command: the short description Claude wrote for it, or the command's name, never the command line. The description is the model's own words, and the mod shows them as written;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
 - a subagent: the short description it was started with;

@@ -2,6 +2,17 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.5.3 (2026-11-12)
+
+- Portuguese labels: `language` takes `pt`. Contributed by Obsessi0n. (#31)
+- A shell command behind `sudo`, `env`, `time`, `timeout`, `nohup`, `nice`, `xargs`, `command` or `exec` is read as the command it runs: `sudo curl` lights Network, where it used to light Shell.
+- Fixed: `find … -exec curl` lit Files, the station for commands that work on files and nothing else. `find` with `-exec` is now read by the command it runs.
+- More commands light Network: `git -C dir push`, `python -m pip install`, `uv`, `pipx`, `poetry`, `pnpm dlx`, `npx -y`, `docker compose pull`, `go get`, `apt install`.
+- `rm` and `rmdir` light Files.
+- Fixed: a typed slash command could drop the row of a background task still running, once more than 80 rows had passed since it began.
+- Control characters are taken out of a typed slash command's name, as out of every other label.
+- An MCP tool's name with doubled underscores reads with single spaces.
+
 ## 0.5.2 (2026-11-12)
 
 - Fixed: for a web address with an IPv6 host and an `@` in its path or query, the label could show the text after the `@` instead of the host: `https://[::1]/x?tok=@secret` was drawn as `secret`. It now shows `[::1]`, and `[::1]:8080` keeps its port. Contributed by markedwardcampos. (#29)
