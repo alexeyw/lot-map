@@ -2,6 +2,10 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.5.2 (2026-11-12)
+
+- Fixed: for a web address with an IPv6 host and an `@` in its path or query, the label could show the text after the `@` instead of the host: `https://[::1]/x?tok=@secret` was drawn as `secret`. It now shows `[::1]`, and `[::1]:8080` keeps its port. Contributed by markedwardcampos. (#29)
+
 ## 0.5.1 (2026-11-11)
 
 - The MP4 copy of the demo is back at `docs/demo.mp4`, where links from outside point; it was removed in 0.3.9. The README links to it again.
