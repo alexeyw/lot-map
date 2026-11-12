@@ -286,15 +286,6 @@ export function formatMs(ms: number, t: Strings): string {
   return ms < 1000 ? t.ms(Math.max(1, Math.round(ms))) : ms < 60000 ? t.seconds((ms / 1000).toFixed(1)) : t.minutes(Math.floor(ms / 60000), Math.round((ms % 60000) / 1000))
 }
 
-/**
- * What a settings hook said when it refused a call, read from the call's error as the engine words it
- * (`PreToolUse:Bash hook error: [the hook's command]: the reason`); undefined for any other error.
- */
-export function hookRefusal(text: string | undefined): string | undefined {
-  const m = /^PreToolUse:\S+ hook error:\s*(?:\[[^\n]*?\]:\s*)?/.exec(text ?? '')
-  return m === null ? undefined : (text ?? '').slice(m[0].length)
-}
-
 /** The first line of a hook's refusal, cut short: the lines after it may repeat the whole command. */
 export function firstLine(text: string, max = 72): string {
   const line = (text.split('\n').find(l => l.trim() !== '') ?? '').trim()

@@ -50,7 +50,7 @@ What each version changed is in [CHANGELOG.md](CHANGELOG.md).
 | Browser | browser tools |
 | Agents | subagents and workflows; their own calls start from this station |
 | Skills | skills and tool search |
-| Hooks | settings hooks that refuse a call or add context |
+| Hooks | settings hooks that refuse a call, ask for permission, add context or take a moment |
 
 On Windows the PowerShell tool is read the same way as Bash, with PowerShell's own names: `Get-Content` and `Select-String` light Files, `Invoke-WebRequest` lights Network. A program run by its full path is read by its name, also from a quoted path with a space, and `CURL.EXE` is `curl`.
 
@@ -147,7 +147,7 @@ Like any mod that follows tool calls, it is handed every call's whole input, inc
 
 It asks Claude Code for one thing: how full the context window is, after each model step. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change. Each is stored under the folder's full path, in Claude Code's own store for the plugin.
 
-What its hooks do. The mod listens to the session's start, prompts, turns, model steps, tool calls, skills, compaction, and to two events of settings hooks, `UserPromptSubmit` and `SessionStart`, where it sees the context a hook added. Each of its hooks passes the event on as it came and returns what came back as it was: it changes no input, no result and no context. It has no hook on a permission check and decides nothing about permissions. A settings hook's refusal is read afterwards, from the error the refused call returns. Its one command, `/lot-map`, opens the pane.
+What its hooks do. The mod listens to the session's start, prompts, turns, model steps, tool calls, skills, compaction, and to three events of settings hooks: `PreToolUse`, where it sees whether a hook refused the call, asked for permission or took a moment, and `UserPromptSubmit` and `SessionStart`, where it sees the context a hook added. Each of its hooks passes the event on as it came and returns what came back as it was: it changes no input, no result, no context and no permission decision, and makes none of its own. Its one command, `/lot-map`, opens the pane.
 
 A label holds a name, never content:
 

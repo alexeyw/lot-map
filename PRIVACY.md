@@ -2,7 +2,7 @@
 
 lot-map is a mod for Claude Code that draws a map of the work in a pane beside the chat. It runs inside Claude Code on your computer. There is no lot-map service, no account and no server: nothing the mod sees leaves your machine through it.
 
-This page describes version 0.4.2. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
+This page describes version 0.5.0. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
 
 ## What the mod is handed
 
@@ -32,7 +32,7 @@ To remove what it keeps, uninstall the plugin.
 - It makes no network requests and has no telemetry, analytics or crash reports.
 - It reads no files and runs no processes.
 - It calls no model and adds nothing to the conversation.
-- It changes no tool call, result, prompt or context, and decides nothing about permissions.
+- It changes no tool call, result, prompt or context. It sees what your settings hooks decide about a call, hands that decision on as it was, and decides nothing about permissions itself.
 
 The code that takes names from a call is `classify` in [`hooks/map.ts`](hooks/map.ts); the hooks are in [`hooks/register.tsx`](hooks/register.tsx).
 

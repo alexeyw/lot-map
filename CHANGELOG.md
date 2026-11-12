@@ -2,6 +2,11 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.5.0 (2026-11-11)
+
+- Back on the Hooks station: the rows for a hook that asked for permission and for a check that took a moment. They went in 0.4.0, when the hook that sees them was removed for a plugin catalogue's rules; that catalogue takes mods only from organizations it has verified, so the hook is back as it was in 0.3.9.
+- The README and the privacy page say what that hook does: it reads what settings hooks decided and hands the decision on unchanged.
+
 ## 0.4.2 (2026-11-11)
 
 - A privacy page, [PRIVACY.md](PRIVACY.md): what the mod is handed, what it keeps and what it does not do. `plugin.json` links to it. The map itself is unchanged.

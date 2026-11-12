@@ -270,12 +270,10 @@ test('a call shows on the pane, on every surface', { options: OWN }, async ($, o
   }
 })
 
-// A settings hook's refusal as the engine hands it to a tool.call hook: the call's error, worded by the engine.
-const REFUSAL = (reason: string): string => `PreToolUse:Bash hook error: [bash "$HOME/.claude/hooks/judge.sh"]: ${reason}`
-
 test('a call a settings hook refused reads as blocked, with the hook lit and its words kept back', { options: OWN }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
-  on('tool.call', () => ({ result: {}, isError: true, text: REFUSAL('JUDGE: found key sk-private\nCommand: secret') }))
+  on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
+  on('tool.call', () => ({ result: {} }))
 
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
 
@@ -288,7 +286,8 @@ test('a call a settings hook refused reads as blocked, with the hook lit and its
 
 test('with hookReasons on, the first line of a refusal shows and the rest does not', { options: { ...OWN, hookReasons: true } }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
-  on('tool.call', () => ({ result: {}, isError: true, text: REFUSAL('JUDGE: нельзя\nCommand: secret') }))
+  on('classic.PreToolUse', () => ({ deny: 'JUDGE: нельзя\nCommand: secret' }))
+  on('tool.call', () => ({ result: {} }))
 
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
 
