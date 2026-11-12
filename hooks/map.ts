@@ -912,6 +912,7 @@ export function describeNow(board: Board, t: Strings): string {
   const running = board.entries.filter(e => e.status === 'run')
   const context = board.context === undefined ? '' : ` · ${t.context} ${Math.round(board.context)}%`
   const top = running[running.length - 1]
-  if (top === undefined) return `${t.idle}${context}`
+  const model = board.model !== undefined ? ` · ${shortModel(board.model)}` : ''
+  if (top === undefined) return `${t.idle}${context}${model}`
   return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}${context}`
 }

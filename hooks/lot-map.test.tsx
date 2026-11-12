@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom, taskNotice, taskOf } from './map'
+import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -908,4 +908,15 @@ test('with reduced motion nothing flies, spreads or spins, and a call still show
   expect(still).toContain('values=".75;0"')
   expect(still.split('transform="rotate(').length - 1).toBe(full.split('transform="rotate(').length - 1 + 2)
   expect(setupFrom({ motion: 'none' }).motion).toBe('full')
+})
+
+test('the idle status line shows the model name when one is known', () => {
+  const t = stringsFor('en')
+  const empty: Board = { entries: [], counts: {} }
+  const withModel: Board = { ...empty, model: 'claude-sonnet-4-5-20250514' }
+  const withContext: Board = { ...withModel, context: 42 }
+  expect(describeNow(empty, t)).toBe(t.idle)
+  expect(describeNow(withModel, t)).toBe(`${t.idle} · ${shortModel('claude-sonnet-4-5-20250514')}`)
+  expect(describeNow(withContext, t)).toContain(shortModel('claude-sonnet-4-5-20250514'))
+  expect(describeNow(withContext, t)).toContain('42%')
 })
