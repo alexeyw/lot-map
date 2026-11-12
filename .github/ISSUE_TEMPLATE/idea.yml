@@ -1,0 +1,35 @@
+name: Idea
+description: Something the map could show or do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For anything larger than a small fix, an issue before the code saves you work: it may be planned already, or not fit.
+  - type: textarea
+    id: what
+    attributes:
+      label: What you would like
+      description: What you want to see on the map or be able to set, and when it would help you.
+    validations:
+      required: true
+  - type: textarea
+    id: look
+    attributes:
+      label: How it could look
+      description: For a change to the drawing, a sketch or a picture. Words alone are hard to decide from.
+  - type: checkboxes
+    id: keeps
+    attributes:
+      label: It keeps to what the mod is
+      description: See "What the mod must stay" in CONTRIBUTING.md.
+      options:
+        - label: It needs no content on a label (no command line, query, file text or full path)
+        - label: It needs no network request, file read or process from the mod
+  - type: dropdown
+    id: who
+    attributes:
+      label: Would you build it?
+      options:
+        - "Yes, after a go-ahead"
+        - "No, only suggesting"
