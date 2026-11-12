@@ -2,6 +2,20 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.6.0 (2026-11-12)
+
+- The rows under the map are one line each. A row used to be one string and wrapped when its label was long, so the rows slid sideways and changed height while the work went on. Now the words are cut at the pane's edge and the time stands in a column at the right. (#46)
+- A row with a long label has a `▸`: press it to read the row whole, and again to close it. One row is open at a time.
+- What took no time, such as a message arriving, shows a dash in the time column, and the answer's row shows how long the whole turn took.
+- The line of now says only what runs. In a terminal it also has the context percentage and the model at its right; beside the drawing it leaves them to the drawing. The model on that line was contributed by gandharvahardikar. (#41)
+- New option `textSize`: `caption`, `footnote` or `body` for the rows under the map.
+- New option `terminalView`: with `picture`, a terminal that shows pictures (iTerm2 3.5 and later, kitty, Ghostty) gets the map itself above the rows, painted by the mod from the same drawing as the desktop app's. Off by default. `cellShape` fits the picture to the terminal's cells. Contributed by buddyatkins. (#33)
+- New option `motion`: with `reduced`, nothing on the map flies, spreads or spins; a call still lights its station and its spoke, and what changes only fades. (#40)
+- The Russian line for when nothing runs is shorter: "Ожидание".
+- The demo and the screenshots are made again with the new rows.
+- README: the install in two steps, for when Claude Code answers that the plugin is not found in any marketplace; and what a search is called on the map. (#44, #39)
+- Inside: `hooks/map.ts` is split into `setup`, `palette`, `classify`, `draw` and `feed`, and still hands the same names on; a check validates and tests every pull request and every push to `main` and `next`. (#45, #35, #43)
+
 ## 0.5.3 (2026-11-12)
 
 - Portuguese labels: `language` takes `pt`. Contributed by Obsessi0n. (#31)
