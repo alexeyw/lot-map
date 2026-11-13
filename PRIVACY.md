@@ -21,6 +21,8 @@ The mod does not look for personal data and has no use for it. It takes a name f
 - a hook's refusal: the name of the tool it stopped, and its first line only if you turn `hookReasons` on;
 - context a hook added: that it was added, and record numbers only if you turn `hookRecords` on.
 
+The mod asks for one thing by itself: the environment variable `COLORFGBG`, and only with `terminalView` set to `picture` and `theme` on `auto`. It holds the terminal's colour numbers, by which the picture is painted light or dark. The mod keeps that answer, light or dark, for the session and nothing else from it, and reads no other variable.
+
 ## What it keeps
 
 - **During a session:** the rows of the map, which of them you opened to read whole, the counters under the stations and the last model step, in Claude Code's state for the session. They are gone when the session ends.
@@ -33,7 +35,6 @@ To remove what it keeps, uninstall the plugin.
 
 - It makes no network requests and has no telemetry, analytics or crash reports.
 - It reads no files and runs no processes.
-- It reads one environment variable, `COLORFGBG`, and only with `terminalView` set to `picture` and `theme` on `auto`: the terminal's colour numbers, to paint the picture light or dark. It keeps the answer, light or dark, for the session and nothing else from it, and reads no other variable.
 - It calls no model and adds nothing to the conversation.
 - With `terminalView` set to `picture`, in a terminal that shows pictures it paints the map's picture itself, from the same rows, and hands it to Claude Code to draw in the pane. The picture holds nothing the map does not show.
 - It changes no tool call, result, prompt or context. It sees what your settings hooks decide about a call, hands that decision on as it was, and decides nothing about permissions itself.

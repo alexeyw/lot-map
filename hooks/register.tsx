@@ -406,7 +406,8 @@ export const register: Register = (on, options) => {
     const current = (
       <Box flexDirection="row" gap={1} alignItems="flex-start">
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text mono size={size} wrap="truncate-end">
+          {/* The theme's own text colour: with none, a terminal draws its default, black on a light profile, over Claude Code's dark pane. */}
+          <Text mono size={size} color="text" wrap="truncate-end">
             {what}
           </Text>
         </Box>

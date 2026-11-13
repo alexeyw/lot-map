@@ -656,7 +656,10 @@ test('the context window shows as soon as the engine tells how full it is', { op
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('>37%<')
   // Beside the drawing the line of now says only what runs: the drawing has the figure and the model already.
-  expect((await ui.find({ type: 'Text', text: /Ожидание/ }))?.text).toBe('Ожидание')
+  const idle = await ui.find({ type: 'Text', text: /Ожидание/ })
+  expect(idle?.text).toBe('Ожидание')
+  // In the theme's text colour, not the terminal's default, which a light terminal makes black on a dark pane.
+  expect(idle?.props.color).toBe('text')
   await ui.unmount()
 
   // A terminal has no drawing, so the figure and the model stand at the right of that line, apart from the words.
