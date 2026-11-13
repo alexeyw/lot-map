@@ -249,6 +249,12 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
       return { station: 'web', label: t.webSearch }
     case 'Artifact':
       return { station: 'web', label: t.artifact }
+    // Work kept on claude.ai: an artifact's comments and data, a Claude Project.
+    case 'ArtifactComments':
+    case 'ArtifactData':
+    case 'SendToProject':
+    case 'SendToProjectContext':
+      return { station: 'web', label: tool }
     case 'Agent':
       return { station: 'agents', label: str(input.description) || t.subagent }
     case 'Monitor':
@@ -257,15 +263,42 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
       return { station: 'agents', label: t.workflow }
     case 'SendMessage':
     case 'TaskStop':
+    case 'ListAgents':
+    // Work that runs later, apart from the turn: schedules and routines.
+    case 'CronCreate':
+    case 'CronDelete':
+    case 'CronList':
+    case 'ScheduleWakeup':
+    case 'RemoteTrigger':
       return { station: 'agents', label: tool }
     case 'Skill':
       return { station: 'skills', label: str(input.skill) || t.skill }
     case 'ToolSearch':
       return { station: 'skills', label: t.loadingTools }
+    // The skill and plugin catalogue.
+    case 'ListSkills':
+    case 'SearchSkills':
+    case 'SuggestSkills':
+    case 'ListPlugins':
+    case 'SearchPlugins':
+    case 'SuggestPluginInstall':
+      return { station: 'skills', label: tool }
     case 'AskUserQuestion':
       return { station: 'you', label: t.questionForYou }
     case 'SendUserFile':
       return { station: 'you', label: t.fileForYou }
+    // What is shown to or asked of the person: the task list, the plan, a notification, review findings.
+    // The name alone: a task's subject and description are content.
+    case 'TaskCreate':
+    case 'TaskUpdate':
+    case 'TaskList':
+    case 'TaskGet':
+    case 'TodoWrite':
+    case 'EnterPlanMode':
+    case 'ExitPlanMode':
+    case 'PushNotification':
+    case 'ReportFindings':
+      return { station: 'you', label: tool }
   }
   const mcp = /^mcp__([^_].*?)__(.+)$/.exec(tool)
   if (mcp === null) return { station: 'shell', label: tool }

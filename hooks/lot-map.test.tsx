@@ -112,6 +112,58 @@ test('a command behind a wrapper is read as the command it runs', () => {
   expect(classify('Bash', { command: 'timeout 30 recall memory journal' }, SETUP)).toEqual({ station: 'memory', label: 'memory' })
 })
 
+test('built-in tools land by what they are for, labelled by their name alone', () => {
+  // Every input carries words of its own: none of them may reach the label.
+  const content = { subject: 'private', description: 'private', prompt: 'private', plan: 'private', query: 'private' }
+  const seen = (tool: string) => {
+    const { station, label } = classify(tool, content, STRANGER)
+    return `${station} ${label}`
+  }
+
+  for (const tool of [
+    'TaskCreate',
+    'TaskUpdate',
+    'TaskList',
+    'TaskGet',
+    'TodoWrite',
+    'EnterPlanMode',
+    'ExitPlanMode',
+    'PushNotification',
+    'ReportFindings',
+  ]) expect(seen(tool)).toBe(`you ${tool}`)
+
+  for (const tool of [
+    'CronCreate',
+    'CronDelete',
+    'CronList',
+    'ScheduleWakeup',
+    'RemoteTrigger',
+    'ListAgents',
+  ]) expect(seen(tool)).toBe(`agents ${tool}`)
+
+  for (const tool of [
+    'ListSkills',
+    'SearchSkills',
+    'SuggestSkills',
+    'ListPlugins',
+    'SearchPlugins',
+    'SuggestPluginInstall',
+  ]) expect(seen(tool)).toBe(`skills ${tool}`)
+
+  for (const tool of [
+    'ArtifactComments',
+    'ArtifactData',
+    'SendToProject',
+    'SendToProjectContext',
+  ]) expect(seen(tool)).toBe(`web ${tool}`)
+
+  // They work with git: Shell, as before.
+  for (const tool of [
+    'EnterWorktree',
+    'ExitWorktree',
+  ]) expect(seen(tool)).toBe(`shell ${tool}`)
+})
+
 test('an MCP name with doubled underscores reads with single spaces', () => {
   expect(classify('mcp__my__server__tool', {}, STRANGER).label).toBe('my: server tool')
 })

@@ -48,15 +48,15 @@ What each version changed is in [CHANGELOG.md](CHANGELOG.md).
 
 | Station | When |
 | --- | --- |
-| You | your messages, questions and files sent to you |
+| You | your messages, questions and files sent to you, the task list and the plan |
 | Model | each model request, context compaction |
 | Memory | Claude Code's memory folder, plus whatever you name in the options |
 | Files | Read, Write, Edit, Grep, Glob, and shell commands that work on files and nothing else: they read, search, move, delete or edit in place (`cat`, `grep`, `mv`, `rm`, `sed`, `tee`, `find … -delete`) |
 | Shell | every other shell command |
 | Network | web fetch and search, MCP servers, and shell commands known to reach the network: `curl`, `gh`, `ssh`, `rsync`, `git push`, `npm install`, `docker pull` and the like, also inside `$(…)` |
 | Browser | browser tools |
-| Agents | subagents and workflows; their own calls start from this station |
-| Skills | skills and tool search |
+| Agents | subagents, workflows and schedules; their own calls start from this station |
+| Skills | skills, tool search, and the skill and plugin catalogue |
 | Hooks | settings hooks that refuse a call, ask for permission, add context or take a moment |
 
 On Windows the PowerShell tool is read the same way as Bash, with PowerShell's own names: `Get-Content` and `Select-String` light Files, `Invoke-WebRequest` lights Network. A program run by its full path is read by its name, also from a quoted path with a space, and `CURL.EXE` is `curl`.
