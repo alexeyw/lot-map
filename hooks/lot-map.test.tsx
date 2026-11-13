@@ -114,7 +114,7 @@ test('a command behind a wrapper is read as the command it runs', () => {
 
 test('built-in tools land by what they are for, labelled by their name alone', () => {
   // Every input carries words of its own: none of them may reach the label.
-  const content = { subject: 'private', description: 'private', prompt: 'private', plan: 'private', query: 'private' }
+  const content = { subject: 'private', description: 'private', prompt: 'private', plan: 'private', query: 'private', message: 'private', uri: 'private', server: 'private' }
   const seen = (tool: string) => {
     const { station, label } = classify(tool, content, STRANGER)
     return `${station} ${label}`
@@ -130,6 +130,16 @@ test('built-in tools land by what they are for, labelled by their name alone', (
     'ExitPlanMode',
     'PushNotification',
     'ReportFindings',
+    'SendUserMessage',
+    'FetchInboxMessage',
+    'SendFeedback',
+    'ProposeGoal',
+    'propose_skills',
+    'WrapUp',
+    'ShowOnboardingRolePicker',
+    'OfferChromeSetup',
+    'ReadWidgetContext',
+    'EndConversation',
   ]) expect(seen(tool)).toBe(`you ${tool}`)
 
   for (const tool of [
@@ -139,6 +149,11 @@ test('built-in tools land by what they are for, labelled by their name alone', (
     'ScheduleWakeup',
     'RemoteTrigger',
     'ListAgents',
+    'SubagentHandback',
+    'SendFile',
+    'Poll',
+    'Yield',
+    'ReadNotifications',
   ]) expect(seen(tool)).toBe(`agents ${tool}`)
 
   for (const tool of [
@@ -148,6 +163,10 @@ test('built-in tools land by what they are for, labelled by their name alone', (
     'ListPlugins',
     'SearchPlugins',
     'SuggestPluginInstall',
+    'ListConnectors',
+    'SearchMcpRegistry',
+    'SuggestConnectors',
+    'WaitForMcpServers',
   ]) expect(seen(tool)).toBe(`skills ${tool}`)
 
   for (const tool of [
@@ -155,13 +174,42 @@ test('built-in tools land by what they are for, labelled by their name alone', (
     'ArtifactData',
     'SendToProject',
     'SendToProjectContext',
+    'Projects',
+    'ClaudeDesign',
+    'DesignSync',
+    'ShareOnboardingGuide',
+    'PublishPlugin',
+    'ListMcpResourcesTool',
+    'ReadMcpResourceTool',
+    'ReadMcpResourceDirTool',
   ]) expect(seen(tool)).toBe(`web ${tool}`)
 
-  // They work with git: Shell, as before.
+  for (const tool of [
+    'LSP',
+  ]) expect(seen(tool)).toBe(`files ${tool}`)
+
+  // They work with git, or run code: Shell, as before.
   for (const tool of [
     'EnterWorktree',
     'ExitWorktree',
+    'REPL',
+    'AppifactRepl',
   ]) expect(seen(tool)).toBe(`shell ${tool}`)
+})
+
+test("an MCP server's resources are memory when the server is a memory server, and never show the resource's address", () => {
+  const seen = (tool: string, server: string, setup = STRANGER) => {
+    const { station, label } = classify(tool, { server, uri: 'file:///Users/a/private.md' }, setup)
+    return `${station} ${label}`
+  }
+  for (const tool of ['ListMcpResourcesTool', 'ReadMcpResourceTool', 'ReadMcpResourceDirTool']) {
+    expect(seen(tool, 'memory')).toBe(`memory ${tool}`)
+    expect(seen(tool, 'github')).toBe(`web ${tool}`)
+    // A server named in the person's options counts as theirs.
+    expect(seen(tool, 'recall', SETUP)).toBe(`memory ${tool}`)
+  }
+  // Listing every server's resources names none: the call is no memory call.
+  expect(classify('ListMcpResourcesTool', {}, STRANGER).station).toBe('web')
 })
 
 test('an MCP name with doubled underscores reads with single spaces', () => {

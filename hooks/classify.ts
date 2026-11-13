@@ -238,6 +238,8 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     }
     case 'Grep':
     case 'Glob':
+    // Code intelligence from a language server.
+    case 'LSP':
       return { station: 'files', label: tool }
     case 'Bash':
       return classifyShell(str(input.command), str(input.description), setup)
@@ -249,12 +251,23 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
       return { station: 'web', label: t.webSearch }
     case 'Artifact':
       return { station: 'web', label: t.artifact }
-    // Work kept on claude.ai: an artifact's comments and data, a Claude Project.
+    // Work kept on claude.ai: an artifact's comments and data, a Claude Project, a design, a shared guide, a published plugin.
     case 'ArtifactComments':
     case 'ArtifactData':
     case 'SendToProject':
     case 'SendToProjectContext':
+    case 'Projects':
+    case 'ClaudeDesign':
+    case 'DesignSync':
+    case 'ShareOnboardingGuide':
+    case 'PublishPlugin':
       return { station: 'web', label: tool }
+    // An MCP server's resources: Memory when the server is one of the person's memory servers, else as any MCP call.
+    // The server's name decides the station; the label is the tool's name, never the resource's address.
+    case 'ListMcpResourcesTool':
+    case 'ReadMcpResourceTool':
+    case 'ReadMcpResourceDirTool':
+      return { station: setup.memoryServers.has(str(input.server)) ? 'memory' : 'web', label: tool }
     case 'Agent':
       return { station: 'agents', label: str(input.description) || t.subagent }
     case 'Monitor':
@@ -270,6 +283,12 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'CronList':
     case 'ScheduleWakeup':
     case 'RemoteTrigger':
+    // A subagent handing its work back, files sent to another session, waiting on background work and what it reported.
+    case 'SubagentHandback':
+    case 'SendFile':
+    case 'Poll':
+    case 'Yield':
+    case 'ReadNotifications':
       return { station: 'agents', label: tool }
     case 'Skill':
       return { station: 'skills', label: str(input.skill) || t.skill }
@@ -282,6 +301,11 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'ListPlugins':
     case 'SearchPlugins':
     case 'SuggestPluginInstall':
+    // The connector catalogue, and waiting for MCP tools to load, as a tool search loads them.
+    case 'ListConnectors':
+    case 'SearchMcpRegistry':
+    case 'SuggestConnectors':
+    case 'WaitForMcpServers':
       return { station: 'skills', label: tool }
     case 'AskUserQuestion':
       return { station: 'you', label: t.questionForYou }
@@ -298,6 +322,18 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'ExitPlanMode':
     case 'PushNotification':
     case 'ReportFindings':
+    // A message to the person or one from them, a goal or skills for them to approve, a next step offered, a card
+    // they are shown, the end of the conversation.
+    case 'SendUserMessage':
+    case 'FetchInboxMessage':
+    case 'SendFeedback':
+    case 'ProposeGoal':
+    case 'propose_skills':
+    case 'WrapUp':
+    case 'ShowOnboardingRolePicker':
+    case 'OfferChromeSetup':
+    case 'ReadWidgetContext':
+    case 'EndConversation':
       return { station: 'you', label: tool }
   }
   const mcp = /^mcp__([^_].*?)__(.+)$/.exec(tool)
