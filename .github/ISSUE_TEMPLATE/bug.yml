@@ -52,3 +52,11 @@ body:
     attributes:
       label: Options you changed
       description: Only the ones that differ from the defaults, such as `language` or `theme`.
+  - type: dropdown
+    id: who
+    attributes:
+      label: Would you fix it?
+      description: Either answer is fine. It only tells the maintainer whether to wait for your pull request.
+      options:
+        - "No, only reporting"
+        - "Yes, I'll send a pull request"
