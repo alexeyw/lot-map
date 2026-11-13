@@ -2,6 +2,18 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.7.0 (2026-11-13)
+
+- In VS Code the line of now has three buttons. **Zoom out** and **Zoom in** draw the map at one of six widths, and **Hide map** folds the pane to one line; what you chose is kept for the next session. The desktop app and the terminal are as they were. Contributed by 5m0k3. (#57, #59)
+- The terminal picture follows the terminal: with `theme` on `auto` it is light on a light terminal that sets `COLORFGBG` (iTerm2, rxvt, Konsole), where it used to be dark on white. Where nothing says, it stays dark. Contributed by jwechsler. (#49)
+- Fixed in a terminal: the line of now had no colour of its own and was black on Claude Code's dark pane under a light profile. It takes the theme's text colour. (#58)
+- Built-in tools that lit Shell land by what they are for: the task list, plan mode and notifications on You, schedules and routines on Agents, the skill and plugin catalogue on Skills, an artifact's comments and data and Claude Projects on Network. Each label is the tool's name. Contributed by anand-krishanu. (#60)
+- The browser reached from a cloud session linked to your computer lights Browser, where it lit Network. Contributed by anand-krishanu. (#50)
+- README: the terminal picture needs Claude Code to draw in fullscreen, and how to turn that on; a section on the VS Code pane. (#58, #59)
+- New page, [PRINCIPLES.md](PRINCIPLES.md): six things the mod holds to, the test or check behind each, and what was measured. (#61)
+- PRIVACY.md and the README said a shell command's and a subagent's label may be the short description the model wrote; a monitor's is too, and they now say so. PRIVACY.md also has a paragraph on `COLORFGBG` and a line on the two values the VS Code pane keeps. (#61, #49, #59)
+- Inside: the check on every pull request also holds the mod to the list of what it hooks and calls, `scripts/surface.txt`; the marketplace has a description; the bug form asks whether the reporter will send a fix. (#61, #62, #63)
+
 ## 0.6.0 (2026-11-12)
 
 - The rows under the map are one line each. A row used to be one string and wrapped when its label was long, so the rows slid sideways and changed height while the work went on. Now the words are cut at the pane's edge and the time stands in a column at the right. (#46)

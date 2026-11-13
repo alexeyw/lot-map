@@ -2,7 +2,7 @@
 
 lot-map is a mod for Claude Code that draws a map of the work in a pane beside the chat. It runs inside Claude Code on your computer. There is no lot-map service, no account and no server: nothing the mod sees leaves your machine through it.
 
-This page describes version 0.6.0. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
+This page describes version 0.7.0. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
 
 ## What the mod is handed
 
