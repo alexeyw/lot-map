@@ -989,3 +989,79 @@ test('the line of now names the model once: not at its right while a model step 
   expect(nowParts({ ...board, entries: [step, call] }, t).meter).toBe('8% · opus 5.5')
   expect(stringsFor('ru').idle).toBe('Ожидание')
 })
+
+/** The plugin's store, kept in memory as the engine keeps it in a file. */
+function fakeStore(on: (pattern: never, hook: never) => void): Map<string, unknown> {
+  const kept = new Map<string, unknown>()
+  const hook = (pattern: string, fn: (e: never) => unknown) => on(pattern as never, ((_: unknown, e: never) => fn(e)) as never)
+  hook('store.get', (e: { key: string }) => ({ value: kept.get(e.key) }))
+  hook('store.set', (e: { key: string; value: unknown }) => {
+    kept.set(e.key, e.value)
+    return { value: undefined }
+  })
+  return kept
+}
+
+test('on vscode the zoom buttons share the line of now, and the desktop pane has none', async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  const desktop = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await desktop.findAll({ type: 'Button' })).length).toBe(0)
+  await desktop.unmount()
+  const editor = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect((await editor.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['Zoom out', 'Zoom in', 'Hide map'])
+  // One row holds the line of now and the buttons: they take no row of their own.
+  const line = (await editor.findAll({ type: 'Box' })).find(b => b.props.flexDirection === 'row' && /Nothing yet|Nothing is running/.test(b.text ?? '') && /Zoom out/.test(b.text ?? ''))
+  expect(line).toBeDefined()
+  expect((await editor.findAll({ type: 'Box' })).some(b => b.props.position === 'absolute')).toBe(false)
+  await editor.unmount()
+})
+
+test('the zoom buttons draw the map smaller or larger in the editor, and the next session keeps it', async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const kept = fakeStore(on as never)
+  const width = async (ui: { find: (q: { type: 'Svg' }) => Promise<{ props: Record<string, unknown> } | undefined> }) => (await ui.find({ type: 'Svg' }))?.props.width
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await width(ui)).toBeUndefined()
+  await ui.press({ key: 'zoom-in' })
+  expect(await width(ui)).toBeUndefined()
+  await ui.press({ key: 'zoom-out' })
+  await ui.press({ key: 'zoom-out' })
+  expect(await width(ui)).toBe(340)
+  expect((await ui.find({ type: 'Svg' }))?.props.height).toBe(Math.round(340 * 430 / 460))
+  for (let i = 0; i < 10; i++) await ui.press({ key: 'zoom-out' })
+  expect(await width(ui)).toBe(160)
+  await ui.press({ key: 'zoom-in' })
+  expect(kept.get('mapZoom')).toBe(200)
+  await ui.unmount()
+
+  // The desktop draws the map as it always has, whatever the editor was zoomed to.
+  const desktop = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await width(desktop)).toBeUndefined()
+  await desktop.unmount()
+
+  await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
+  const again = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await width(again)).toBe(200)
+  await again.unmount()
+})
+
+test('minimized, the vscode pane is one line and a press restores the map', async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const kept = fakeStore(on as never)
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  await ui.press({ key: 'hide' })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['Show map'])
+  expect(kept.get('paneMin')).toBe(true)
+  await ui.press({ key: 'show' })
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  expect(kept.get('paneMin')).toBe(false)
+  await ui.unmount()
+})
+
+

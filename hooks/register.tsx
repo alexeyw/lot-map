@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { MAP_ASPECT, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 import { drawPicture, terminalPicture } from './terminal'
 
@@ -13,6 +13,11 @@ const LONG_LABEL = 28
 /** The least the time takes at the end of a row, so that short times line up: `107 ms`. A longer one widens its own row. */
 const TIME_COLUMN = 6
 const CREW = 12
+/**
+ * The widths, in CSS pixels, the editor may draw the map at. Its pane is a third of the panel tall and cannot be made
+ * taller, so the person zooms the map out until it fits, rows and all. Past the last, the map is as wide as the pane.
+ */
+const ZOOMS = [160, 200, 240, 280, 340, 400]
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
 const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-3' })
@@ -147,6 +152,19 @@ async function noteContext($: EngineInterface, context: readonly string[] | unde
   })
 }
 
+/** What the person set in the editor's pane: the map folded away, or zoomed. Kept between sessions: never what it shows. */
+async function setView($: EngineInterface, view: Pick<Board, 'minimized' | 'zoom'>): Promise<void> {
+  await update($, board, b => ({ ...b, ...view }))
+  if ('minimized' in view) await $.store.set('paneMin', view.minimized === true)
+  if ('zoom' in view) await $.store.set('mapZoom', view.zoom ?? null)
+}
+
+/** One step of zoom out (-1) or in (+1) from a width; undefined is the pane's whole width. */
+function zoomStep(zoom: number | undefined, by: -1 | 1): number | undefined {
+  const at = zoom === undefined ? ZOOMS.length : ZOOMS.indexOf(zoom)
+  return ZOOMS[Math.min(ZOOMS.length, Math.max(0, (at < 0 ? ZOOMS.length : at) + by))]
+}
+
 export const register: Register = (on, options) => {
   const setup = setupFrom(options)
   const { t } = setup
@@ -168,6 +186,12 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
     void quietly(() => $.ui.open({ id: PANE, title: t.title }))
+    await quietly(async () => {
+      const minimized = (await $.store.get('paneMin')) === true
+      const kept = await $.store.get('mapZoom')
+      const zoom = typeof kept === 'number' && ZOOMS.includes(kept) ? kept : undefined
+      await update($, board, b => ({ ...b, minimized, zoom }))
+    })
     await quietly(async () => {
       modelKey = `model:${e.cwd}`
       const kept = await $.store.get(modelKey)
@@ -436,10 +460,43 @@ export const register: Register = (on, options) => {
     }
 
     const { Svg } = $.ui.resolve(e)
+    // The editor's pane cannot be made taller: there the person zooms the map or folds it away. Elsewhere, as before.
+    if (e.surface === 'vscode' && state.minimized === true) {
+      return (
+        <Box flexDirection="row" gap={1} alignItems="flex-start">
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            {current}
+          </Box>
+          <Button key="show" plain dimColor label={t.showMap} onPress={() => quietly(() => setView($, { minimized: false }))} />
+        </Box>
+      )
+    }
+    const isEditor = e.surface === 'vscode'
+    const zoom = isEditor ? state.zoom : undefined
+    const map = <Svg source={drawMap(state, now, setup)} alt={`${t.title}. ${describeNow(state, t)}`} {...(zoom !== undefined ? { width: zoom, height: Math.round(zoom * MAP_ASPECT) } : {})} />
+    if (!isEditor) {
+      return (
+        <Box flexDirection="column">
+          {map}
+          {current}
+          {feed}
+        </Box>
+      )
+    }
+    // The pane is short, so its buttons take no row of their own: they share the line of now, at its right.
     return (
       <Box flexDirection="column">
-        <Svg source={drawMap(state, now, setup)} alt={`${t.title}. ${describeNow(state, t)}`} />
-        {current}
+        <Box key="map" flexDirection="row" justifyContent="center">
+          {map}
+        </Box>
+        <Box flexDirection="row" gap={2} alignItems="flex-start">
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            {current}
+          </Box>
+          <Button key="zoom-out" plain dimColor label={t.zoomOut} onPress={() => quietly(() => setView($, { zoom: zoomStep(zoom, -1) }))} />
+          <Button key="zoom-in" plain dimColor label={t.zoomIn} onPress={() => quietly(() => setView($, { zoom: zoomStep(zoom, 1) }))} />
+          <Button key="hide" plain dimColor label={t.hideMap} onPress={() => quietly(() => setView($, { minimized: true }))} />
+        </Box>
         {feed}
       </Box>
     )

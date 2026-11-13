@@ -39,6 +39,10 @@ export type Board = {
   switchedAt?: number
   /** The row of the feed the person opened to read whole: its entry's id. */
   open?: string
+  /** The editor's pane folded to its line of now; kept between sessions as well. */
+  minimized?: boolean
+  /** How wide the editor draws the map, in CSS pixels; absent, as wide as the pane. Kept between sessions as well. */
+  zoom?: number
 }
 
 declare module 'claude-code' {

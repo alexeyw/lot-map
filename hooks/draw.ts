@@ -10,6 +10,8 @@ import type { Strings } from './text'
 
 const W = 460
 const H = 430
+/** Height over width of the drawing, for a surface that sizes it itself. */
+export const MAP_ASPECT = H / W
 const CX = 230
 const CY = 212
 const RX = 176

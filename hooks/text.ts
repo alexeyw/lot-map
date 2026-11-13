@@ -7,6 +7,11 @@ export type Strings = {
   command: string
   opened: string
   cannotOpen: (reason: string) => string
+  /** The pane's buttons in an editor, where the pane cannot be made taller. */
+  zoomOut: string
+  zoomIn: string
+  hideMap: string
+  showMap: string
   stations: Record<StationId, string>
   newMessage: string
   answerReady: string
@@ -45,6 +50,10 @@ const en: Strings = {
   command: 'Open the work map beside the chat',
   opened: 'Work map opened.',
   cannotOpen: reason => `Nowhere to show the map right now: ${reason}`,
+  zoomOut: 'Zoom out',
+  zoomIn: 'Zoom in',
+  hideMap: 'Hide map',
+  showMap: 'Show map',
   stations: {
     you: 'You',
     model: 'Model',
@@ -94,6 +103,10 @@ const ru: Strings = {
   command: 'Открыть карту работы рядом с чатом',
   opened: 'Карта работы открыта.',
   cannotOpen: reason => `Карту сейчас негде показать: ${reason}`,
+  zoomOut: 'Уменьшить',
+  zoomIn: 'Увеличить',
+  hideMap: 'Скрыть карту',
+  showMap: 'Показать карту',
   stations: {
     you: 'Ты',
     model: 'Модель',
@@ -143,6 +156,10 @@ const es: Strings = {
   command: 'Abrir el mapa de trabajo junto al chat',
   opened: 'Mapa de trabajo abierto.',
   cannotOpen: reason => `Ahora no hay dónde mostrar el mapa: ${reason}`,
+  zoomOut: 'Alejar',
+  zoomIn: 'Acercar',
+  hideMap: 'Ocultar mapa',
+  showMap: 'Mostrar mapa',
   stations: {
     you: 'Tú',
     model: 'Modelo',
@@ -192,6 +209,10 @@ const fr: Strings = {
   command: 'Ouvrir la carte du travail à côté du chat',
   opened: 'Carte du travail ouverte.',
   cannotOpen: reason => `Impossible d'afficher la carte pour le moment : ${reason}`,
+  zoomOut: 'Dézoomer',
+  zoomIn: 'Zoomer',
+  hideMap: 'Masquer la carte',
+  showMap: 'Afficher la carte',
   stations: {
     you: 'Vous',
     model: 'Modèle',
@@ -241,6 +262,10 @@ const de: Strings = {
   command: 'Arbeitskarte neben dem Chat öffnen',
   opened: 'Arbeitskarte geöffnet.',
   cannotOpen: reason => `Die Karte kann gerade nirgends angezeigt werden: ${reason}`,
+  zoomOut: 'Verkleinern',
+  zoomIn: 'Vergrößern',
+  hideMap: 'Karte ausblenden',
+  showMap: 'Karte zeigen',
   stations: {
     you: 'Du',
     model: 'Modell',
@@ -290,6 +315,10 @@ const it: Strings = {
   command: 'Apri la mappa del lavoro accanto alla chat',
   opened: 'Mappa del lavoro aperta.',
   cannotOpen: reason => `Al momento non c'è dove mostrare la mappa: ${reason}`,
+  zoomOut: 'Riduci',
+  zoomIn: 'Ingrandisci',
+  hideMap: 'Nascondi mappa',
+  showMap: 'Mostra mappa',
   stations: {
     you: 'Tu',
     model: 'Modello',
@@ -340,6 +369,10 @@ const pt: Strings = {
   command: 'Abrir o mapa de trabalho ao lado do chat',
   opened: 'Mapa de trabalho aberto.',
   cannotOpen: reason => `De momento não há onde mostrar o mapa: ${reason}`,
+  zoomOut: 'Reduzir',
+  zoomIn: 'Ampliar',
+  hideMap: 'Ocultar mapa',
+  showMap: 'Mostrar mapa',
   stations: {
     you: 'Tu',
     model: 'Modelo',
