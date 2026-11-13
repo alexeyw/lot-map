@@ -1,4 +1,4 @@
-# Every pull request and every push to main or next: the plugin validates and its tests pass.
+# Every pull request and every push to main or next: the plugin validates, its tests pass, and it hooks and calls only what is listed.
 name: check
 
 on:
@@ -36,3 +36,6 @@ jobs:
         run: claude plugin validate .
       - name: Test
         run: claude plugin test .
+      # What the mod hooks and calls is what scripts/surface.txt lists, and nothing that reaches outside the session.
+      - name: Surface
+        run: node scripts/check-surface.mjs

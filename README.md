@@ -180,7 +180,7 @@ A label holds a name, never content:
 
 - a file: the last two parts of its path;
 - a web address: the host alone, without a login, password, path or query; an address that can be read two ways shows only its scheme;
-- a shell command: the short description Claude wrote for it, or the command's name, never the command line. The description is the model's own words, and the mod shows them as written;
+- a shell command or a monitor: the short description Claude wrote for it, or the command's name, never the command line. The description is the model's own words, and the mod shows them as written;
 - a search: the tool's name for `Grep` and `Glob`, the words `web search` for a web search and `loading tools` for a tool search, in the map's language, never the pattern or the query;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
@@ -203,7 +203,7 @@ Words live in `hooks/text.ts`; a new language is one more table there and one mo
 
 The terminal picture is painted by `hooks/raster.ts`, which reads the drawing `drawMap` makes. A test paints every kind of drawing and fails on anything the painter does not know, so a change to the drawing that needs more of SVG shows there first. Another, `the terminal picture's font has every letter the map writes, in every language`, names the letters a new language needs added to `hooks/font.ts`; [FONTS.md](FONTS.md) says how to make that file again.
 
-Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md).
+Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md). What the mod holds to, and the check behind each point, is in [PRINCIPLES.md](PRINCIPLES.md).
 
 ## License
 

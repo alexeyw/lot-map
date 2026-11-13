@@ -11,13 +11,14 @@ Thanks for wanting to help. lot-map is small and kept by one person in his own t
 
 ## What the mod must stay
 
-These are not style. A change that breaks one of them will not be merged.
+These are not style. A change that breaks one of them will not be merged. [PRINCIPLES.md](PRINCIPLES.md) says the same at length, with the test or check that holds each one and what it measured.
 
 - **It watches and changes nothing.** Every hook passes the event on as it came and returns what came back as it was: no input, result, prompt, context or permission decision is touched.
 - **A label holds a name, never content.** No command line, query, file text, path beyond its last two parts, or address beyond its host. The list is in the [README](README.md#what-it-shows-and-what-it-keeps) and in [PRIVACY.md](PRIVACY.md); if your change makes the mod read or keep something new, say so in the pull request.
 - **No network, no files, no processes.** The mod uses the engine's calls and nothing else.
 - **A fault on the map never reaches the work.** Engine calls go through `quietly`; a broken board must not stop a tool call or a turn.
 - **What a user has today stays as it is.** A new option's default keeps the present behaviour.
+- **The map stays calm.** Ten stations, one line of now, one line per row. New information goes into one of those or into an option, not into a new element.
 
 ## Running it
 
@@ -31,7 +32,11 @@ claude plugin validate .
 claude plugin test .
 ```
 
-Neither needs an account. To see your change live, point Claude Code at your checkout:
+```bash
+node scripts/check-surface.mjs
+```
+
+None of them needs an account. The third holds the mod to the list of what it hooks and calls, [`scripts/surface.txt`](scripts/surface.txt); if your change adds an engine call or reads something new, it fails until you run it with `--write`, and the changed list is part of your pull request. To see your change live, point Claude Code at your checkout:
 
 ```bash
 claude --plugin-dir .
@@ -39,7 +44,7 @@ claude --plugin-dir .
 
 It takes the place of an installed lot-map for that session and starts with the default options. Afterwards you may find the engine's types in `.claude-plugin/types/` and a `tsconfig.json` beside them, for your editor; both are ignored by git.
 
-CI runs the first two on every pull request. On your first one a maintainer has to approve the run, so it may wait a little.
+CI runs all three on every pull request. On your first one a maintainer has to approve the run, so it may wait a little.
 
 ## A pull request
 
