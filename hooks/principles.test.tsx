@@ -105,6 +105,8 @@ const loaded = (more: Record<string, unknown> = {}): Record<string, unknown> => 
   files: [`/Users/${MARK}/a.txt`],
   script: MARK,
   args: MARK,
+  uri: `file:///Users/${MARK}/notes.md`,
+  server: MARK,
   ...more,
 })
 
@@ -117,7 +119,11 @@ const TOOLS = [
   'SendToProject', 'SendToProjectContext', 'Agent', 'Monitor', 'Workflow', 'SendMessage', 'TaskStop', 'ListAgents', 'CronCreate', 'CronDelete', 'CronList',
   'ScheduleWakeup', 'RemoteTrigger', 'Skill', 'ToolSearch', 'ListSkills', 'SearchSkills', 'SuggestSkills', 'ListPlugins', 'SearchPlugins', 'SuggestPluginInstall',
   'AskUserQuestion', 'SendUserFile', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite', 'EnterPlanMode', 'ExitPlanMode', 'PushNotification',
-  'ReportFindings', 'EnterWorktree', 'ExitWorktree', 'SomeToolOfTomorrow', 'mcp__memory__search', 'mcp__Claude_Browser__navigate', 'mcp__claude-in-chrome__navigate',
+  'ReportFindings', 'EnterWorktree', 'ExitWorktree', 'SendUserMessage', 'FetchInboxMessage', 'SendFeedback', 'ProposeGoal', 'propose_skills',
+  'WrapUp', 'ShowOnboardingRolePicker', 'OfferChromeSetup', 'ReadWidgetContext', 'EndConversation', 'SubagentHandback', 'SendFile', 'Poll', 'Yield',
+  'ReadNotifications', 'ListConnectors', 'SearchMcpRegistry', 'SuggestConnectors', 'WaitForMcpServers', 'Projects', 'ClaudeDesign', 'DesignSync',
+  'ShareOnboardingGuide', 'PublishPlugin', 'ListMcpResourcesTool', 'ReadMcpResourceTool', 'ReadMcpResourceDirTool', 'LSP', 'REPL', 'AppifactRepl',
+  'SomeToolOfTomorrow', 'mcp__memory__search', 'mcp__Claude_Browser__navigate', 'mcp__claude-in-chrome__navigate',
   'mcp__remote-devices__Claude_Browser__navigate', 'mcp__terminal__run_in_terminal', 'mcp__visualize__show_widget', 'mcp__ccd_turn__update_plan',
   'mcp__plugin-authoring__scan_secrets', 'mcp__some_server__some_tool',
 ]
