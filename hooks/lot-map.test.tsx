@@ -116,6 +116,15 @@ test('an MCP name with doubled underscores reads with single spaces', () => {
   expect(classify('mcp__my__server__tool', {}, STRANGER).label).toBe('my: server tool')
 })
 
+test('the browser reached from a cloud session lands on Browser, with a label like the local one', () => {
+  const seen = (tool: string, input: Record<string, unknown>) => classify(tool, input, STRANGER)
+  expect(seen('mcp__remote-devices__Claude_Browser__navigate', { url: 'https://user:private@a.b/x?q=1' })).toEqual({ station: 'browser', label: 'a.b' })
+  expect(seen('mcp__remote-devices__Claude_Browser__get_page_text', {})).toEqual({ station: 'browser', label: 'get page text' })
+  expect(seen('mcp__remote-devices__Claude_Browser__computer', { action: 'type', text: 'private' })).toEqual({ station: 'browser', label: 'computer' })
+  // Only the browser: the server's other tools stay where they were.
+  expect(seen('mcp__remote-devices__computer_screenshot', {}).station).toBe('web')
+})
+
 test('out of the box, memory is only what every install has', () => {
   const at = (tool: string, input: Record<string, unknown>) => classify(tool, input, STRANGER).station
   expect(at('Read', { file_path: '/Users/a/.claude/projects/p/memory/n.md' })).toBe('memory')

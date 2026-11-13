@@ -275,9 +275,12 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     const id = typeof input.id === 'number' || (typeof input.id === 'string' && /^[\w-]{1,24}$/.test(input.id)) ? ` #${input.id}` : ''
     return { station: 'memory', label: (setup.memoryLabels.get(name) ?? name.replace(/_+/g, ' ')) + id }
   }
-  if (server === 'Claude_Browser' || server === 'claude-in-chrome') {
+  // A cloud session linked to the person's computer reaches the same browser under `remote-devices`.
+  const remote = server === 'remote-devices' ? /^Claude_Browser__(.+)$/.exec(name) : null
+  if (server === 'Claude_Browser' || server === 'claude-in-chrome' || remote !== null) {
     const url = str(input.url)
-    return { station: 'browser', label: url && /^[a-z]+:/i.test(url) ? hostOf(url) : name.replace(/_+/g, ' ') }
+    const action = remote?.[1] ?? name
+    return { station: 'browser', label: url && /^[a-z]+:/i.test(url) ? hostOf(url) : action.replace(/_+/g, ' ') }
   }
   if (server === 'terminal') return { station: 'shell', label: name.replace(/_+/g, ' ') }
   if (server === 'visualize' || server.startsWith('ccd_')) return { station: 'you', label: name.replace(/_+/g, ' ') }
