@@ -27,6 +27,7 @@ The mod asks for one thing by itself: the environment variable `COLORFGBG`, and 
 
 - **During a session:** the rows of the map, which of them you opened to read whole, the counters under the stations and the last model step, in Claude Code's state for the session. They are gone when the session ends.
 - **Between sessions:** one value per folder, the name of the model last used there, so that the map can show a change of model. It is stored under the folder's full path in Claude Code's own store for the plugin, on your computer. A folder's path usually contains your account name.
+- **Between sessions, from the VS Code pane:** how far you zoomed the map out and whether you hid it, a number and a yes or no, the same for every folder. They are in the same store and say nothing of what the map showed.
 - **Your options** (language, colours, memory servers and the rest) are kept by Claude Code in your settings, as for any plugin.
 
 To remove what it keeps, uninstall the plugin.
