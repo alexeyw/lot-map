@@ -19,19 +19,21 @@ const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
 export function foldRows(entries: readonly Entry[], max = 16, apart = false): Row[] {
   const rows: Row[] = []
   const running: Row[] = []
+  // Set once a row was left out: from there on nothing is a neighbour of the last row.
+  let isCut = false
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
     if (e === undefined) continue
     const took = e.endedAt === undefined ? 0 : Math.max(0, e.endedAt - e.startedAt)
     const last = rows[rows.length - 1]
-    // Nothing folds across a running call that was kept: the rows between are gone, so the two were never neighbours.
-    if (running.length === 0 && last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from && (!apart || last.entry.agentId === e.agentId)) {
+    if (!isCut && last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from && (!apart || last.entry.agentId === e.agentId)) {
       last.times++
       last.tookMs += took
       continue
     }
     if (rows.length >= max) {
       // Past the list's end only what still runs counts.
+      isCut = true
       if (e.status === 'run' && running.length < max) running.push({ entry: e, times: 1, tookMs: took })
       continue
     }

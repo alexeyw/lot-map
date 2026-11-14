@@ -1279,3 +1279,14 @@ test('a call still running stays in the list however many rows came after it, as
   const ended = { ...running, status: 'ok' as const, endedAt: 50 }
   expect(foldRows([ended, ...after]).some(r => r.entry.label === 'Run the long build')).toBe(false)
 })
+
+test('the last row of a full list folds only what stood next to it, not the same station further back', () => {
+  // Model and shell in turn, forty of them: the sixteenth row is one call, with nothing of the older ones in it.
+  const turns = Array.from({ length: 40 }, (_, i) => entry(i % 2 === 0 ? 'model' : 'shell', i))
+  const rows = foldRows(turns)
+  expect(rows.length).toBe(16)
+  expect(rows.map(r => r.times)).toEqual(Array.from({ length: 16 }, () => 1))
+  // What does stand next to it still folds in.
+  const tail = [entry('model', 0), entry('model', 1), ...Array.from({ length: 15 }, (_, i) => entry(i % 2 === 0 ? 'shell' : 'files', 10 + i))]
+  expect(foldRows([entry('shell', -1), ...tail])[15]?.times).toBe(2)
+})
