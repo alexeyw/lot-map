@@ -1,7 +1,10 @@
-// The terminal picture (`terminalView: picture`): the desktop map's drawing painted to pixels, and the loop of frames that keeps it moving.
+// The map above the rows in a terminal, for a person who asked for it, and the loop of frames that keeps it moving:
+// the picture (`terminalView: picture`), the desktop map's drawing painted to pixels, or the braille map
+// (`terminalView: braille`), the same board as cells, for a terminal that shows no pictures.
 import type { EngineInterface, RenderElement, RenderInputOf } from 'claude-code'
 
 import type { Board } from '../types'
+import { brailleSize, nextFrameIn, packCells, paintBraille } from './braille'
 import { describeNow, drawMap } from './map'
 import type { Setup } from './map'
 import { endlessEvery, imageSource, nextChangeIn, paint, parseMap, scaleFor } from './raster'
@@ -46,15 +49,28 @@ export type Picture = {
   isSchemeUnknown: boolean
 }
 
-function schedule($: EngineInterface, picture: Picture, delay: number | undefined): void {
-  picture.timer?.cancel()
-  picture.timer = undefined
+/** A map's next frame in `delay` ms, in place of the one it was waiting for; none with no delay. */
+function schedule($: EngineInterface, map: Picture | Braille, delay: number | undefined, frame: () => Promise<void>): void {
+  map.timer?.cancel()
+  map.timer = undefined
   if (delay === undefined) return
   try {
     // A fault in a frame must never reach the work, as `quietly` keeps it in register.tsx.
-    picture.timer = $.clock.after(delay, () => void tick($, picture).catch(() => undefined))
+    map.timer = $.clock.after(delay, () => void frame().catch(() => undefined))
   } catch {
-    // No timer: the picture stays still.
+    // No timer: the map stays still.
+  }
+}
+
+/** Under `auto`, a map's first drawing asks the terminal, through COLORFGBG, whether it is light or dark; where that says nothing, the map stays dark. */
+async function settleScheme($: EngineInterface, map: Picture | Braille): Promise<void> {
+  if (!map.isSchemeUnknown) return
+  map.isSchemeUnknown = false
+  try {
+    const scheme = schemeFrom(await $.env.get('COLORFGBG'))
+    if (scheme !== undefined) map.setup = { ...map.setup, theme: scheme }
+  } catch {
+    // Nothing to read: the map stays dark, which is no reason to lose it.
   }
 }
 
@@ -74,15 +90,7 @@ export function terminalPicture(setup: Setup): Picture | undefined {
 /** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures. */
 export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, picture: Picture): Promise<RenderElement | undefined> {
   if (picture.showsPictures === false) return undefined
-  if (picture.isSchemeUnknown) {
-    picture.isSchemeUnknown = false
-    try {
-      const scheme = schemeFrom(await $.env.get('COLORFGBG'))
-      if (scheme !== undefined) picture.setup = { ...picture.setup, theme: scheme }
-    } catch {
-      // Nothing to read: the picture stays dark, which is no reason to lose it.
-    }
-  }
+  await settleScheme($, picture)
   const { setup } = picture
   const { Image } = $.ui.resolve(e)
   const scene = parseMap(drawMap(board, now, setup))
@@ -98,7 +106,7 @@ export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', '
   picture.shown = { scene, pane: e.requestId, drawnAt: now, isBusy: busy }
   // This frame goes with the drawing; the loop sends the rest, and its first frame tells whether pictures show here.
   const next = nextChangeIn(scene, 0, endlessEvery(0, busy))
-  schedule($, picture, picture.showsPictures ? next : Math.min(PROBE_MS, next ?? PROBE_MS))
+  schedule($, picture, picture.showsPictures ? next : Math.min(PROBE_MS, next ?? PROBE_MS), () => tick($, picture))
   return (
     <Image
       key={MAP_KEY}
@@ -131,5 +139,76 @@ async function tick($: EngineInterface, picture: Picture): Promise<void> {
   const next = nextChangeIn(drawing.scene, t, endlessEvery(t, drawing.isBusy))
   // Less the time this frame took, but at least a third of the wait, to leave the mod's other hooks their turn.
   const spent = (await $.clock.now()) - drawing.drawnAt - t
-  schedule($, picture, next === undefined ? undefined : Math.round(Math.max(next - spent, next / 3)))
+  schedule($, picture, next === undefined ? undefined : Math.round(Math.max(next - spent, next / 3)), () => tick($, picture))
+}
+
+// ---- the braille map -----------------------------------------------------------------------------
+
+/** The braille map on show in a terminal, and the loop that keeps it moving between drawings. */
+export type Braille = {
+  setup: Setup
+  /** The board on show, the pane it is on, the cells it takes, and when it was drawn. */
+  shown: { board: Board; pane: string; columns: number; rows: number; drawnAt: number } | undefined
+  timer: { cancel: () => void } | undefined
+  /** Under `auto`, until the first drawing has asked the terminal whether it is light or dark. */
+  isSchemeUnknown: boolean
+}
+
+/** The terminal's braille map for this setup, or none unless `terminalView` is `braille`. A reload starts afresh; the engine cancels the old timer. */
+export function terminalBraille(setup: Setup): Braille | undefined {
+  if (setup.terminalView !== 'braille') return undefined
+  // Light or dark as the picture is: under `auto` the first drawing asks the terminal, and until then, or where it says nothing, dark.
+  return { setup: { ...setup, theme: setup.theme === 'auto' ? 'dark' : setup.theme }, shown: undefined, timer: undefined, isSchemeUnknown: setup.theme === 'auto' }
+}
+
+/** The braille map above the rows for this board; its loop then keeps it moving. None in a pane too small to read it in. */
+export async function drawBraille($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, braille: Braille): Promise<RenderElement | undefined> {
+  await settleScheme($, braille)
+  const { setup } = braille
+  const size = brailleSize(e.props.bodyColumns, e.props.scroll.bodyRows)
+  if (size === undefined) {
+    braille.shown = undefined
+    return undefined
+  }
+  const { Raster } = $.ui.resolve(e)
+  braille.shown = { board, pane: e.requestId, ...size, drawnAt: now }
+  // This frame goes with the drawing; the loop sends the rest, and none while nothing on the map moves.
+  schedule($, braille, nextFrameIn(board, now, setup), () => frame($, braille))
+  return <Raster key={MAP_KEY} columns={size.columns} rows={size.rows} cells={packCells(paintBraille(board, now, setup, size.columns, size.rows))} />
+}
+
+/** The board on show as it looks now, in place of the last frame; then the one after, when it will look different. */
+async function frame($: EngineInterface, braille: Braille): Promise<void> {
+  braille.timer = undefined
+  const shown = braille.shown
+  if (shown === undefined) return
+  const now = await $.clock.now()
+  const cells = packCells(paintBraille(shown.board, now, braille.setup, shown.columns, shown.rows))
+  const sent = await $.ui.blit({ requestId: shown.pane, key: MAP_KEY, cells, columns: shown.columns, rows: shown.rows })
+  // Refused: the pane is closed, behind another one, or of another size by now. The next drawing starts the frames again.
+  if (sent.deny !== undefined) {
+    if (braille.shown === shown) braille.shown = undefined
+    return
+  }
+  if (braille.shown !== shown) return
+  const next = nextFrameIn(shown.board, now, braille.setup, now - shown.drawnAt)
+  // Less the time this frame took, but at least a third of the wait, to leave the mod's other hooks their turn.
+  const spent = (await $.clock.now()) - now
+  schedule($, braille, next === undefined ? undefined : Math.round(Math.max(next - spent, next / 3)), () => frame($, braille))
+}
+
+// ---- which of them -------------------------------------------------------------------------------
+
+/** What a terminal draws above the rows for this setup: the picture or the braille map, as the person chose. Neither falls back to the other. */
+export type TerminalMap = { picture: Picture | undefined; braille: Braille | undefined }
+
+export function terminalMap(setup: Setup): TerminalMap {
+  return { picture: terminalPicture(setup), braille: terminalBraille(setup) }
+}
+
+/** The map above the rows for this board, or none: with `terminalView` on `text`, in a pane too small, or where the picture cannot show. */
+export async function drawTerminalMap($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, map: TerminalMap): Promise<RenderElement | undefined> {
+  if (map.picture !== undefined) return drawPicture($, e, board, now, map.picture)
+  if (map.braille !== undefined) return drawBraille($, e, board, now, map.braille)
+  return undefined
 }

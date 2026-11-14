@@ -57,6 +57,7 @@ Measured on 2026-11-13, Apple M1 Pro, Claude Code 2.1.321, after a warm-up, thre
 - The 1.5 ms is the mod together with the test kit that stands in for the engine. In a live session the engine's own share is not measured.
 - Reading a command line takes about a microsecond a character, growing in a straight line: 2 to 3 ms for 2,000 characters of piped commands, 15 to 30 ms for 20,000, 140 to 290 ms for 200,000. Commands of that size are rare (a file written through a heredoc), and the time is spent before the call runs. It is the one cost here that is not next to nothing.
 - The terminal picture (`terminalView: picture`, off by default) paints up to thirty frames a second while the map moves. Its cost per frame has no test here.
+- The braille map (`terminalView: braille`, off by default) paints up to eight frames a second while the map moves, and none at rest. A frame of the largest map, painted and packed, took 0.14 to 0.24 ms on an Intel Core Ultra 7 155H under Windows 11 (Claude Code 2.1.325, after a warm-up, three runs). `principle 3: a frame of the braille map…` in `hooks/braille.test.tsx` holds it under 5 ms and prints its figure with the others.
 
 **Checked by:** `principle 3: naming a call, drawing the map and folding the rows each stay within their budget` and `principle 3: a tool call through the mod stays within its budget…`. Both print their figures: `claude plugin test . | grep COST`.
 

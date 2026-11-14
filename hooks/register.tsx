@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Entry, StationId, Status } from '../types'
 import { MAP_ASPECT, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
-import { drawPicture, terminalPicture } from './terminal'
+import { drawTerminalMap, terminalMap } from './terminal'
 
 const PANE = 'lot-map'
 const KEEP = 80
@@ -180,8 +180,8 @@ export const register: Register = (on, options) => {
   let lastModel: string | undefined
   let modelKey = 'model'
 
-  // In a terminal, the map's picture above the rows, for a person who asked for it.
-  const picture = terminalPicture(setup)
+  // In a terminal, the map above the rows, as a picture or in braille dots, for a person who asked for it.
+  const above = terminalMap(setup)
 
   on('session.start', async ($, e, next) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
@@ -449,7 +449,7 @@ export const register: Register = (on, options) => {
 
     if (e.surface === 'terminal') {
       const tally = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0).map(s => `${t.stations[s.id]} ${state.counts[s.id]}`).join(' · ')
-      const map = picture === undefined ? undefined : await quietly(() => drawPicture($, e, state, now, picture))
+      const map = await quietly(() => drawTerminalMap($, e, state, now, above))
       return (
         <Box flexDirection="column">
           {map !== undefined ? [map] : []}

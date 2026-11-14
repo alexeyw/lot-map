@@ -149,10 +149,11 @@
       "title": "Terminal view",
       "options": [
         "text",
-        "picture"
+        "picture",
+        "braille"
       ],
       "default": "text",
-      "description": "How the map looks in a terminal: text, the rows alone, or picture, the map itself above them, painted by the mod, in a terminal that shows pictures such as iTerm2, kitty or Ghostty."
+      "description": "How the map looks in a terminal: text, the rows alone; picture, the map itself above them, painted by the mod, in a terminal that shows pictures such as iTerm2, kitty or Ghostty; or braille, the map above them in braille dots and letters, in any terminal whose font has braille, such as Windows Terminal."
     },
     "cellShape": {
       "type": "number",

@@ -2,7 +2,8 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { COLOR_NAMES, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { paintBraille, rowsOf } from './braille'
+import { COLOR_NAMES, STATIONS, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
@@ -358,6 +359,23 @@ test('the terminal picture\'s font has every letter the map writes, in every lan
   const words = LANGUAGES.flatMap(language => Object.values(stringsFor(language).stations))
   const missing = [...new Set([...words.join(''), ...'0123456789%×↓→·…◆+ abcdefghijklmnopqrstuvwxyz.CLAUDE'])].filter(ch => !hasGlyph(ch))
   expect(missing).toEqual([])
+})
+
+test('the braille map has room for every station\'s name, whole and beside all it can carry, in every language', () => {
+  // The most a name carries: a count, and the mark of what went wrong.
+  const board: Board = { entries: [], counts: Object.fromEntries(STATIONS.map(s => [s.id, 888])), faults: Object.fromEntries(STATIONS.map(s => [s.id, 100])) }
+  for (const language of LANGUAGES) {
+    for (const layout of ['you-top', 'you-bottom'] as const) {
+      const setup = setupFrom({ language, layout })
+      // At its smallest and at its largest.
+      for (const [columns, rows] of [[50, 17], [76, 21]] as const) {
+        const grid = rowsOf(paintBraille(board, 1_000_000, setup, columns, rows)).join('\n')
+        for (const name of Object.values(setup.t.stations)) expect(grid).toContain(`${name} 888 !99+`)
+        // Every letter of the language is one a cell holds: none became a question mark.
+        expect(grid).not.toContain('?')
+      }
+    }
+  }
 })
 
 for (const [language, row] of [['es', 'Archivos  b/content.py'], ['fr', 'Fichiers   b/content.py'], ['de', 'Dateien    b/content.py'], ['it', 'File      b/content.py'], ['pt', 'Ficheiros b/content.py']] as const) {

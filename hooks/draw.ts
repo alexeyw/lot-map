@@ -23,12 +23,13 @@ const HUB = CORE + 8
 
 const FONT = 'font-family="SF Mono, ui-monospace, Menlo, monospace"'
 
-const PULSE_MS = 800
+// The braille map keeps these times too, so that the two drawings of one board light and fade together.
+export const PULSE_MS = 800
 const RIPPLE_MS = 450
-const GLOW_MS = 3200
-const ALARM_MS = 6000
-const SWITCH_MS = 8000
-const DONE_MS = 1100
+export const GLOW_MS = 3200
+export const ALARM_MS = 6000
+export const SWITCH_MS = 8000
+export const DONE_MS = 1100
 const TRAIL_STOPS = 7
 /** A leg of the route stays for a while after it was drawn, then fades: the route shows where the work is going, and the spokes keep where it went. */
 export const TRAIL_HOLD_MS = 40_000

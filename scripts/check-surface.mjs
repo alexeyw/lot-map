@@ -47,7 +47,7 @@ if (process.argv.includes('--write')) {
 const OUTSIDE = /\$\.(fs|process|model|net|http|agent|tool|audio|session\.append|prompt)\b/
 for (const line of surface.split('\n')) if (line.includes(' calls: ') && OUTSIDE.test(line)) fail(`a call that reaches outside the session: ${line}`)
 for (const line of surface.split('\n')) if (/ hooks: (prompt\.compose|session\.append|tool\.describe|tool\.check)/.test(line)) fail(`a hook that can change what the model is sent or what is allowed: ${line}`)
-if (/\b(fetch|XMLHttpRequest|WebSocket|require)\s*\(|\bimport\s*\(/.test(['register.tsx', 'terminal.tsx', 'classify.ts', 'draw.ts', 'feed.ts', 'setup.ts', 'palette.ts', 'raster.ts'].map(f => readFileSync(new URL(`../hooks/${f}`, here), 'utf8')).join('\n')))
+if (/\b(fetch|XMLHttpRequest|WebSocket|require)\s*\(|\bimport\s*\(/.test(['register.tsx', 'terminal.tsx', 'braille.ts', 'classify.ts', 'draw.ts', 'feed.ts', 'setup.ts', 'palette.ts', 'raster.ts'].map(f => readFileSync(new URL(`../hooks/${f}`, here), 'utf8')).join('\n')))
   fail('the hooks module names fetch, a socket or a dynamic import')
 
 // ---- 2. the defaults ---------------------------------------------------------------------------------
