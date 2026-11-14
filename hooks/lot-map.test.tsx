@@ -1251,3 +1251,12 @@ test('with subagentNames a refused spawn comes back as it was written, and a sub
   expect(await ui.find({ type: 'Text', text: /haiku 5\.5 · step 1 · subagent/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('with subagentNames the steps of two subagents keep a row each, and without it they fold as before', () => {
+  const steps = [entry('model', 1, { from: 'agents', agentId: 'a1' }), entry('model', 2, { from: 'agents', agentId: 'a2' }), entry('model', 3, { from: 'agents', agentId: 'a2' })]
+  expect(foldRows(steps).map(r => r.times)).toEqual([3])
+  expect(foldRows(steps, 16, true).map(r => [r.entry.agentId, r.times])).toEqual([
+    ['a2', 2],
+    ['a1', 1],
+  ])
+})

@@ -9,15 +9,18 @@ export type Row = { entry: Entry; times: number; tookMs: number }
 
 const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
 
-/** The newest rows first. Finished calls that follow one another at one station fold into a single row. */
-export function foldRows(entries: readonly Entry[], max = 16): Row[] {
+/**
+ * The newest rows first. Finished calls that follow one another at one station fold into a single row.
+ * With `apart`, the calls of two subagents never share a row: each row may name its subagent, and a folded one names only the newest.
+ */
+export function foldRows(entries: readonly Entry[], max = 16, apart = false): Row[] {
   const rows: Row[] = []
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
     if (e === undefined) continue
     const took = e.endedAt === undefined ? 0 : Math.max(0, e.endedAt - e.startedAt)
     const last = rows[rows.length - 1]
-    if (last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from) {
+    if (last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from && (!apart || last.entry.agentId === e.agentId)) {
       last.times++
       last.tookMs += took
       continue

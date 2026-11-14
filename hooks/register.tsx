@@ -404,7 +404,7 @@ export const register: Register = (on, options) => {
       }
     }
 
-    const rows = foldRows(state.entries).map(({ entry, times, tookMs }) => {
+    const rows = foldRows(state.entries, undefined, setup.subagentNames).map(({ entry, times, tookMs }) => {
       const isSwitch = entry.mark === 'switch'
       const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
       const whole = turnMs.get(entry.id)
