@@ -13,6 +13,8 @@ const LONG_LABEL = 28
 /** The least the time takes at the end of a row, so that short times line up: `107 ms`. A longer one widens its own row. */
 const TIME_COLUMN = 6
 const CREW = 12
+/** How many subagents' names are kept for their rows. */
+const CREW_NAMES = 32
 /**
  * The widths, in CSS pixels, the editor may draw the map at. Its pane is a third of the panel tall and cannot be made
  * taller, so the person zooms the map out until it fits, rows and all. Past the last, the map is as wide as the pane.
@@ -218,6 +220,28 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // Which subagent is which, by the few words it was started with: the same words its row on Agents already shows.
+  // Kept for the labels of its model steps and nowhere else; the newest CREW_NAMES of them.
+  const crew = new Map<string, string>()
+  if (setup.subagentNames) {
+    on('agent.spawn', async ($, e, next) => {
+      const started = await next(e)
+      try {
+        const name = clean(e.description, 40)
+        if (started.agentId !== undefined && name !== '') {
+          crew.set(started.agentId, name)
+          for (const id of crew.keys()) {
+            if (crew.size <= CREW_NAMES) break
+            crew.delete(id)
+          }
+        }
+      } catch {
+        // A name that cannot be kept is no reason to trouble the spawn.
+      }
+      return started
+    })
+  }
+
   on('turn.step', async function* ($, e, next) {
     const isMain = e.agentId === undefined
     if (isMain && lastModel !== e.model) {
@@ -238,7 +262,7 @@ export const register: Register = (on, options) => {
     }
     const id = await begin($, {
       station: 'model',
-      label: `${shortModel(e.model)} · ${t.step(e.index + 1)}${isMain ? '' : ` · ${t.subagent}`}`,
+      label: `${shortModel(e.model)} · ${t.step(e.index + 1)}${isMain ? '' : ` · ${crew.get(e.agentId ?? '') ?? t.subagent}`}`,
       from: isMain ? 'core' : 'agents',
       ...(isMain ? { patch: { model: e.model, step: e.index + 1 } } : { agentId: e.agentId }),
     })

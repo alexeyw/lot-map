@@ -1,3 +1,4 @@
+./register.tsx hooks: agent.spawn
 ./register.tsx hooks: classic.PreToolUse
 ./register.tsx hooks: classic.SessionStart
 ./register.tsx hooks: classic.UserPromptSubmit

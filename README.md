@@ -152,6 +152,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
 | `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
+| `subagentNames` | `false` | a subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters; off, it says only that it is a subagent |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 | `background` | `solid` | the map's own background, or `transparent`, which lets the pane behind it show through. The rim around the labels keeps the background's colour, so on a surface of another shade it shows as a faint halo |
 | `colors` | none | colours of your own, each as `name=#rrggbb`; see [Colours of your own](#colours-of-your-own) |
@@ -206,7 +207,7 @@ Like any mod that follows tool calls, it is handed every call's whole input, inc
 
 It asks Claude Code for one thing: how full the context window is, after each model step. Between sessions it keeps one thing, the name of the model last used in each folder, so that it can show a change. Each is stored under the folder's full path, in Claude Code's own store for the plugin.
 
-What its hooks do. The mod listens to the session's start, prompts, turns, model steps, tool calls, skills, compaction, and to three events of settings hooks: `PreToolUse`, where it sees whether a hook refused the call, asked for permission or took a moment, and `UserPromptSubmit` and `SessionStart`, where it sees the context a hook added. Each of its hooks passes the event on as it came and returns what came back as it was: it changes no input, no result, no context and no permission decision, and makes none of its own. Its one command, `/lot-map`, opens the pane.
+What its hooks do. The mod listens to the session's start, prompts, turns, model steps, tool calls, skills, compaction, with `subagentNames` on a subagent's start, and to three events of settings hooks: `PreToolUse`, where it sees whether a hook refused the call, asked for permission or took a moment, and `UserPromptSubmit` and `SessionStart`, where it sees the context a hook added. Each of its hooks passes the event on as it came and returns what came back as it was: it changes no input, no result, no context and no permission decision, and makes none of its own. Its one command, `/lot-map`, opens the pane.
 
 A label holds a name, never content:
 
@@ -216,7 +217,7 @@ A label holds a name, never content:
 - a search: the tool's name for `Grep` and `Glob`, the words `web search` for a web search and `loading tools` for a tool search, in the map's language, never the pattern or the query;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a memory command: its name, and the word after it only if you listed that word in `memorySubcommands`;
-- a subagent: the short description it was started with;
+- a subagent: the short description it was started with; with `subagentNames` on, its first 40 characters on that subagent's model steps as well;
 - a background task's report: that the task ended and whether it failed, never its summary or its output;
 - a hook's refusal: the name of the tool it stopped. Its first line shows only with `hookReasons` on, because a refusal may quote what the hook found.
 

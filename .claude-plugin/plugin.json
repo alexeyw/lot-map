@@ -85,6 +85,12 @@
       "default": false,
       "description": "Show the first line of a hook's refusal, up to 72 characters. Off, the map says only which tool was stopped: a refusal may quote what the hook found."
     },
+    "subagentNames": {
+      "type": "boolean",
+      "title": "Name subagents in the rows",
+      "default": false,
+      "description": "A subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters. Off, it says only that it is a subagent."
+    },
     "theme": {
       "type": "string",
       "title": "Colours",

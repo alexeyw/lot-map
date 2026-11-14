@@ -40,6 +40,8 @@ export type Setup = {
   hookRecords: boolean
   /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
   hookReasons: boolean
+  /** Whether a subagent's model step says which subagent it is, by the description it was started with. Off, it says only that it is one. */
+  subagentNames: boolean
   theme: 'auto' | 'dark' | 'light'
   /** Whether the map paints its own ground, or leaves the surface it lies on showing through. */
   background: 'solid' | 'transparent'
@@ -85,6 +87,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     memoryLabels,
     hookRecords: options.hookRecords === true,
     hookReasons: options.hookReasons === true,
+    subagentNames: options.subagentNames === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     background: options.background === 'transparent' ? 'transparent' : 'solid',
     colors: colorsFrom(options.colors),

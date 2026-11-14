@@ -1195,3 +1195,59 @@ test('minimized, the vscode pane is one line and a press restores the map', asyn
 })
 
 
+
+const SPAWN = { prompt: 'PRIVATE7Q read every file', description: 'Count md files', subagentType: 'Explore' }
+
+/** What stands beneath the mod for a subagent's step: a clock and a step that answers. Hooks go in before `$` is first called. */
+function beneathAStep(on: any): void {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.step', async function* () {
+    yield { kind: 'text', index: 0, text: 'x' } as never
+    return { turnId: 't2', index: 0, answer: '', toolUses: [] } as never
+  })
+}
+
+/** One model step of subagent `a1`, left running, so its row is on the pane. */
+async function stepOfSubagent($: any): Promise<void> {
+  await $.turn.step({ ...stepOn('claude-haiku-5-5'), turnId: 't2', agentId: 'a1' } as never)[Symbol.asyncIterator]().next()
+}
+
+test('with subagentNames a subagent\'s step says which subagent it is, by its description and nothing else of the spawn', { options: { subagentNames: true } }, async ($, on) => {
+  beneathAStep(on)
+  let arrived: unknown
+  on('agent.spawn', ((_: unknown, e: unknown) => ((arrived = e), { model: 'claude-haiku-5-5', agentId: 'a1' })) as never)
+  const started = await $.agent.spawn(SPAWN as never)
+  // The mod watches the spawn: what goes beneath is what was sent, and what comes back is what was answered.
+  expect(arrived).toMatchObject(SPAWN)
+  expect(started).toEqual({ model: 'claude-haiku-5-5', agentId: 'a1' } as never)
+  await stepOfSubagent($)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /haiku 5\.5 · step 1 · Count md files/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /PRIVATE7Q/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Explore/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('without subagentNames a subagent\'s step says only that it is one', async ($, on) => {
+  beneathAStep(on)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }) as never)
+  await $.agent.spawn(SPAWN as never)
+  await stepOfSubagent($)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /haiku 5\.5 · step 1 · subagent/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Count md files/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('with subagentNames a refused spawn comes back as it was written, and a subagent nobody named is a subagent', { options: { subagentNames: true } }, async ($, on) => {
+  beneathAStep(on)
+  on('agent.spawn', () => ({ deny: 'not now' }) as never)
+  expect(await $.agent.spawn(SPAWN as never)).toEqual({ deny: 'not now' } as never)
+  await stepOfSubagent($)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /haiku 5\.5 · step 1 · subagent/ })).toBeDefined()
+  await ui.unmount()
+})
