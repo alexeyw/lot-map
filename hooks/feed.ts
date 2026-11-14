@@ -12,23 +12,32 @@ const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
 /**
  * The newest rows first. Finished calls that follow one another at one station fold into a single row.
  * With `apart`, the calls of two subagents never share a row: each row may name its subagent, and a folded one names only the newest.
+ *
+ * A call still running is never pushed out by what came after it: past the last row it stays, as the last rows of the
+ * list, in place of the oldest finished ones. The map shows it at work for as long as it runs, and the list says the same.
  */
 export function foldRows(entries: readonly Entry[], max = 16, apart = false): Row[] {
   const rows: Row[] = []
+  const running: Row[] = []
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
     if (e === undefined) continue
     const took = e.endedAt === undefined ? 0 : Math.max(0, e.endedAt - e.startedAt)
     const last = rows[rows.length - 1]
-    if (last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from && (!apart || last.entry.agentId === e.agentId)) {
+    // Nothing folds across a running call that was kept: the rows between are gone, so the two were never neighbours.
+    if (running.length === 0 && last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from && (!apart || last.entry.agentId === e.agentId)) {
       last.times++
       last.tookMs += took
       continue
     }
-    if (rows.length === max) break
+    if (rows.length >= max) {
+      // Past the list's end only what still runs counts.
+      if (e.status === 'run' && running.length < max) running.push({ entry: e, times: 1, tookMs: took })
+      continue
+    }
     rows.push({ entry: e, times: 1, tookMs: took })
   }
-  return rows
+  return running.length === 0 ? rows : [...rows.slice(0, max - running.length), ...running]
 }
 
 /**
