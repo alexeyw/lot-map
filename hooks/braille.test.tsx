@@ -166,8 +166,8 @@ test('with terminalView braille, a terminal with the room draws the map as cells
   expect(cells.length).toBe(60 * 21 * 16)
   const read = unpack(cells)
   expect(read.map(x => x.letter).join('')).toContain('Files 1')
-  // No ground of its own: every cell leaves the terminal's showing.
-  expect(read.every(x => x.ground === 0x01000000)).toBe(true)
+  // On a ground of its own, as the desktop map is: with nothing set, the dark palette's.
+  expect(read.every(x => x.ground === 0x0a0c11)).toBe(true)
   // No picture beside it, and the rows are still there under it.
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
   expect((await ui.find({ type: 'Text', text: /b\/content\.py/ }))?.text).toContain('Files')
@@ -300,25 +300,43 @@ test('with motion reduced the braille map has no pulse, no beat and no circling:
   expect(still[shell?.row ?? 0]?.slice((shell?.column ?? 0) + 1, (shell?.column ?? 0) + 3)).toBe('⣿⣿')
 })
 
-test('the braille map writes its words in the terminal\'s own color, and takes the palette and the person\'s colors for the rest', () => {
-  const board: Board = { entries: [], counts: { files: 3 } }
-  const cells = (options: Record<string, unknown>): string => packCells(paintBraille(board, NOW, setupFrom(options), 60, 21))
-  // The core's name: the terminal's color, or the person's own.
-  expect(inkOf(cells({}), 'CLAUDE')).toBe(0x01000000)
-  expect(inkOf(cells({ colors: 'text=#112233' }), 'CLAUDE')).toBe(0x112233)
-  // The name of a station that was used: the palette's label color, dark or light.
-  expect(inkOf(cells({ theme: 'dark' }), 'Files 3')).toBe(0x9ba1ab)
-  expect(inkOf(cells({ theme: 'light' }), 'Files 3')).toBe(0x5f6570)
-  expect(inkOf(cells({ colors: 'label=#445566' }), 'Files 3')).toBe(0x445566)
-  // No ground of its own, unless the person set a background color.
-  expect(unpack(cells({ theme: 'dark' })).every(x => x.ground === 0x01000000)).toBe(true)
-  expect(unpack(cells({ colors: 'background=#123456' })).every(x => x.ground === 0x123456)).toBe(true)
+/** A map with one station used, as a Raster would get it, and the grounds its cells stand on: one, whatever the cell holds. */
+const used = (options: Record<string, unknown>): string => packCells(paintBraille({ entries: [], counts: { files: 3 } }, NOW, setupFrom(options), 60, 21))
+const groundsOf = (options: Record<string, unknown>): number[] => [...new Set(unpack(used(options)).map(x => x.ground))]
+
+test('with background solid, as it is unless changed, the braille map stands on the palette\'s ground with the palette\'s words, so it reads in any pane', () => {
+  // The pane's ground is Claude Code's theme's and the terminal's own colors are the terminal's: the map leans on neither.
+  expect(groundsOf({})).toEqual([0x0a0c11])
+  expect(inkOf(used({}), 'CLAUDE')).toBe(0xebe6dc)
+  expect(groundsOf({ theme: 'light' })).toEqual([0xf5f2ea])
+  expect(inkOf(used({ theme: 'light' }), 'CLAUDE')).toBe(0x1f2228)
+  // The person's own colors hold.
+  expect(groundsOf({ colors: 'background=#123456' })).toEqual([0x123456])
+  expect(inkOf(used({ colors: 'text=#112233' }), 'CLAUDE')).toBe(0x112233)
+  // The name of a station that was used: the palette's label color, dark or light, or the person's.
+  expect(inkOf(used({ theme: 'dark' }), 'Files 3')).toBe(0x9ba1ab)
+  expect(inkOf(used({ theme: 'light' }), 'Files 3')).toBe(0x5f6570)
+  expect(inkOf(used({ colors: 'label=#445566' }), 'Files 3')).toBe(0x445566)
 })
 
-for (const [what, variables, label] of [
-  ['a light terminal gets the light colors', { COLORFGBG: '0;15' }, 0x5f6570],
-  ['a dark terminal gets the dark colors', { COLORFGBG: '15;0' }, 0x9ba1ab],
-  ['a terminal that says nothing gets the dark colors', {}, 0x9ba1ab],
+test('with background transparent the braille map has no ground, and its words take the terminal\'s own color', () => {
+  const bare = { background: 'transparent' }
+  expect(groundsOf(bare)).toEqual([0x01000000])
+  expect(inkOf(used(bare), 'CLAUDE')).toBe(0x01000000)
+  expect(groundsOf({ ...bare, theme: 'light' })).toEqual([0x01000000])
+  expect(inkOf(used({ ...bare, theme: 'light' }), 'CLAUDE')).toBe(0x01000000)
+  // A background color of the person's own does not bring the ground back; a text color of theirs still holds.
+  expect(groundsOf({ ...bare, colors: 'background=#123456' })).toEqual([0x01000000])
+  expect(inkOf(used({ ...bare, colors: 'text=#112233' }), 'CLAUDE')).toBe(0x112233)
+  // The rest is the palette's, as on a ground.
+  expect(inkOf(used({ ...bare, theme: 'dark' }), 'Files 3')).toBe(0x9ba1ab)
+  expect(inkOf(used({ ...bare, theme: 'light' }), 'Files 3')).toBe(0x5f6570)
+})
+
+for (const [what, variables, label, ground] of [
+  ['a light terminal gets the light colors on their light ground', { COLORFGBG: '0;15' }, 0x5f6570, 0xf5f2ea],
+  ['a dark terminal gets the dark colors on their dark ground', { COLORFGBG: '15;0' }, 0x9ba1ab, 0x0a0c11],
+  ['a terminal that says nothing gets the dark colors on their dark ground', {}, 0x9ba1ab, 0x0a0c11],
 ] as const) {
   test(`with theme auto, ${what} on the braille map`, { options: BRAILLE }, async ($, on) => {
     let clock = NOW
@@ -329,7 +347,9 @@ for (const [what, variables, label] of [
     // Long after the call, so that the station is no longer lit and its name is in the label color.
     clock = NOW + 60_000
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    expect(inkOf(String((await ui.find({ type: 'Raster' }))?.props.cells), 'Files 1')).toBe(label)
+    const cells = String((await ui.find({ type: 'Raster' }))?.props.cells)
+    expect(inkOf(cells, 'Files 1')).toBe(label)
+    expect(unpack(cells).every(x => x.ground === ground)).toBe(true)
     await ui.unmount()
   })
 }

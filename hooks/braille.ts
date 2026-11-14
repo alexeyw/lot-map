@@ -126,7 +126,7 @@ export function rowsOf(c: Cells): string[] {
 
 // ---- colors --------------------------------------------------------------------------------------
 
-type Ink = { text: number; label: number; faint: number; line: number; accent: number; hot: number; red: number; mem: number; memHot: number }
+type Ink = { ground: number; text: number; label: number; faint: number; line: number; accent: number; hot: number; red: number; mem: number; memHot: number }
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16)
 
@@ -137,15 +137,24 @@ function mix(a: number, b: number, t: number): number {
 }
 
 /**
- * The palette's colors, as the first drawing has them, with two differences a terminal asks for. The words take the
- * terminal's own color unless the person set one: it reads on that terminal's ground whatever the ground is. And a line
- * at rest is halfway between `line` and `faint`: a row of single dots on a ground the map does not paint is much
- * fainter than the same color in a stroke on the map's own.
+ * The palette's colors, as the first drawing has them, and `background` meaning what it means there.
+ *
+ * `solid`: the cells stand on the palette's ground and the words take its text color, so the map reads in any pane.
+ * The pane's ground comes from Claude Code's theme and a cell cannot ask for it, so where that theme and the palette
+ * differ this is a light map in a dark pane, or the other way round, as the picture is.
+ *
+ * `transparent`: no ground, and the words in the terminal's own color unless the person set one. That reads only
+ * where the terminal and Claude Code's theme agree: a light terminal's dark words cannot be read on a dark pane.
+ *
+ * Either way a line at rest is halfway between `line` and `faint`: a row of single dots is much fainter than the same
+ * color in a stroke.
  */
 function inkOf(setup: Setup): Ink {
   const p: Palette = { ...(setup.theme === 'light' ? LIGHT : DARK), ...setup.colors }
+  const isBare = setup.background === 'transparent'
   return {
-    text: setup.colors.bone === undefined ? DEFAULT : rgb(p.bone),
+    ground: isBare ? DEFAULT : rgb(p.ground),
+    text: isBare && setup.colors.bone === undefined ? DEFAULT : rgb(p.bone),
     label: rgb(p.ash),
     faint: rgb(p.dim),
     line: setup.colors.line === undefined ? mix(rgb(p.line), rgb(p.dim), 0.5) : rgb(p.line),
@@ -240,9 +249,8 @@ const isBad = (e: Entry): boolean => e.status === 'block' || e.status === 'err'
 
 /** The map at `now`, on `columns` by `rows` cells: the stations in a ring around the core, a spoke to each, pulses on the spokes. */
 export function paintBraille(board: Board, now: number, setup: Setup, columns: number, rows: number): Cells {
-  // No ground of its own, so the terminal's shows through, whatever its color; unless the person set a background color, as for the picture.
-  const c = blank(columns, rows, setup.colors.ground === undefined ? DEFAULT : rgb(setup.colors.ground))
   const ink = inkOf(setup)
+  const c = blank(columns, rows, ink.ground)
   const names = setup.t.stations
   // With reduced motion nothing flies, spreads or circles: a call lights its station and its spoke, and those only change color.
   const isStill = setup.motion === 'reduced'

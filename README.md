@@ -124,9 +124,14 @@ What it does not draw, since a cell holds one colour and a dot is all the detail
 - memory's second count, `↓`, of what a hook brought unasked: one number counts both;
 - the fading of a glow: a station is bright, and then it is not.
 
-The words take the terminal's own colour, so they read on a dark ground and on a light one; `text=#rrggbb` in `colors` gives them another. The rest follows `theme` and `colors` as the picture does: light or dark by `COLORFGBG` under `auto`, dark where nothing says, and no background unless you set `background=#rrggbb`. `layout` turns the ring. With `motion` on `reduced` nothing flies, beats or circles: a call lights its station and its spoke, and the subagents stand beside theirs.
+Its colours are the map's own, as in the desktop app. `theme` and `colors` hold; under `auto` it is light or dark by `COLORFGBG`, as the picture is, and dark where nothing says, so on a light terminal that does not say, set `theme` to `light`. `background` means here what it means there:
 
-The map needs a pane body of at least 50 columns and 25 rows, and takes up to 76 by 21; in a smaller pane the rows stay alone. It is painted again only when it will look different: about eight times a second while a pulse flies or a subagent circles, at each beat of a station at work, and not at all at rest. Ten minutes after the map last changed, what still runs gets a frame every five seconds.
+- `solid`, the default: the cells stand on the palette's background and the words take its text colour, so the map reads in any pane. The pane's own ground comes from Claude Code's theme, which the map cannot ask for; where that and the terminal differ, such as a light terminal under the dark theme, it is a light map in a dark pane, as the picture is.
+- `transparent`: the cells have no ground and the words take the terminal's own colour. Choose it where the terminal and Claude Code's theme agree: the map then sits in the pane with no box around it. Where they differ the words can hardly be read.
+
+`layout` turns the ring. With `motion` on `reduced` nothing flies, beats or circles: a call lights its station and its spoke, and the subagents stand beside theirs.
+
+Like the picture, the map shows only where the pane stands beside the conversation. Under Claude Code's default renderer the pane stands under the conversation and is too short for the map, so the rows stay alone: type `/tui fullscreen`, or start it as `CLAUDE_CODE_NO_FLICKER=1 claude`. The map needs a pane body of at least 50 columns and 25 rows, and takes up to 76 by 21; in a smaller pane the rows stay alone. It is painted again only when it will look different: about eight times a second while a pulse flies or a subagent circles, at each beat of a station at work, and not at all at rest. Ten minutes after the map last changed, what still runs gets a frame every five seconds.
 
 ## In VS Code
 
