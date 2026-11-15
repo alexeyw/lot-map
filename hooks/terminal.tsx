@@ -12,7 +12,7 @@ import type { Scene } from './raster'
 
 const MAP_KEY = 'map'
 /** Pixels per unit of the drawing: about what a docked pane shows on a sharp screen. The Image's size limit may take it lower. */
-const SCALE = 1.5
+export const SCALE = 1.5
 /** Narrower than this the map cannot be read, and the pane stays text. */
 const MAP_MIN_COLUMNS = 24
 const MAP_MAX_COLUMNS = 72

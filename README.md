@@ -2,6 +2,8 @@
 
 A mod for Claude Code: a live map of the work, in a pane beside the chat. Every tool call, model step, hook and skill sends a pulse from the centre to its station, so you see memory, files, shell, web and agents at work instead of reading a list of commands.
 
+It runs on your machine and sends nothing anywhere. Local does not mean blind: like any mod that follows tool calls it is handed each call whole, and it takes names from that and nothing else. [What it reads and keeps](PRIVACY.md), and [the checks that hold it to that](PRINCIPLES.md).
+
 ![The map during a work session](docs/demo.gif)
 
 *A made-up session replayed through the mod's own drawing code. [Video (MP4)](docs/demo.mp4).*
