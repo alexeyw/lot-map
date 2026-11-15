@@ -2,6 +2,18 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.8.0 (2026-11-14)
+
+- New terminal view, `terminalView: braille`: the map above the rows in braille dots and letters, for a terminal that shows no pictures, such as Windows Terminal. With `background` on `solid` it stands on its own ground and reads in any pane. `text` stays the default. Contributed by Obsessi0n. (#52, #68)
+- New option `subagentNames`, off by default: a subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters. With it on, the calls of two subagents never share a folded row. (#70, #71)
+- Fixed: a call still running, such as a background task, was pushed out of the list by sixteen newer rows while its station still beat on the map. It stays as the last row until it ends. Such rows take half the list at most; with more still running, the last is marked `+22` for the rest. (#72)
+- Shell commands land on the right station more often. A command inside `for … do`, `if … then`, `while`, `!` or `{ … }`, a line handed to `bash -c` or `eval`, and a command behind `watch` are read as the command itself. The text of a here-document is no longer read as commands, so a file written through one shows as Files. (#73)
+- More commands are known to reach the network: `kubectl`, `aws`, `gcloud`, `az`, `nmap`, HTTPie, `pip3.12`, bare `yarn`, `bun i`, and subcommands of `svn`, `hg`, `terraform`, `helm`, `deno`, `openssl` and `git`. (#73)
+- A command line is read up to its first 8,000 characters. Naming a call whose command is a 19,000-character script takes 0.4 ms where it took 15. (#73)
+- More built-in tools that lit Shell land by what they are for: an MCP server's resources on Memory or Network by their server, code intelligence on Files, what agents hand to each other on Agents, designs and published plugins on Network. Each label is the tool's name. Contributed by anand-krishanu. (#66)
+- PRINCIPLES.md: the terminal picture's frame has a cost test and its figures. A frame takes 19 to 20 ms with the map at work, which the page names as the one cost that is not small. (#74)
+- README: its opening says what local means: the mod sends nothing anywhere, and it is handed each call whole and takes names from it. PRIVACY.md says what `subagentNames` adds. (#74, #71)
+
 ## 0.7.0 (2026-11-13)
 
 - In VS Code the line of now has three buttons. **Zoom out** and **Zoom in** draw the map at one of six widths, and **Hide map** folds the pane to one line; what you chose is kept for the next session. The desktop app and the terminal are as they were. Contributed by 5m0k3. (#57, #59)
