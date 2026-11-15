@@ -49,14 +49,14 @@ No tokens: the mod calls no model and adds nothing to the conversation or the pr
 | Folding 80 rows for the list under the map | 2 µs | 0.2 ms |
 | A tool call through the mod and the test kit, start to end | 1.5 ms | 15 ms |
 | The same after 300 more calls | 1.2 to 1.4 ms | three times the first |
-| Naming a call whose command line is a 19,000-character script | 15 ms | 150 ms |
+| Naming a call whose command line is a 19,000-character script | 0.4 ms | 20 ms |
 
 Measured on 2026-11-13, Apple M1 Pro, Claude Code 2.1.321, after a warm-up, three runs. The budgets are many times the figures so that a slow CI runner passes; they catch a change of kind, not of degree.
 
 **What the figures do not say:**
 
 - The 1.5 ms is the mod together with the test kit that stands in for the engine. In a live session the engine's own share is not measured.
-- Reading a command line takes about a microsecond a character, growing in a straight line: 2 to 3 ms for 2,000 characters of piped commands, 15 to 30 ms for 20,000, 140 to 290 ms for 200,000. Commands of that size are rare (a file written through a heredoc), and the time is spent before the call runs. It is the one cost here that is not next to nothing.
+- A command line is read up to its first 8,000 characters, and the text of a here-document is not read at all: a longer line is a script written inline, and what counts stands at its start. Ordinary piped commands take about a microsecond a character: 2 ms for 2,000 characters, 8 ms for 8,000 and for anything longer. The worst input found, 200,000 characters of one-letter commands joined by pipes, takes 36 ms, and a here-document of 200,000 characters 4.5 ms (measured on 2026-11-14, the same machine). The time is spent before the call runs.
 - The terminal picture (`terminalView: picture`, off by default) paints up to thirty frames a second while the map moves. Its cost per frame has no test here.
 - The braille map (`terminalView: braille`, off by default) paints up to eight frames a second while the map moves, and none at rest. A frame of the largest map, painted and packed, took 0.14 to 0.24 ms on an Intel Core Ultra 7 155H under Windows 11 (Claude Code 2.1.325, after a warm-up, three runs). `principle 3: a frame of the braille map…` in `hooks/braille.test.tsx` holds it under 5 ms and prints its figure with the others.
 

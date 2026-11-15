@@ -213,7 +213,7 @@ test('principle 3: naming a call, drawing the map and folding the rows each stay
   expect(naming).toBeLessThan(0.5)
   expect(drawing).toBeLessThan(2)
   expect(folding).toBeLessThan(0.2)
-  expect(long).toBeLessThan(150)
+  expect(long).toBeLessThan(20)
 })
 
 test('principle 3: a tool call through the mod stays within its budget, and the two hundredth costs what the first did', async ($, on) => {

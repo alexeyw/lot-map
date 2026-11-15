@@ -1303,3 +1303,88 @@ test('thirty background tasks still running take half the list, the last of them
   // Every one of the thirty is counted once.
   expect(rows.slice(8).reduce((n, r) => n + r.times, 0)).toBe(30)
 })
+
+const stationOf = (command: string, tool = 'Bash') => classify(tool, { command }, STRANGER).station
+
+test('a command inside a loop, a condition, a group or a negation is still the command', () => {
+  expect(stationOf('for u in a b; do curl $u; done')).toBe('web')
+  expect(stationOf('if curl -sf x; then echo ok; fi')).toBe('web')
+  expect(stationOf('if test -f a; then echo ok; else wget x; fi')).toBe('web')
+  expect(stationOf('while ! curl -sf x; do sleep 1; done')).toBe('web')
+  expect(stationOf('until ping -c1 host; do sleep 1; done')).toBe('web')
+  expect(stationOf('! curl x')).toBe('web')
+  expect(stationOf('{ curl x; }')).toBe('web')
+  expect(stationOf('(cd /tmp && curl x)')).toBe('web')
+  // The words of the construct are no commands: a loop over files that only reads them is files.
+  expect(stationOf('for f in *.md; do cat $f; done')).toBe('files')
+  expect(stationOf('if grep -q x a.txt; then echo yes; fi')).toBe('files')
+  expect(stationOf('while read line; do echo $line; done')).toBe('shell')
+  expect(stationOf('for i in 1 2 3; do make test; done')).toBe('shell')
+  // A file named like a keyword is an argument, not a construct.
+  expect(stationOf('cat do then fi')).toBe('files')
+})
+
+test('a command handed to a shell, to eval or to watch is the command that counts', () => {
+  expect(stationOf('bash -c "curl https://x.y"')).toBe('web')
+  expect(stationOf("sh -c 'wget x'")).toBe('web')
+  expect(stationOf('zsh -lc "git fetch && make"')).toBe('web')
+  expect(stationOf('eval "curl x"')).toBe('web')
+  expect(stationOf('watch -n 5 curl x')).toBe('web')
+  expect(stationOf('find . -exec sh -c "curl x" \;')).toBe('web')
+  expect(stationOf('sudo bash -c "apt-get update && apt-get install -y jq"')).toBe('web')
+  expect(stationOf("bash -c 'cat a | sort'")).toBe('files')
+  expect(stationOf('bash -c "make build"')).toBe('shell')
+  // A script is not a command line: what it does is not read.
+  expect(stationOf('bash deploy.sh curl')).toBe('shell')
+  // Shells inside shells stop being read at some depth, and nothing breaks.
+  expect(stationOf(`bash -c "bash -c 'bash -c \\"bash -c curl\\"'"`)).not.toBe('files')
+})
+
+test('the text of a here-document is no command, whatever it says', () => {
+  expect(stationOf('cat <<EOF > f\ncurl x\nEOF')).toBe('files')
+  expect(stationOf("cat <<'EOF' > notes.md\nsome text\nwget y\nEOF")).toBe('files')
+  expect(stationOf('cat <<-EOF > f\n\tcurl x\n\tEOF')).toBe('files')
+  expect(stationOf('python3 - <<"PY"\nimport os\ncurl = 1\nPY')).toBe('shell')
+  // What follows the here-document is read again.
+  expect(stationOf('cat <<EOF > f\ntext\nEOF\ncurl x')).toBe('web')
+  expect(stationOf('cat <<A > a; cat <<B > b\none\nA\ncurl\nB\nls')).toBe('files')
+  // One that never ends is all text.
+  expect(stationOf('cat <<EOF > f\ncurl x')).toBe('files')
+  // A here-string is one word, and a shift is arithmetic.
+  expect(stationOf('grep x <<< "curl"')).toBe('files')
+  expect(stationOf('echo $((1 << 2)); curl x')).toBe('web')
+  // PowerShell has no here-documents of this kind.
+  expect(stationOf('Get-Content a.txt', 'PowerShell')).toBe('files')
+})
+
+test('a command line is read up to a length, and a long one costs no more than that', () => {
+  // Past the first eight thousand characters nothing is read: the label and the station come from what stands before.
+  const long = `ls ${'a'.repeat(9000)}; curl x`
+  expect(stationOf(long)).toBe('files')
+  expect(stationOf(`curl x; ls ${'a'.repeat(9000)}`)).toBe('web')
+  const pipes = 'x|'.repeat(100_000)
+  for (let i = 0; i < 3; i++) stationOf(pipes)
+  const t0 = performance.now()
+  stationOf(pipes)
+  const ms = performance.now() - t0
+  console.log(`COST naming a 200,000-character line of pipes: ${ms.toFixed(1)} ms`)
+  expect(ms).toBeLessThan(100)
+  const doc = `cat <<EOF > f\n${'line of text here\n'.repeat(11_000)}EOF\ncurl x`
+  for (let i = 0; i < 3; i++) stationOf(doc)
+  const t1 = performance.now()
+  // The command after a long here-document is still seen.
+  expect(stationOf(doc)).toBe('web')
+  const docMs = performance.now() - t1
+  console.log(`COST naming a 200,000-character here-document: ${docMs.toFixed(1)} ms`)
+  expect(docMs).toBeLessThan(100)
+})
+
+test('more commands that reach the network are known by name or by subcommand', () => {
+  for (const c of ['pip3.12 install x', 'pip3 download x', 'bun i', 'yarn', 'yarn --frozen-lockfile', 'git submodule update --init', 'git remote update', 'svn checkout u', 'hg clone u', 'kubectl get pods', 'aws s3 ls', 'gcloud auth list', 'az login', 'terraform apply', 'helm install x ./chart', 'nmap host', 'http GET x.y', 'openssl s_client -connect x:443', 'deno install']) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  // The same programs at work on what is already here stay on Shell.
+  for (const c of ['yarn build', 'git submodule status', 'git remote -v', 'terraform fmt', 'helm template .', 'openssl sha256 a.bin', 'deno run a.ts', 'svn status', 'bunx cowsay', 'npx cowsay']) {
+    expect([c, stationOf(c)]).toEqual([c, 'shell'])
+  }
+})

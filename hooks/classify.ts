@@ -46,17 +46,18 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way. */
 const FILE_WORDS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg', 'find', 'ls', 'wc', 'cp', 'mv', 'mkdir', 'touch', 'diff', 'cmp', 'sort', 'uniq', 'cut', 'tr', 'awk', 'tee', 'stat', 'file', 'du', 'tree', 'ln', 'basename', 'dirname', 'realpath', 'jq', 'rm', 'rmdir'])
-const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'set', 'pwd', 'sleep', 'which', 'test', '['])
-const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup'])
+const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read'])
+const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup', 'nmap', 'http', 'https', 'kubectl', 'aws', 'gcloud', 'az'])
 /** Commands that reach the network only with some of their subcommands. */
 const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
-  git: new Set(['push', 'pull', 'fetch', 'clone', 'ls-remote']),
+  git: new Set(['push', 'pull', 'fetch', 'clone', 'ls-remote', 'submodule update', 'remote update']),
+  svn: new Set(['checkout', 'co', 'update', 'up', 'commit', 'ci', 'export']),
+  hg: new Set(['clone', 'pull', 'push', 'incoming', 'outgoing']),
   npm: new Set(['install', 'i', 'ci', 'add', 'update', 'publish', 'view', 'audit']),
   pnpm: new Set(['install', 'i', 'add', 'update', 'publish', 'dlx']),
   yarn: new Set(['install', 'add', 'upgrade', 'publish', 'dlx']),
-  bun: new Set(['install', 'add', 'update', 'publish']),
+  bun: new Set(['install', 'i', 'add', 'update', 'publish']),
   pip: new Set(['install', 'download']),
-  pip3: new Set(['install', 'download']),
   pipx: new Set(['install', 'upgrade', 'upgrade-all', 'run']),
   uv: new Set(['add', 'sync', 'lock', 'publish', 'tool install']),
   poetry: new Set(['install', 'add', 'update', 'lock', 'publish']),
@@ -67,6 +68,10 @@ const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   go: new Set(['get', 'install', 'mod download']),
   apt: new Set(['install', 'update', 'upgrade', 'full-upgrade', 'dist-upgrade']),
   'apt-get': new Set(['install', 'update', 'upgrade', 'dist-upgrade']),
+  deno: new Set(['install', 'add', 'cache']),
+  terraform: new Set(['init', 'plan', 'apply', 'destroy', 'import', 'refresh']),
+  helm: new Set(['install', 'upgrade', 'pull', 'push', 'repo', 'search', 'dependency']),
+  openssl: new Set(['s_client']),
 }
 /** Programs that Python runs as a module: `python -m pip install` is `pip install`. */
 const PY_MODULES = new Set(['pip', 'uv', 'pipx', 'poetry'])
@@ -89,6 +94,7 @@ const WRAPPERS: Record<string, { takes?: readonly string[]; skip?: number; asks?
   command: { asks: ['-v', '-V'] },
   exec: { takes: ['-a'] },
   xargs: { takes: ['-n', '-I', '-P', '-L', '-d', '-E', '-s', '-a', '-J', '-R'] },
+  watch: { takes: ['-n', '--interval'] },
 }
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 /** Flags of git and of docker that take a word after them and come before the subcommand. */
@@ -102,6 +108,47 @@ const pastFlags = (words: string[], takes: { has(flag: string): boolean }): stri
   return words.slice(i)
 }
 const RUNNERS = new Set(['python', 'python3', 'bash', 'sh', 'zsh', 'node'])
+/** Shells that run a line handed to them with `-c`: the commands of that line are the ones that count. */
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
+/** Words of a shell construct that stand before a command: `do curl x` is curl. */
+const BEFORE_A_COMMAND = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '!', '{'])
+/** Words that open or close a construct and run nothing themselves: `for u in a b`, `done`, `fi`. */
+const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', 'esac', '}'])
+/** How much of a command line is read. A longer one is a script written inline, and what counts stands at its start. */
+const READ = 8000
+
+/** A word without the one pair of quotes around it. */
+const unquoted = (word: string): string => {
+  const q = word[0]
+  if (q !== '"' && q !== "'") return word
+  return word.length > 1 && word.endsWith(q) ? word.slice(1, -1) : word.slice(1)
+}
+
+/**
+ * A shell line without the text of its here-documents: what stands between `<<WORD` and the line that is `WORD` is
+ * written somewhere, not run. One that never ends is text to the end. `<<<` is a here-string and `((a << b))` is
+ * arithmetic: neither opens one.
+ */
+function withoutHereDocuments(command: string): string {
+  if (!command.includes('<<')) return command
+  const kept: string[] = []
+  const waiting: { word: string; tabs: boolean }[] = []
+  for (const line of command.split('\n')) {
+    const open = waiting[0]
+    if (open !== undefined) {
+      const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
+      if (text === open.word) waiting.shift()
+      continue
+    }
+    kept.push(line)
+    for (const m of line.matchAll(/(?<!<)<<(?!<)(-?)\s*(["']?)([A-Za-z_][\w.]*)\2/g)) {
+      const before = line.slice(0, m.index)
+      if (before.lastIndexOf('((') > before.lastIndexOf('))')) continue
+      waiting.push({ word: m[3] ?? '', tabs: m[1] === '-' })
+    }
+  }
+  return kept.join('\n')
+}
 
 // PowerShell's own names for the same three kinds of command, in lower case: PowerShell does not tell cases apart.
 const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-content', 'out-file', 'get-childitem', 'gci', 'dir', 'get-item', 'gi', 'select-string', 'sls', 'copy-item', 'cpi', 'copy', 'move-item', 'mi', 'move', 'rename-item', 'rni', 'ren', 'new-item', 'ni', 'md', 'test-path', 'resolve-path', 'get-filehash'])
@@ -112,7 +159,7 @@ const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', '
  * The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument.
  * `deep` also cuts at `$(…)`, backticks and brackets, to find a command run inside another; the pieces around it are then no commands.
  */
-function segments(command: string, deep = false): string[][] {
+function segments(command: string, deep = false, constructs = false): string[][] {
   return command
     .split(deep ? /&&|\|\||;|\||\n|\$\(|`|\(|\)/ : /&&|\|\||;|\||\n/)
     // Cut at spaces outside quotes, so that "C:\Program Files\Git\cmd\git.exe" stays one word.
@@ -120,7 +167,16 @@ function segments(command: string, deep = false): string[][] {
     .map(words => {
       let i = 0
       while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) i++
-      return words.slice(i)
+      if (!constructs) return words.slice(i)
+      // `do curl x`, `if curl x`, `! curl x`, `(curl x`: the command is what follows. `for u in a b` and `done` run nothing.
+      let rest = words.slice(i)
+      for (;;) {
+        const head = rest[0] ?? ''
+        if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
+        else if (head.startsWith('(') && !head.startsWith('((')) rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
+        else break
+      }
+      return NO_COMMAND.has(rest[0] ?? '') ? [] : rest
     })
     .filter(words => words.length > 0)
 }
@@ -176,16 +232,31 @@ function classifyShell(command: string, description: string, setup: Setup, power
     }
     return rest
   }
-  /** The commands of one piece of a line: its own, and each one that `find` is told to run with `-exec`. */
-  const commands = (words: string[]): string[][] => {
+  /**
+   * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, and in place of
+   * `bash -c "…"` or `eval "…"` the commands of the line handed over. A script's name is not a line: `bash deploy.sh`
+   * is read no further. Shells inside shells are followed three deep.
+   */
+  const commands = (words: string[], depth = 0): string[][] => {
     const outer = unwrapped(words)
+    const head = name(outer[0])
+    if (!powershell && depth < 3) {
+      let line: string | undefined
+      if (head === 'eval') line = outer.slice(1).map(unquoted).join(' ')
+      else if (SHELLS.has(head)) {
+        const at = outer.findIndex((w, i) => i > 0 && !w.startsWith('-'))
+        const flag = outer.findIndex((w, i) => i > 0 && /^-[a-z]*c$/.test(w))
+        if (flag > 0 && (at < 0 || at > flag) && outer[flag + 1] !== undefined) line = unquoted(outer[flag + 1] ?? '')
+      }
+      if (line !== undefined) return segments(line, false, true).flatMap(inner => commands(inner, depth + 1))
+    }
     const all = [outer]
-    if (name(outer[0]) === 'find') {
+    if (head === 'find') {
       outer.forEach((word, i) => {
         if (!/^-(?:exec|execdir|ok|okdir)$/.test(word)) return
         const tail = outer.slice(i + 1)
         const end = tail.findIndex(w => w === ';' || w === '\\;' || w === '\\' || w === '+')
-        all.push(unwrapped(end < 0 ? tail : tail.slice(0, end)))
+        all.push(...commands(end < 0 ? tail : tail.slice(0, end), depth + 1))
       })
     }
     return all.filter(c => c.length > 0)
@@ -197,6 +268,10 @@ function classifyShell(command: string, description: string, setup: Setup, power
     if (NET_WORDS.has(head) || (powershell && PS_NET_WORDS.has(head))) return true
     if (/^(?:python[\d.]*|py)$/.test(head) && rest[0] === '-m' && PY_MODULES.has(rest[1] ?? '')) [head, rest] = [rest[1] ?? '', rest.slice(2)]
     if (head === 'uv' && rest[0] === 'pip') [head, rest] = ['pip', rest.slice(1)]
+    // pip3 and pip3.12 are pip.
+    if (/^pip[\d.]+$/.test(head)) head = 'pip'
+    // yarn with no subcommand installs.
+    if (head === 'yarn' && rest.every(w => w.startsWith('-'))) return true
     if (head === 'git') rest = pastFlags(rest, GIT_TAKES)
     if (head === 'docker') {
       rest = pastFlags(rest, DOCKER_TAKES)
@@ -207,21 +282,24 @@ function classifyShell(command: string, description: string, setup: Setup, power
     const subs = NET_SUBCOMMANDS[head]
     return subs !== undefined && (subs.has(rest[0] ?? '') || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''}`))
   }
-  const lines = segments(command).map(own).filter(words => words.length > 0)
+  // What is read: the line without the text of its here-documents, and no more than its first part.
+  const read = (powershell ? command : withoutHereDocuments(command)).slice(0, READ)
+  const lines = segments(read, false, !powershell).map(own).filter(words => words.length > 0)
   const label = description.trim() || base(lines[0]?.[0] ?? 'shell')
-  for (const words of lines.flatMap(commands)) {
+  const run = lines.flatMap(words => commands(words))
+  for (const words of run) {
     const head = name(words[0])
     const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
     if (setup.memoryCommands.some(c => named(head, c) || named(script, c))) {
       return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
-  if (segments(command, true).map(own).flatMap(commands).some(isNet)) return { station: 'web', label }
+  if (run.some(isNet) || segments(read, true, !powershell).map(own).flatMap(words => commands(words)).some(isNet)) return { station: 'web', label }
   const isNeutral = (head: string): boolean => NEUTRAL_WORDS.has(head) || (powershell && PS_NEUTRAL_WORDS.has(head))
   const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
-  const real = lines.flatMap(commands).filter(words => !isNeutral(name(words[0])))
+  const real = run.filter(words => !isNeutral(name(words[0])))
   if (real.length > 0 && real.every(words => isFile(name(words[0])))) {
-    return { station: isMemoryPath(command, setup) ? 'memory' : 'files', label }
+    return { station: isMemoryPath(read, setup) ? 'memory' : 'files', label }
   }
   return { station: 'shell', label }
 }
