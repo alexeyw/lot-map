@@ -21,7 +21,7 @@ The mod is meant to watch and to change nothing, so any of these is a vulnerabil
 - a network request, a file read or a process started by the mod;
 - text from a tool call or a hook that gets drawn as something other than plain text.
 
-What the mod is handed and what it keeps is described in [PRIVACY.md](PRIVACY.md).
+What the mod is handed and what it keeps are described in [PRIVACY.md](PRIVACY.md).
 
 ## What does not
 
