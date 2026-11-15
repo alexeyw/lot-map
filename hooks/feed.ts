@@ -15,12 +15,16 @@ const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
  *
  * A call still running is never pushed out by what came after it: past the last row it stays, as the last rows of the
  * list, in place of the oldest finished ones. The map shows it at work for as long as it runs, and the list says the same.
+ *
+ * Such rows take half the list at most, so the newest calls always have the other half. With more of them still
+ * running than that, the last row stands for the rest as a folded row does: `+22`.
  */
 export function foldRows(entries: readonly Entry[], max = 16, apart = false): Row[] {
   const rows: Row[] = []
   const running: Row[] = []
   // Set once a row was left out: from there on nothing is a neighbour of the last row.
   let isCut = false
+  const held = Math.max(1, Math.floor(max / 2))
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
     if (e === undefined) continue
@@ -34,7 +38,10 @@ export function foldRows(entries: readonly Entry[], max = 16, apart = false): Ro
     if (rows.length >= max) {
       // Past the list's end only what still runs counts.
       isCut = true
-      if (e.status === 'run' && running.length < max) running.push({ entry: e, times: 1, tookMs: took })
+      if (e.status !== 'run') continue
+      const oldest = running[running.length - 1]
+      if (running.length < held || oldest === undefined) running.push({ entry: e, times: 1, tookMs: took })
+      else oldest.times++
       continue
     }
     rows.push({ entry: e, times: 1, tookMs: took })

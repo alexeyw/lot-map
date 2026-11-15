@@ -1290,3 +1290,16 @@ test('the last row of a full list folds only what stood next to it, not the same
   const tail = [entry('model', 0), entry('model', 1), ...Array.from({ length: 15 }, (_, i) => entry(i % 2 === 0 ? 'shell' : 'files', 10 + i))]
   expect(foldRows([entry('shell', -1), ...tail])[15]?.times).toBe(2)
 })
+
+test('thirty background tasks still running take half the list, the last of them standing for the rest, and the newest calls keep the other half', () => {
+  const tasks = Array.from({ length: 30 }, (_, i) => entry('agents', i, { status: 'run', endedAt: undefined, task: `b${i}`, label: `task ${i}` }))
+  const after = Array.from({ length: 20 }, (_, i) => entry(i % 2 === 0 ? 'files' : 'shell', 100 + i))
+  const rows = foldRows([...tasks, ...after])
+  expect(rows.length).toBe(16)
+  // The newest eight calls, then the newest eight of the tasks; the eighth stands for the twenty-two older ones.
+  expect(rows.slice(0, 8).map(r => r.entry.startedAt)).toEqual([119, 118, 117, 116, 115, 114, 113, 112])
+  expect(rows.slice(8).map(r => r.entry.label)).toEqual(['task 29', 'task 28', 'task 27', 'task 26', 'task 25', 'task 24', 'task 23', 'task 22'])
+  expect(rows.slice(8).map(r => r.times)).toEqual([1, 1, 1, 1, 1, 1, 1, 23])
+  // Every one of the thirty is counted once.
+  expect(rows.slice(8).reduce((n, r) => n + r.times, 0)).toBe(30)
+})
