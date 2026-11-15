@@ -411,8 +411,9 @@ export const register: Register = (on, options) => {
       // A row of one moment (a message, what a hook added) took no time: its place in the column holds a dash.
       const took = entry.endedAt === undefined ? t.running : whole !== undefined && whole > 0 ? formatMs(whole, t) : tookMs > 0 ? formatMs(tookMs, t) : '—'
       const isMoment = took === '—'
-      // Theme keys, so the rows read on a light theme as well as on a dark one.
-      const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
+      // Theme keys, so the rows read on a light theme as well as on a dark one. A running row is not in Claude's own
+      // colour: on a light theme that one stands next to the colour of a failure, and a running call read as a failed one.
+      const color = entry.status === 'run' ? 'ide' : isSwitch ? 'claude' : entry.status === 'ok' ? undefined : 'error'
       const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}`
       const isDim = entry.status === 'ok' && !isSwitch
       // One row of the pane a row of the feed: the words are cut at the edge, the time keeps a column of its own at the

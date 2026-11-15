@@ -1388,3 +1388,21 @@ test('more commands that reach the network are known by name or by subcommand', 
     expect([c, stationOf(c)]).toEqual([c, 'shell'])
   }
 })
+
+test('a running row is in a colour of its own, apart from the colour of a failed one', { options: { language: 'ru' } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  let n = 0
+  on('tool.call', () => {
+    return (n++ === 0 ? { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' } } : { result: {}, isError: true }) as never
+  })
+
+  await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Ждать сборку', run_in_background: true })
+  await $.tool.call({ tool: 'Bash', command: 'curl example.com', description: 'Спросить сервер' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const running = await ui.find({ type: 'Text', text: /● .*Ждать сборку/ })
+  const failed = await ui.find({ type: 'Text', text: /✕ .*Спросить сервер/ })
+  expect(running?.props.color).toBe('ide')
+  expect(failed?.props.color).toBe('error')
+  await ui.unmount()
+})
