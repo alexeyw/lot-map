@@ -2,6 +2,13 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.9.0 (2026-11-16)
+
+- Fixed: in iTerm2, `terminalView: picture` made iTerm2's memory grow without limit. iTerm2 keeps every picture it is sent until its tab is closed: measured in iTerm2 3.7.7, a moving map took about 2 MB a frame, 17 GB in five minutes. In iTerm2 the picture is now off and a line above the rows says so; `braille` gives the map there. kitty, Ghostty and other terminals keep the picture. For this the mod reads `TERM_PROGRAM` and `LC_TERMINAL`, which PRIVACY.md names. Reported by castigator. (#81, #82)
+- New option `contextCost`, off by default: a call's row says about how many tokens the context grew by with its answer, after its time (`85 ms +42k`), and the desktop map adds each station's sum to its count (`9 · 180k`). An estimate, shown one step late: the growth also holds the model's own words and what hooks added. Two or three calls in one step share it evenly, marked `~`; more get no figure. Contributed by Obsessi0n. (#80, #83)
+- A running row has a colour of its own, the theme's blue. It was in Claude's colour, which on a light theme stands next to the colour of a failed row, and a running call read as a failed one. The demo and the pictures in `docs/` show it. (#77)
+- SECURITY.md and README: two sentences set right. Contributed by lunar-me. (#78, #79)
+
 ## 0.8.0 (2026-11-14)
 
 - New terminal view, `terminalView: braille`: the map above the rows in braille dots and letters, for a terminal that shows no pictures, such as Windows Terminal. With `background` on `solid` it stands on its own ground and reads in any pane. `text` stays the default. Contributed by Obsessi0n. (#52, #68)
