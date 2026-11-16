@@ -236,6 +236,37 @@ test('out of the box, memory is only what every install has', () => {
   expect(classify('mcp__memory__search_nodes', {}, STRANGER).label).toBe('search nodes')
 })
 
+test('serverStations puts a server on each station the person may name, and the row still reads server: tool', () => {
+  const put = (station: string) => setupFrom({ serverStations: [`srv=${station}`] })
+  for (const station of ['files', 'shell', 'web', 'browser', 'agents', 'skills', 'you']) {
+    expect(classify('mcp__srv__list_things', { query: 'private' }, put(station))).toEqual({ station, label: 'srv: list things' })
+  }
+  // A string works as well as a list, and the other servers stay where they were.
+  const two = setupFrom({ serverStations: 'srv=files, other = skills' })
+  expect(classify('mcp__srv__read', {}, two).station).toBe('files')
+  expect(classify('mcp__other__read', {}, two).station).toBe('skills')
+  expect(classify('mcp__third__read', {}, two).station).toBe('web')
+  // What the person sets wins over the mod's own route for a server it knows.
+  expect(classify('mcp__Claude_Browser__navigate', { url: 'https://a.b/c' }, setupFrom({ serverStations: ['Claude_Browser=web'] }))).toEqual({ station: 'web', label: 'Claude_Browser: navigate' })
+  // The server's resources follow it.
+  expect(classify('ReadMcpResourceTool', { server: 'srv', uri: 'private://x' }, put('files'))).toEqual({ station: 'files', label: 'ReadMcpResourceTool' })
+})
+
+test('serverStations ignores an entry whose station is unknown, or is memory, the model or hooks', () => {
+  const odd = setupFrom({ serverStations: ['a=nowhere', 'b=memory', 'c=model', 'd=hooks', 'e=', '=files', 'no-equals', 'f=files'] })
+  expect([...odd.serverStations]).toEqual([['f', 'files']])
+  expect(classify('mcp__a__x', {}, odd).station).toBe('web')
+  expect(classify('mcp__b__x', {}, odd).station).toBe('web')
+  expect(setupFrom({}).serverStations.size).toBe(0)
+  expect(setupFrom({ serverStations: 7 }).serverStations.size).toBe(0)
+})
+
+test('a server named in memoryServers and in serverStations goes to Memory', () => {
+  const both = setupFrom({ memoryServers: ['recall'], serverStations: ['recall=files'] })
+  expect(classify('mcp__recall__search', {}, both)).toEqual({ station: 'memory', label: 'search' })
+  expect(classify('ReadMcpResourceTool', { server: 'recall' }, both).station).toBe('memory')
+})
+
 test('labels never carry what was written or searched', () => {
   const label = (tool: string, input: Record<string, unknown>) => classify(tool, input, SETUP).label
   expect(label('Read', { file_path: '/a/b/c/content.py' })).toBe('c/content.py')

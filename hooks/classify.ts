@@ -340,12 +340,13 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'ShareOnboardingGuide':
     case 'PublishPlugin':
       return { station: 'web', label: tool }
-    // An MCP server's resources: Memory when the server is one of the person's memory servers, else as any MCP call.
+    // An MCP server's resources: Memory when the server is one of the person's memory servers, the station the person
+    // gave it in `serverStations`, else as any MCP call.
     // The server's name decides the station; the label is the tool's name, never the resource's address.
     case 'ListMcpResourcesTool':
     case 'ReadMcpResourceTool':
     case 'ReadMcpResourceDirTool':
-      return { station: setup.memoryServers.has(str(input.server)) ? 'memory' : 'web', label: tool }
+      return { station: setup.memoryServers.has(str(input.server)) ? 'memory' : (setup.serverStations.get(str(input.server)) ?? 'web'), label: tool }
     case 'Agent':
       return { station: 'agents', label: str(input.description) || t.subagent }
     case 'Monitor':
@@ -422,6 +423,9 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     const id = typeof input.id === 'number' || (typeof input.id === 'string' && /^[\w-]{1,24}$/.test(input.id)) ? ` #${input.id}` : ''
     return { station: 'memory', label: (setup.memoryLabels.get(name) ?? name.replace(/_+/g, ' ')) + id }
   }
+  // What the person set wins over the mod's own routes below, which is why it comes before them. Memory was decided above.
+  const chosen = setup.serverStations.get(server)
+  if (chosen !== undefined) return { station: chosen, label: `${server}: ${name.replace(/_+/g, ' ')}` }
   // A cloud session linked to the person's computer reaches the same browser under `remote-devices`.
   const remote = server === 'remote-devices' ? /^Claude_Browser__(.+)$/.exec(name) : null
   if (server === 'Claude_Browser' || server === 'claude-in-chrome' || remote !== null) {

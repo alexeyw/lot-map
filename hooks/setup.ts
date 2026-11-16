@@ -37,6 +37,8 @@ export type Setup = {
   memorySubcommands: ReadonlySet<string>
   memoryPaths: readonly string[]
   memoryLabels: ReadonlyMap<string, string>
+  /** MCP servers the person put on a station of their own choosing, by the server's name. Memory keeps `memoryServers`. */
+  serverStations: ReadonlyMap<string, StationId>
   hookRecords: boolean
   /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
   hookReasons: boolean
@@ -69,6 +71,9 @@ function cellShapeFrom(value: unknown): number {
   return Number.isFinite(n) && n >= 1.2 && n <= 4 ? n : CELL_SHAPE
 }
 
+/** The stations an MCP server may be put on. Memory has `memoryServers`; the model and the hooks are not where a tool runs. */
+const SERVER_STATIONS: readonly StationId[] = ['files', 'shell', 'web', 'browser', 'agents', 'skills', 'you']
+
 const list = (v: unknown): string[] =>
   (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : []).map(x => String(x).trim()).filter(x => x !== '')
 
@@ -77,6 +82,12 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
   for (const pair of list(options.memoryLabels)) {
     const at = pair.indexOf('=')
     if (at > 0 && at < pair.length - 1) memoryLabels.set(pair.slice(0, at).trim(), pair.slice(at + 1).trim())
+  }
+  const serverStations = new Map<string, StationId>()
+  for (const pair of list(options.serverStations)) {
+    const at = pair.indexOf('=')
+    const station = SERVER_STATIONS.find(id => id === pair.slice(at + 1).trim())
+    if (at > 0 && station !== undefined) serverStations.set(pair.slice(0, at).trim(), station)
   }
   const core = typeof options.coreName === 'string' ? options.coreName.trim().slice(0, 10) : ''
   return {
@@ -87,6 +98,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     memorySubcommands: new Set(list(options.memorySubcommands)),
     memoryPaths: list(options.memoryPaths),
     memoryLabels,
+    serverStations,
     hookRecords: options.hookRecords === true,
     hookReasons: options.hookReasons === true,
     subagentNames: options.subagentNames === true,

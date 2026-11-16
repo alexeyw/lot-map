@@ -73,6 +73,13 @@
       "default": [],
       "description": "Short names for memory tools, each written as tool=name. A tool without one goes by its own name."
     },
+    "serverStations": {
+      "type": "string",
+      "multiple": true,
+      "title": "Servers on a station",
+      "default": [],
+      "description": "Put an MCP server's tools on a station of the map, each written as server=station. The stations are files, shell, web, browser, agents, skills and you. Memory keeps memoryServers, which wins if a server is in both. A server without an entry, or with an unknown station, goes where the mod puts it."
+    },
     "hookRecords": {
       "type": "boolean",
       "title": "Hooks add numbered records",
