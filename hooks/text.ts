@@ -30,6 +30,8 @@ export type Strings = {
   running: string
   nothingYet: string
   noCounts: string
+  /** In place of the terminal picture, in a terminal that keeps every picture it is sent. */
+  noPictureHere: string
   idle: string
   context: string
   andMore: (n: number) => string
@@ -83,6 +85,7 @@ const en: Strings = {
   running: 'running',
   nothingYet: 'Nothing yet.',
   noCounts: 'No counts yet.',
+  noPictureHere: "No picture in iTerm2: it keeps every frame in memory. See the README.",
   idle: 'Nothing is running.',
   context: 'context',
   andMore: n => ` and ${n} more`,
@@ -136,6 +139,7 @@ const ru: Strings = {
   running: 'идёт',
   nothingYet: 'Пока ничего не было.',
   noCounts: 'Счётчики пусты.',
+  noPictureHere: "В iTerm2 картинки нет: он держит в памяти каждый кадр. См. README.",
   idle: 'Ожидание',
   context: 'контекст',
   andMore: n => ` и ещё ${n}`,
@@ -189,6 +193,7 @@ const es: Strings = {
   running: 'en curso',
   nothingYet: 'Todavía nada.',
   noCounts: 'Aún no hay recuentos.',
+  noPictureHere: "Sin imagen en iTerm2: guarda en memoria cada fotograma. Ver el README.",
   idle: 'No hay nada en ejecución.',
   context: 'contexto',
   andMore: n => ` y ${n} más`,
@@ -242,6 +247,7 @@ const fr: Strings = {
   running: 'en cours',
   nothingYet: 'Rien pour le moment.',
   noCounts: 'Aucun compteur pour le moment.',
+  noPictureHere: "Pas d'image dans iTerm2 : il garde chaque image en mémoire. Voir le README.",
   idle: 'Rien en cours.',
   context: 'contexte',
   andMore: n => ` et ${n} de plus`,
@@ -295,6 +301,7 @@ const de: Strings = {
   running: 'läuft',
   nothingYet: 'Noch nichts.',
   noCounts: 'Noch keine Zählerstände.',
+  noPictureHere: "Kein Bild in iTerm2: Es behält jedes Einzelbild im Speicher. Siehe README.",
   idle: 'Nichts läuft.',
   context: 'Kontext',
   andMore: n => ` und ${n} weitere`,
@@ -348,6 +355,7 @@ const it: Strings = {
   running: 'in corso',
   nothingYet: 'Ancora niente.',
   noCounts: 'Ancora nessun conteggio.',
+  noPictureHere: "Nessuna immagine in iTerm2: tiene in memoria ogni fotogramma. Vedi il README.",
   idle: 'Niente in esecuzione.',
   context: 'contesto',
   andMore: n => ` e altri ${n}`,
@@ -402,6 +410,7 @@ const pt: Strings = {
   running: 'em curso',
   nothingYet: 'Ainda nada.',
   noCounts: 'Ainda sem contagens.',
+  noPictureHere: "Sem imagem no iTerm2: ele guarda cada quadro na memória. Veja o README.",
   idle: 'Nada em execução.',
   context: 'contexto',
   andMore: n => ` e mais ${n}`,

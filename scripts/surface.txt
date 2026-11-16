@@ -27,5 +27,7 @@
 ./register.tsx calls: $.ui.resolve
 ./register.tsx env writes: nothing
 ./register.tsx env reads: COLORFGBG
+./register.tsx env reads: LC_TERMINAL
+./register.tsx env reads: TERM_PROGRAM
 ./register.tsx state writes: lot-map.board
 ./register.tsx state reads: lot-map.board

@@ -47,6 +47,8 @@ export type Picture = {
   showsPictures: boolean | undefined
   /** Under `auto`, until the first drawing has asked the terminal whether it is light or dark. */
   isSchemeUnknown: boolean
+  /** Whether this terminal keeps every picture it is sent (iTerm2): unknown until the first drawing has asked. No picture there. */
+  keepsFrames: boolean | undefined
 }
 
 /** A map's next frame in `delay` ms, in place of the one it was waiting for; none with no delay. */
@@ -74,6 +76,21 @@ async function settleScheme($: EngineInterface, map: Picture | Braille): Promise
   }
 }
 
+/** iTerm2 by what it tells a program: `TERM_PROGRAM` in its own window, `LC_TERMINAL` over ssh and inside tmux. */
+export const isITerm2 = (termProgram: string | undefined, lcTerminal: string | undefined): boolean => termProgram === 'iTerm.app' || lcTerminal === 'iTerm2'
+
+/**
+ * Whether the terminal keeps every picture it is sent. iTerm2 3.7.7 does, until the tab is closed: about 2 MB a frame,
+ * 17 GB in five minutes of a moving map (issue #81). Where nothing can be read, no.
+ */
+async function keepsFrames($: EngineInterface): Promise<boolean> {
+  try {
+    return isITerm2(await $.env.get('TERM_PROGRAM'), await $.env.get('LC_TERMINAL'))
+  } catch {
+    return false
+  }
+}
+
 /** The terminal's picture for this setup, or none while `terminalView` is `text`. A reload starts afresh; the engine cancels the old timer. */
 export function terminalPicture(setup: Setup): Picture | undefined {
   if (setup.terminalView !== 'picture') return undefined
@@ -84,11 +101,17 @@ export function terminalPicture(setup: Setup): Picture | undefined {
     theme: setup.theme === 'auto' ? 'dark' : setup.theme,
     background: setup.colors.ground === undefined ? 'transparent' : setup.background,
   }
-  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto' }
+  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto', keepsFrames: undefined }
 }
 
-/** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures. */
+/** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures; in iTerm2, a line saying why there is none. */
 export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, picture: Picture): Promise<RenderElement | undefined> {
+  if (picture.keepsFrames === undefined) picture.keepsFrames = await keepsFrames($)
+  if (picture.keepsFrames) {
+    // No picture and no loop: one line in its place says why the rows stand alone.
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{picture.setup.t.noPictureHere}</Text>
+  }
   if (picture.showsPictures === false) return undefined
   await settleScheme($, picture)
   const { setup } = picture
