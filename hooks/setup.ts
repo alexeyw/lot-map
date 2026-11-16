@@ -49,6 +49,8 @@ export type Setup = {
   theme: 'auto' | 'dark' | 'light'
   /** Whether the map paints its own ground, or leaves the surface it lies on showing through. */
   background: 'solid' | 'transparent'
+  /** What the pane is painted with: the surface's own, nothing, so what lies behind it shows through, or a color. */
+  paneBackground: 'theme' | 'transparent' | `#${string}`
   /** Colors the person set, by their place in the palette. They hold on any surface; the rest follows the theme. */
   colors: Partial<Palette>
   /** Who sits at the top of the ring: the person, or the network with the person at the bottom. */
@@ -105,6 +107,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     contextCost: options.contextCost === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     background: options.background === 'transparent' ? 'transparent' : 'solid',
+    paneBackground: paneBackgroundFrom(options.paneBackground),
     colors: colorsFrom(options.colors),
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
     motion: options.motion === 'reduced' ? 'reduced' : 'full',
@@ -112,6 +115,15 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     terminalView: options.terminalView === 'picture' || options.terminalView === 'braille' ? options.terminalView : 'text',
     cellShape: cellShapeFrom(options.cellShape),
   }
+}
+
+/** `transparent`, or a color as `#rgb` or `#rrggbb`; anything else leaves the pane as the surface paints it. */
+function paneBackgroundFrom(v: unknown): Setup['paneBackground'] {
+  const value = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  if (value === 'transparent') return 'transparent'
+  const digits = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(value)?.[1]
+  if (digits === undefined) return 'theme'
+  return `#${digits.length === 3 ? [...digits].map(d => d + d).join('') : digits}`
 }
 
 /**

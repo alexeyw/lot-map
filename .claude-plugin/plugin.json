@@ -125,6 +125,12 @@
       "default": "solid",
       "description": "The map's own background, or transparent, which lets the pane behind it show through."
     },
+    "paneBackground": {
+      "type": "string",
+      "title": "Pane background",
+      "default": "theme",
+      "description": "What the pane is painted with: theme, Claude Code's own; transparent, which lets the terminal or the app behind it show through; or a colour written as #rrggbb."
+    },
     "colors": {
       "type": "string",
       "multiple": true,

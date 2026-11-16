@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
@@ -421,6 +422,15 @@ for (const [language, row] of [['es', 'Archivos  b/content.py'], ['fr', 'Fichier
   })
 }
 
+test('paneBackground is the theme\'s unless it is transparent or a colour', () => {
+  expect(setupFrom({}).paneBackground).toBe('theme')
+  expect(setupFrom({ paneBackground: 'transparent' }).paneBackground).toBe('transparent')
+  expect(setupFrom({ paneBackground: ' Transparent ' }).paneBackground).toBe('transparent')
+  expect(setupFrom({ paneBackground: '#0A0F1A' }).paneBackground).toBe('#0a0f1a')
+  expect(setupFrom({ paneBackground: '#abc' }).paneBackground).toBe('#aabbcc')
+  for (const odd of ['clear', 'red', '#12345', 'rgb(1,2,3)', '', 7, true]) expect(setupFrom({ paneBackground: odd }).paneBackground).toBe('theme')
+})
+
 test('options that make no sense count as not set', () => {
   const odd = setupFrom({ language: 'xx', coreName: '   ', memoryServers: 7, memoryLabels: ['no-equals', '=x', 'y='], hookRecords: 'yes' })
   expect(odd.t.idle).toBe(stringsFor('en').idle)
@@ -485,6 +495,36 @@ test('with no options set the map speaks English and shows no record numbers', a
     expect(await ui.find({ type: 'Text', text: /#12/ })).toBeUndefined()
     await ui.unmount()
   }
+})
+
+// The pane's background as the engine is asked for it, by what `paneBackground` says.
+async function openedWith(...[$, on]: Parameters<TestBody>): Promise<unknown[]> {
+  const asked: unknown[] = []
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('ui.open', (_, e) => {
+    asked.push('backgroundColor' in e ? e.backgroundColor : 'none')
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  return asked
+}
+
+test('by default the pane is opened without a background of its own', async ($, on) => {
+  expect(await openedWith($, on)).toEqual(['none'])
+})
+
+test('paneBackground transparent opens the pane transparent', { options: { paneBackground: 'transparent' } }, async ($, on) => {
+  expect(await openedWith($, on)).toEqual(['transparent'])
+})
+
+test('paneBackground #rrggbb opens the pane in that colour', { options: { paneBackground: '#0A0F1A' } }, async ($, on) => {
+  expect(await openedWith($, on)).toEqual(['#0a0f1a'])
+})
+
+test('an unknown paneBackground keeps the theme\'s', { options: { paneBackground: 'clear' } }, async ($, on) => {
+  expect(await openedWith($, on)).toEqual(['none'])
 })
 
 test('a call shows on the pane, on every surface', { options: OWN }, async ($, on) => {

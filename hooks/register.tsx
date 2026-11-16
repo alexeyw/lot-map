@@ -229,6 +229,9 @@ export const register: Register = (on, options) => {
   let lastModel: string | undefined
   let modelKey = 'model'
 
+  // The pane as it is opened: with `paneBackground` set, the surface paints that under it, or nothing.
+  const pane = { id: PANE, title: t.title, ...(setup.paneBackground === 'theme' ? {} : { backgroundColor: setup.paneBackground }) }
+
   // In a terminal, the map above the rows, as a picture or in braille dots, for a person who asked for it.
   const above = terminalMap(setup)
 
@@ -239,7 +242,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
-    void quietly(() => $.ui.open({ id: PANE, title: t.title }))
+    void quietly(() => $.ui.open(pane))
     await quietly(async () => {
       const minimized = (await $.store.get('paneMin')) === true
       const kept = await $.store.get('mapZoom')
@@ -255,7 +258,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'lot-map' }, async $ => {
-    const opened = await $.ui.open({ id: PANE, title: t.title })
+    const opened = await $.ui.open(pane)
     return { text: opened.isPlaced ? t.opened : t.cannotOpen(String(opened.reason)) }
   })
 

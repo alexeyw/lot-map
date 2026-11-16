@@ -19,7 +19,7 @@ const PLAIN = setupFrom({})
 const TALK = [{ role: 'user', text: 'kept', toolUses: [] }]
 
 // prettier-ignore
-const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"hookRecords":false,"hookReasons":false,"subagentNames":false,"contextCost":false,"theme":"auto","background":"solid","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","terminalView":"text","cellShape":2.4}
+const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"hookRecords":false,"hookReasons":false,"subagentNames":false,"contextCost":false,"theme":"auto","background":"solid","paneBackground":"theme","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","terminalView":"text","cellShape":2.4}
 
 // ---- 1. It watches and changes nothing ------------------------------------------------------------
 
