@@ -1415,6 +1415,42 @@ test('a command handed to a shell, to eval or to watch is the command that count
   expect(stationOf(`bash -c "bash -c 'bash -c \\"bash -c curl\\"'"`)).not.toBe('files')
 })
 
+test('what parts two commands parts them only outside quotes', () => {
+  // A pattern, a script or a filter with `|` or `;` in it is one argument of a command that works on files.
+  for (const c of ['grep -E "ssh|curl" log.txt', 'grep -rn "foo|bar" src', 'rg "push|pull" .', 'sed "s/a/b/; s/curl/x/" f', "awk '{print $1; }' f", "jq '.a | .b' f.json", 'cat f | grep -E "wget|nc"', `bash -c "grep -E 'a|b' f"`, 'find . -name "*.ts" -exec grep -l "a|b" {} \\;', "find . -exec grep -l 'a;b' {} ';'"]) {
+    expect([c, stationOf(c)]).toEqual([c, 'files'])
+  }
+  // Text that names a network command runs none.
+  for (const c of ['git commit -m "fix: retry; curl fallback"', 'echo "a; wget b"', 'echo "for u; do curl; done"', `echo "it's; curl"`, 'echo "a \\" ; curl x"', 'echo a\\; curl', "echo $'it\\'s; curl x'", 'make # then; curl x', "make # don't; curl x"]) {
+    expect([c, stationOf(c)]).toEqual([c, 'shell'])
+  }
+  // Outside the quotes the same characters still part commands, and a command after a comment's line is read.
+  for (const c of ['grep "a" f && curl x', 'echo "a"; curl x', "make # don't\ncurl x", 'echo a\\\\; curl x', 'bash -c "echo \\"hi\\"; curl x"', 'sleep 5 & curl x', 'make |& curl -T - x']) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  // Sending output somewhere ends no command, and a backslash at a line's end joins two lines.
+  expect(stationOf('ls a 2>&1')).toBe('files')
+  expect(stationOf('ls a &> out.txt')).toBe('files')
+  expect(stationOf('git \\\n  push origin main')).toBe('web')
+  // Double quotes do not stop a command inside them from running; single quotes do.
+  expect(stationOf('echo "$(curl x)"')).toBe('web')
+  expect(stationOf('echo "now `curl x` done"')).toBe('web')
+  expect(stationOf('git commit -m "$(date); $(curl x)"')).toBe('web')
+  expect(stationOf("echo '$(curl x)'")).toBe('shell')
+  expect(stationOf("echo '`curl x`'")).toBe('shell')
+  // The text beside a command run inside quotes is still text.
+  expect(stationOf('echo "$(date) curl x"')).toBe('shell')
+  // A line handed to a shell in single quotes is run by that shell, and what it runs inside is found.
+  expect(stationOf("bash -c 'echo $(curl x)'")).toBe('web')
+  expect(stationOf('case $1 in a) curl x ;; esac')).toBe('web')
+  // PowerShell: a backslash is a path's, and a backtick keeps the character after it.
+  expect(stationOf('Select-String "a|b" f.txt', 'PowerShell')).toBe('files')
+  expect(stationOf('Write-Host "a; curl b"', 'PowerShell')).toBe('shell')
+  expect(stationOf('Get-Content "C:\\dir\\"; curl x', 'PowerShell')).toBe('web')
+  expect(stationOf('Write-Host a`; curl', 'PowerShell')).toBe('shell')
+  expect(stationOf('& "C:\\Program Files\\Git\\cmd\\git.exe" push', 'PowerShell')).toBe('web')
+})
+
 test('the text of a here-document is no command, whatever it says', () => {
   expect(stationOf('cat <<EOF > f\ncurl x\nEOF')).toBe('files')
   expect(stationOf("cat <<'EOF' > notes.md\nsome text\nwget y\nEOF")).toBe('files')

@@ -117,11 +117,12 @@ const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', '
 /** How much of a command line is read. A longer one is a script written inline, and what counts stands at its start. */
 const READ = 8000
 
-/** A word without the one pair of quotes around it. */
+/** A word without the one pair of quotes around it. Inside double quotes a backslash before `"`, `\\`, `$` or a backtick goes too. */
 const unquoted = (word: string): string => {
   const q = word[0]
   if (q !== '"' && q !== "'") return word
-  return word.length > 1 && word.endsWith(q) ? word.slice(1, -1) : word.slice(1)
+  const inner = word.length > 1 && word.endsWith(q) ? word.slice(1, -1) : word.slice(1)
+  return q === '"' ? inner.replace(/\\(["\\$`])/g, '$1') : inner
 }
 
 /**
@@ -155,15 +156,94 @@ const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-
 const PS_NEUTRAL_WORDS = new Set(['write-host', 'write-output', 'set-location', 'sl', 'get-location', 'gl', 'start-sleep', 'select-object', 'select', 'where-object', 'where', '?', 'foreach-object', 'foreach', '%', 'sort-object', 'measure-object', 'measure', 'format-table', 'ft', 'format-list', 'fl', 'out-string', 'out-null'])
 const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'test-connection', 'test-netconnection', 'resolve-dnsname', 'start-bitstransfer'])
 
+/** A command being read: its text so far, the quote open in it, and what closes it when it stands inside another. */
+type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`' }
+
+/**
+ * A shell line cut into its commands. `&&`, `||`, `;`, `|`, `&` and a line's end part two commands only outside
+ * quotes: in `grep -E "a|b" f` the `|` is the pattern's. A backslash keeps the character after it (in PowerShell a
+ * backtick does), and a comment runs to the end of its line and is no command.
+ * `deep` also takes out each command run inside another, in `$(…)`, backticks or brackets, as a command of its own.
+ * Double quotes do not stop those from running; single quotes do.
+ */
+function pieces(line: string, deep: boolean, powershell: boolean): string[] {
+  const out: string[] = []
+  const open: Reading[] = [{ text: '', quote: '', close: '' }]
+  const escape = powershell ? '`' : '\\'
+  const cut = (reading: Reading): void => {
+    out.push(reading.text)
+    reading.text = ''
+  }
+  for (let i = 0; i < line.length; i++) {
+    const top = open[open.length - 1] as Reading
+    const c = line[i] ?? ''
+    const next = line[i + 1] ?? ''
+    if (top.quote === "'") {
+      top.text += c
+      if (c === "'") top.quote = ''
+      continue
+    }
+    // A backslash at a line's end joins the two lines.
+    if (c === '\\' && next === '\n' && !powershell) {
+      top.text += ' '
+      i++
+      continue
+    }
+    if (c === escape || (c === '\\' && top.quote === '$')) {
+      top.text += c + next
+      i++
+      continue
+    }
+    const inside = deep && c === '$' && next === '(' ? ')' : deep && c === '`' && !powershell && top.close !== '`' ? '`' : ''
+    if (top.quote !== '') {
+      if ((top.quote === '$' && c === "'") || (top.quote === '"' && c === '"')) top.quote = ''
+      if (top.quote === '"' && inside !== '') {
+        open.push({ text: '', quote: '', close: inside })
+        if (inside === ')') i++
+        top.text += ' '
+      } else top.text += c
+      continue
+    }
+    if (c === '"' || c === "'") {
+      top.quote = c
+      top.text += c
+    } else if (c === '$' && next === "'" && !powershell) {
+      top.quote = '$'
+      top.text += "$'"
+      i++
+    } else if (c === '#' && /^$|\s$/.test(top.text.slice(-1))) {
+      while (i + 1 < line.length && line[i + 1] !== '\n') i++
+    } else if (c === '\n' || c === ';' || c === '|') cut(top)
+    else if (c === '&' && (next === '&' || !powershell)) {
+      // `2>&1` and `&>file` send output somewhere; they end no command.
+      if (next !== '&' && (next === '>' || /[<>]/.test(line[i - 1] ?? ''))) top.text += c
+      else cut(top)
+    } else if (inside !== '' || (deep && c === '(')) {
+      open.push({ text: '', quote: '', close: inside === '`' ? '`' : ')' })
+      if (inside === ')') i++
+      top.text += ' '
+    } else if (deep && (c === ')' || c === '`') && !(c === '`' && powershell)) {
+      cut(top)
+      // A `)` that closes nothing is a `case` pattern's: what follows it is a command.
+      if (top.close === c && open.length > 1) open.pop()
+    } else top.text += c
+  }
+  for (const reading of open) out.push(reading.text)
+  return out
+}
+
+/** A piece's words, cut at spaces outside quotes, so that "C:\Program Files\Git\cmd\git.exe" stays one word. */
+const WORDS = /(?:\\[\s\S]|[^\s"'\\]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?)+/g
+/** PowerShell's words: there a backslash is a path's and nothing more. */
+const PS_WORDS = /(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g
+
 /**
  * The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument.
- * `deep` also cuts at `$(…)`, backticks and brackets, to find a command run inside another; the pieces around it are then no commands.
+ * `deep` adds each command run inside another: see `pieces`.
  */
-function segments(command: string, deep = false, constructs = false): string[][] {
-  return command
-    .split(deep ? /&&|\|\||;|\||\n|\$\(|`|\(|\)/ : /&&|\|\||;|\||\n/)
-    // Cut at spaces outside quotes, so that "C:\Program Files\Git\cmd\git.exe" stays one word.
-    .map(part => part.match(/(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g) ?? [])
+function segments(command: string, deep = false, constructs = false, powershell = false): string[][] {
+  return pieces(command, deep, powershell)
+    .map(part => part.match(powershell ? PS_WORDS : WORDS) ?? [])
     .map(words => {
       let i = 0
       while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) i++
@@ -237,7 +317,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
    * `bash -c "…"` or `eval "…"` the commands of the line handed over. A script's name is not a line: `bash deploy.sh`
    * is read no further. Shells inside shells are followed three deep.
    */
-  const commands = (words: string[], depth = 0): string[][] => {
+  const commands = (words: string[], deep = false, depth = 0): string[][] => {
     const outer = unwrapped(words)
     const head = name(outer[0])
     if (!powershell && depth < 3) {
@@ -248,15 +328,15 @@ function classifyShell(command: string, description: string, setup: Setup, power
         const flag = outer.findIndex((w, i) => i > 0 && /^-[a-z]*c$/.test(w))
         if (flag > 0 && (at < 0 || at > flag) && outer[flag + 1] !== undefined) line = unquoted(outer[flag + 1] ?? '')
       }
-      if (line !== undefined) return segments(line, false, true).flatMap(inner => commands(inner, depth + 1))
+      if (line !== undefined) return segments(line, deep, true).flatMap(inner => commands(inner, deep, depth + 1))
     }
     const all = [outer]
     if (head === 'find') {
       outer.forEach((word, i) => {
         if (!/^-(?:exec|execdir|ok|okdir)$/.test(word)) return
         const tail = outer.slice(i + 1)
-        const end = tail.findIndex(w => w === ';' || w === '\\;' || w === '\\' || w === '+')
-        all.push(...commands(end < 0 ? tail : tail.slice(0, end), depth + 1))
+        const end = tail.findIndex(w => w === '\\;' || unquoted(w) === ';' || w === '+')
+        all.push(...commands(end < 0 ? tail : tail.slice(0, end), deep, depth + 1))
       })
     }
     return all.filter(c => c.length > 0)
@@ -284,7 +364,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
   }
   // What is read: the line without the text of its here-documents, and no more than its first part.
   const read = (powershell ? command : withoutHereDocuments(command)).slice(0, READ)
-  const lines = segments(read, false, !powershell).map(own).filter(words => words.length > 0)
+  const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
   const label = description.trim() || base(lines[0]?.[0] ?? 'shell')
   const run = lines.flatMap(words => commands(words))
   for (const words of run) {
@@ -294,7 +374,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
       return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
-  if (run.some(isNet) || segments(read, true, !powershell).map(own).flatMap(words => commands(words)).some(isNet)) return { station: 'web', label }
+  if (run.some(isNet) || segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(isNet)) return { station: 'web', label }
   const isNeutral = (head: string): boolean => NEUTRAL_WORDS.has(head) || (powershell && PS_NEUTRAL_WORDS.has(head))
   const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
   const real = run.filter(words => !isNeutral(name(words[0])))
