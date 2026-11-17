@@ -1,6 +1,7 @@
 // `contextCost`: what each call added to the context, on its row on every surface and as each station's sum on the desktop map.
 import { expect, test } from 'claude-code/testing'
 
+import { charged, stepCosts } from './cost'
 import { drawMap, formatTokens, foldRows, setupFrom } from './map'
 import type { Board, Entry } from '../types'
 
@@ -217,6 +218,37 @@ test('a call whose step was the last of its turn, one before a compaction and a 
   for (const name of [/last\.ts/, /before\.ts/, /after\.ts/, /sub\.ts/]) expect(await rowOf(ui, name)).toBeDefined()
   expect(await ui.find({ type: 'Text', text: COST_FIGURE })).toBeUndefined()
   await ui.unmount()
+})
+
+test('the order of a step is kept apart from the engine: a call is answered by the next step, and charged with that step\'s growth', () => {
+  const call = (id: string, station: Entry['station']): Entry => ({ id, station, label: id, from: 'core', startedAt: 0, endedAt: 1, status: 'ok' })
+  const costs = stepCosts(true)
+  // The first step answers no call and only sets the mark.
+  const first = costs.stepEnded(costs.stepStarted(), 10_000)
+  expect(first).toEqual({ calls: [], before: undefined, after: 10_000 })
+  costs.called('a')
+  const second = costs.stepEnded(costs.stepStarted(), 14_000)
+  expect(second).toEqual({ calls: ['a'], before: 10_000, after: 14_000 })
+  const board: Board = { entries: [call('a', 'files'), call('b', 'shell')], counts: {} }
+  const after = charged(board, second?.calls ?? [], second?.before, second?.after)
+  expect(after.entries.map(e => e.tokens)).toEqual([4000, undefined])
+  expect(after.spent).toEqual({ files: 4000 })
+  // A call made in the turn's last step, and one made before a compaction, are answered by no step.
+  costs.called('b')
+  costs.turnEnded()
+  expect(costs.stepStarted()).toEqual([])
+  costs.called('c')
+  costs.compacted()
+  expect(costs.stepEnded(costs.stepStarted(), 3000)).toEqual({ calls: [], before: undefined, after: 3000 })
+  // Nothing to put anywhere leaves the board as it was: no reading before, a context that shrank, a call not on the board.
+  expect(charged(board, ['a'], undefined, 5000)).toBe(board)
+  expect(charged(board, ['a'], 5000, 4000)).toBe(board)
+  expect(charged(board, ['gone'], 1000, 5000)).toBe(board)
+  // Off, it keeps nothing and no step has anything to put.
+  const off = stepCosts(false)
+  off.called('a')
+  expect(off.stepStarted()).toEqual([])
+  expect(off.stepEnded([], 5000)).toBeUndefined()
 })
 
 test('a folded row sums its calls\' figures, and is marked when some of them have none', () => {

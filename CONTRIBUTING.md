@@ -76,7 +76,10 @@ Please translate a language you speak.
 | `hooks/draw.ts` | the drawing (`drawMap`) |
 | `hooks/feed.ts` | the rows under the map |
 | `hooks/map.ts` | hands the five above on under their old address |
-| `hooks/register.tsx` | the hooks and the pane |
+| `hooks/register.tsx` | the hooks: what the mod listens to |
+| `hooks/board.ts` | the board the map is drawn from, and every write to it |
+| `hooks/pane.tsx` | the pane, drawn from the board |
+| `hooks/cost.ts` | the sums of `contextCost` |
 | `hooks/text.ts` | the words, one table per language |
 | `hooks/lot-map.test.tsx` | the tests |
 | `types/index.d.ts` | the board's shape |
