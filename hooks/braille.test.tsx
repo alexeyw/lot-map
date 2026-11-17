@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import type { Board, Entry } from '../types'
 import { ENDLESS_FOR_MS, FRAME_MS, brailleSize, nextFrameIn, packCells, paintBraille, placesOf, rowsOf } from './braille'
-import { STATIONS, setupFrom } from './map'
+import { STATIONS, drawMap, setupFrom } from './map'
 import { fromBase64 } from './raster'
 
 const PANE = {
@@ -116,6 +116,70 @@ test('the braille map shows what the first drawing counts: calls, faults, how ma
   expect(grid).toContain('opus 5.5')
   // A station not used yet has its name alone.
   expect(grid).toMatch(/Browser(?! \d)/)
+})
+
+// ---- the inventory: everything the first drawing shows, and whether the braille map shows it too --------------------
+//
+// Each line is one thing on the map, as two boards (or one board at two moments) that differ in that thing alone.
+// The first drawing must tell the two apart. The braille map must tell them apart too, or, where the line has
+// `leftOut`, must draw both the same, to the last cell and colour: then `leftOut` is the words the README says it
+// with, in "What it does not draw", and `scripts/check-surface.mjs` holds the README to these lines, both ways.
+// Something new on the map gets a line here: drawn in braille too, or left out and said so.
+// It catches what is drawn from a board these lines hold; a new field of the board needs its line written.
+
+type Side = { board: Board; now?: number; options?: Record<string, unknown> }
+type Line = { shows: string; a: Side; b: Side; withSums?: boolean; leftOut?: string }
+
+const at = (board: Board, now = NOW, options?: Record<string, unknown>): Side => ({ board, now, ...(options === undefined ? {} : { options }) })
+const one = (entries: Entry[], more: Partial<Board> = {}): Board => ({ entries, counts: {}, ...more })
+const WORKING = one([running('shell', NOW - 8000)], { counts: { shell: 1 } })
+const JUST_DONE = one([entry('files', NOW - 2000)], { counts: { files: 1 } })
+
+const INVENTORY: Line[] = [
+  { shows: 'how many calls a station took', a: at(one([], { counts: { files: 3 } })), b: at(EMPTY) },
+  { shows: 'a spoke worn in with use', a: at(one([], { counts: { files: 300 } })), b: at(one([], { counts: { files: 3 } })) },
+  { shows: 'a station bright after a call', a: at(JUST_DONE), b: at(one([], { counts: { files: 1 } })) },
+  { shows: 'a station at work', a: at(WORKING), b: at(one([], { counts: { shell: 1 } })) },
+  { shows: 'an error or a refusal, in red', a: at(one([entry('web', NOW - 2000, { status: 'err' })])), b: at(one([entry('web', NOW - 2000)])) },
+  { shows: 'what went wrong since the last message, counted', a: at(one([], { faults: { web: 2 } })), b: at(EMPTY) },
+  { shows: 'how many calls run at one station', a: at(one([running('shell', NOW - 8000), running('shell', NOW - 7000)])), b: at(one([running('shell', NOW - 8000)])) },
+  { shows: 'a pulse out along the spoke and one back', a: at(one([entry('files', NOW - 300)])), b: at(one([entry('files', NOW - 1500)])) },
+  { shows: 'what a hook brought unasked, flying in', a: at(one([entry('memory', NOW - 300, { from: 'inbound' })])), b: at(one([entry('memory', NOW - 300)])) },
+  { shows: 'the context window', a: at(one([], { context: 41 })), b: at(EMPTY) },
+  { shows: 'the model', a: at(one([], { model: 'claude-opus-5-5' })), b: at(EMPTY) },
+  { shows: 'a model just changed', a: at(one([], { model: 'claude-opus-5-5', switchedAt: NOW - 1000 })), b: at(one([], { model: 'claude-opus-5-5' })) },
+  { shows: 'the name at the centre', a: at(EMPTY, NOW, { coreName: 'LOT' }), b: at(EMPTY) },
+  { shows: 'subagents at work, circling', a: at(one([], { agents: ['a', 'b'] })), b: at(EMPTY) },
+  { shows: 'the ring of an answer', a: at(one([entry('you', NOW - 300, { mark: 'done' })])), b: at(one([entry('you', NOW - 300)])) },
+  { shows: 'the ring turned so that You is at the bottom', a: at(EMPTY, NOW, { layout: 'you-bottom' }), b: at(EMPTY) },
+
+  // The route: both stations long since cooled, the leg between them still on the first drawing.
+  { shows: 'the route', a: at(one([entry('files', NOW - 20_000), entry('shell', NOW - 15_000)])), b: at(one([entry('shell', NOW - 15_000)])), leftOut: 'the route between the stations, and its fading trail' },
+  // The same station at work, twenty seconds on: the hands have moved, and the beat is at the same turn.
+  { shows: 'the clock hands', a: at(WORKING), b: at(WORKING, NOW + 20_000), leftOut: 'the clock hands around a station at work' },
+  { shows: 'the breathing', a: at(EMPTY), b: at(EMPTY, NOW + 2400), leftOut: 'the breathing of the centre' },
+  // The same glow, a little further gone.
+  { shows: 'a glow fading', a: at(JUST_DONE), b: at(JUST_DONE, NOW + 800), leftOut: 'the fading of a glow' },
+  { shows: 'two pulses side by side', a: at(one([entry('files', NOW - 300, { id: 'a' }), entry('files', NOW - 300, { id: 'b' })])), b: at(one([entry('files', NOW - 300, { id: 'a' })])), leftOut: 'pulses side by side' },
+  { shows: 'what a hook brought, counted apart', a: at(one([], { counts: { memory: 5 }, pushed: 2 })), b: at(one([], { counts: { memory: 5 } })), leftOut: "memory's second count" },
+  { shows: 'a subagent\'s call leaving from Agents', a: at(one([entry('files', NOW - 300, { from: 'agents', agentId: 'x' })])), b: at(one([entry('files', NOW - 300)])), leftOut: "a subagent's call leaving from the Agents station" },
+  { shows: 'what a station\'s calls added to the context', a: at(one([], { counts: { files: 3 }, spent: { files: 14_000 } }), NOW, { contextCost: true }), b: at(one([], { counts: { files: 3 } }), NOW, { contextCost: true }), withSums: true, leftOut: "the braille map show the rows' figures and not the sums" },
+]
+
+// Left out as well, and not to be shown by two boards: they are on every map or never apart from what flies.
+// leftOut: 'the icons in the stations'
+// leftOut: 'the dashed contours'
+// leftOut: 'the rings where a pulse lands and where the model changes'
+
+test('everything the first drawing shows is in the braille map too, or is left out of it whole and by name', () => {
+  const first = (side: Side, withSums: boolean): string => drawMap(side.board, side.now ?? NOW, setupFrom(side.options ?? {}), withSums)
+  const second = (side: Side): string => packCells(paintBraille(side.board, side.now ?? NOW, setupFrom(side.options ?? {}), 60, 21))
+  for (const line of INVENTORY) {
+    expect([line.shows, first(line.a, line.withSums === true) !== first(line.b, line.withSums === true)]).toEqual([line.shows, true])
+    expect([line.shows, second(line.a) !== second(line.b)]).toEqual([line.shows, line.leftOut === undefined])
+  }
+  // The lines stay apart: a line is one thing.
+  expect(new Set(INVENTORY.map(line => line.shows)).size).toBe(INVENTORY.length)
 })
 
 test('no label reaches the braille map: it holds the names of the stations, the counts, the core and the model, and nothing else', () => {

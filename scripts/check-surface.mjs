@@ -2,6 +2,7 @@
 //   1. the mod hooks and calls exactly what `surface.txt` lists (so a new engine call, an environment read or a new
 //      hook shows in a pull request as a change to that file), and none of the calls that reach outside the session;
 //   2. the defaults the tests hold are the defaults `.claude-plugin/plugin.json` documents.
+//   3. what the README says the braille map leaves out is what the inventory in `hooks/braille.test.tsx` leaves out.
 // Run from the repository's root: `node scripts/check-surface.mjs` (add `--write` to rewrite surface.txt).
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -58,4 +59,15 @@ const held = /^const DEFAULTS = (\{.*\})$/m.exec(readFileSync(new URL('../hooks/
 if (held === undefined) fail('hooks/principles.test.tsx has no `const DEFAULTS = {…}` line')
 else if (JSON.stringify(JSON.parse(held)) !== documented) fail(`the defaults in hooks/principles.test.tsx are not the manifest's. Set the line to:\nconst DEFAULTS = ${documented}`)
 
-if (process.exitCode === undefined) console.log(`check-surface: ${surface.trim().split('\n').length} hooks and calls as listed, none reaching outside; ${Object.keys(manifest.userConfig).length} defaults as documented`)
+// ---- 3. what the braille map leaves out ---------------------------------------------------------------
+
+const readme = readFileSync(new URL('../README.md', here), 'utf8')
+const leftOut = [...readFileSync(new URL('../hooks/braille.test.tsx', here), 'utf8').matchAll(/leftOut: (?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g)].map(m => (m[1] ?? m[2]).replace(/\\(.)/g, '$1'))
+if (leftOut.length === 0) fail('hooks/braille.test.tsx names nothing the braille map leaves out')
+for (const words of leftOut) if (!readme.includes(words)) fail(`the README does not say that the braille map leaves out: ${words}`)
+// The other way: every line of the README's list is one the inventory holds.
+const list = /What it does not draw[^\n]*\n\n((?:- .*\n)+)/.exec(readme)?.[1]
+if (list === undefined) fail('the README has no list under "What it does not draw"')
+else for (const item of list.trim().split('\n')) if (!leftOut.some(words => item.includes(words))) fail(`the README says the braille map leaves out something the inventory in hooks/braille.test.tsx does not hold: ${item}`)
+
+if (process.exitCode === undefined) console.log(`check-surface: ${surface.trim().split('\n').length} hooks and calls as listed, none reaching outside; ${Object.keys(manifest.userConfig).length} defaults as documented; ${leftOut.length} things the braille map leaves out as the README says`)
