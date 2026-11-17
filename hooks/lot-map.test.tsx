@@ -1477,3 +1477,32 @@ test('a running row is in a colour of its own, apart from the colour of a failed
   expect(failed?.props.color).toBe('error')
   await ui.unmount()
 })
+
+test('guardedHooks is on unless switched off, in either spelling', () => {
+  expect(setupFrom({}).guardedHooks).toBe(true)
+  expect(setupFrom({ guardedHooks: 'nonsense' }).guardedHooks).toBe(true)
+  expect(setupFrom({ guardedHooks: false }).guardedHooks).toBe(false)
+  expect(setupFrom({ guardedHooks: 'false' }).guardedHooks).toBe(false)
+})
+
+test('with guardedHooks off a refused call still reads as blocked, and no hook of the five leaves a row', { options: { ...OWN, guardedHooks: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
+  on('classic.UserPromptSubmit', () => ({ additionalContext: ['• [#1971 excerpt] тайный текст записи'] }))
+  on('classic.SessionStart', () => ({ additionalContext: ['• [#277 excerpt] ещё'] }))
+  on('skill.prompt', (_, e) => ({ text: e.text }) as never)
+  on('session.compact', () => ({ skip: 'test' }) as never)
+  on('tool.call', () => ({ result: {} }))
+
+  await $.classic.SessionStart({ source: 'startup' } as never)
+  await $.classic.UserPromptSubmit({ prompt: 'привет', permission_mode: 'default' } as never)
+  await $.skill.prompt({ skill: 'deploy', text: '' } as never)
+  await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'kept', toolUses: [] }] } as never)
+  await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /Показать статус/ }))?.text).toContain('✕')
+  expect(await ui.find({ type: 'Text', text: /Хуки|deploy|#1971|#277|JUDGE|sk-private/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(SETUP.t.compacting) })).toBeUndefined()
+  await ui.unmount()
+})

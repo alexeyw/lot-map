@@ -92,6 +92,12 @@
       "default": false,
       "description": "Show the first line of a hook's refusal, up to 72 characters. Off, the map says only which tool was stopped: a refusal may quote what the hook found."
     },
+    "guardedHooks": {
+      "type": "boolean",
+      "title": "Hooks a guard skips",
+      "default": true,
+      "description": "Turn off on a Team or Enterprise login where the transcript fills with notices that a lot-map hook was skipped. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; everything else stays."
+    },
     "subagentNames": {
       "type": "boolean",
       "title": "Name subagents in the rows",

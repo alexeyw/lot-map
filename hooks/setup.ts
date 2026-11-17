@@ -42,6 +42,8 @@ export type Setup = {
   hookRecords: boolean
   /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
   hookReasons: boolean
+  /** Whether the mod listens to the five events an organisation's guard keeps a mod away from. Off, it adds no hook on them. */
+  guardedHooks: boolean
   /** Whether a subagent's model step says which subagent it is, by the description it was started with. Off, it says only that it is one. */
   subagentNames: boolean
   /** Whether a row says about how much its call added to the context, and the desktop map each station's sum. */
@@ -103,6 +105,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     serverStations,
     hookRecords: options.hookRecords === true,
     hookReasons: options.hookReasons === true,
+    guardedHooks: !(options.guardedHooks === false || options.guardedHooks === 'false'),
     subagentNames: options.subagentNames === true,
     contextCost: options.contextCost === true,
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',

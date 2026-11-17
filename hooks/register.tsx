@@ -396,21 +396,26 @@ export const register: Register = (on, options) => {
     }
   })
 
-  on('classic.PreToolUse', async ($, e, next) => {
-    const startedAt = (await quietly(() => $.clock.now())) ?? 0
-    const decided = await next(e)
-    const endedAt = (await quietly(() => $.clock.now())) ?? startedAt
-    if (decided.deny !== undefined) {
-      if (e.tool_use_id !== undefined) refused.add(e.tool_use_id)
-      await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(decided.deny) : '') || t.stopped(e.tool), status: 'block', startedAt })
-    } else if (decided.ask !== undefined) {
-      await begin($, { station: 'hooks', label: t.askedPermission(e.tool), status: 'ok', startedAt, endedAt })
-    } else if (endedAt - startedAt >= 400) {
-      // A check that took a moment is worth seeing; the instant ones are not.
-      await begin($, { station: 'hooks', label: t.checkBefore(e.tool), status: 'ok', startedAt, endedAt })
-    }
-    return decided
-  })
+  // On a Team or Enterprise login a guard of the organisation's runs ahead of every mod and sends these five
+  // events on past it, with a notice in the transcript each time. With `guardedHooks` off the mod adds no hook
+  // on them, so there is nothing to skip and nothing to say.
+  if (setup.guardedHooks) {
+    on('classic.PreToolUse', async ($, e, next) => {
+      const startedAt = (await quietly(() => $.clock.now())) ?? 0
+      const decided = await next(e)
+      const endedAt = (await quietly(() => $.clock.now())) ?? startedAt
+      if (decided.deny !== undefined) {
+        if (e.tool_use_id !== undefined) refused.add(e.tool_use_id)
+        await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(decided.deny) : '') || t.stopped(e.tool), status: 'block', startedAt })
+      } else if (decided.ask !== undefined) {
+        await begin($, { station: 'hooks', label: t.askedPermission(e.tool), status: 'ok', startedAt, endedAt })
+      } else if (endedAt - startedAt >= 400) {
+        // A check that took a moment is worth seeing; the instant ones are not.
+        await begin($, { station: 'hooks', label: t.checkBefore(e.tool), status: 'ok', startedAt, endedAt })
+      }
+      return decided
+    })
+  }
 
   // A notification delivered into a running turn starts no turn of its own; this is where it is seen.
   on('prompt.submit', async ($, e, next) => {
@@ -422,44 +427,46 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    const result = await next(e)
-    await noteContext($, result.additionalContext, t.toMessage, setup)
-    return result
-  })
-
-  on('classic.SessionStart', async ($, e, next) => {
-    const result = await next(e)
-    await noteContext($, result.additionalContext, t.atStart, setup)
-    return result
-  })
-
-  on('skill.prompt', async ($, e, next) => {
-    const result = await next(e)
-    // A skill the model called is already on the map as its tool call; this one catches a typed slash command.
-    await quietly(async () => {
-      const now = await $.clock.now()
-      await update($, board, b => {
-        const label = clean(e.skill)
-        if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === label)) return b
-        const entry: Entry = { id: newId(now), station: 'skills', label, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
-        return { ...b, entries: kept([...b.entries, entry]), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
-      })
+  if (setup.guardedHooks) {
+    on('classic.UserPromptSubmit', async ($, e, next) => {
+      const result = await next(e)
+      await noteContext($, result.additionalContext, t.toMessage, setup)
+      return result
     })
-    return result
-  })
 
-  on('session.compact', async ($, e, next) => {
-    const id = await begin($, { station: 'model', label: t.compacting })
-    // After a compaction the context starts again: no call before it gets a figure, and the next step only sets the mark.
-    waiting = []
-    lastTokens = undefined
-    try {
-      return await next(e)
-    } finally {
-      await finish($, id, 'ok', (await contextOf($)).patch)
-    }
-  })
+    on('classic.SessionStart', async ($, e, next) => {
+      const result = await next(e)
+      await noteContext($, result.additionalContext, t.atStart, setup)
+      return result
+    })
+
+    on('skill.prompt', async ($, e, next) => {
+      const result = await next(e)
+      // A skill the model called is already on the map as its tool call; this one catches a typed slash command.
+      await quietly(async () => {
+        const now = await $.clock.now()
+        await update($, board, b => {
+          const label = clean(e.skill)
+          if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === label)) return b
+          const entry: Entry = { id: newId(now), station: 'skills', label, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
+          return { ...b, entries: kept([...b.entries, entry]), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
+        })
+      })
+      return result
+    })
+
+    on('session.compact', async ($, e, next) => {
+      const id = await begin($, { station: 'model', label: t.compacting })
+      // After a compaction the context starts again: no call before it gets a figure, and the next step only sets the mark.
+      waiting = []
+      lastTokens = undefined
+      try {
+        return await next(e)
+      } finally {
+        await finish($, id, 'ok', (await contextOf($)).patch)
+      }
+    })
+  }
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const state = await read($, board)
