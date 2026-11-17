@@ -1506,3 +1506,39 @@ test('with guardedHooks off a refused call still reads as blocked, and no hook o
   expect(await ui.find({ type: 'Text', text: new RegExp(SETUP.t.compacting) })).toBeUndefined()
   await ui.unmount()
 })
+
+test('with no surface attached at the start the pane is not opened; it opens when a surface joins', async ($, on) => {
+  let opens = 0
+  let roster: string[] = []
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('session.surfaces', () => ({ value: roster }) as never)
+  on('ui.open', () => {
+    opens++
+    return { value: roster.length > 0 ? { isPlaced: true } : { isPlaced: false, reason: 'no-surface' } } as never
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }) as never)
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(opens).toBe(0)
+
+  roster = ['desktop']
+  await $.session.attach({ clientId: 'c1', surface: 'desktop' } as never)
+  expect(opens).toBe(1)
+})
+
+test('with a surface attached at the start the pane is opened at once', async ($, on) => {
+  let opens = 0
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('session.surfaces', () => ({ value: ['terminal'] }) as never)
+  on('ui.open', () => {
+    opens++
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opens).toBe(1)
+})

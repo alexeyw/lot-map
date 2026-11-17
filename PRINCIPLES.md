@@ -36,7 +36,7 @@ The mod makes no network request, reads no file, runs no process and calls no mo
 
 - `principle 2: no tool puts content on its label, whatever its input carries`: 87 tool names, each called with a mark in every field that holds content (command line, pattern, query, file text, prompt, plan, the first parts of a path, an address's login, path and query, a resource's address).
 - `principle 2: nothing a session carries reaches what the mod keeps or draws`: the same calls, a message, a hook's refusal and a hook's context sent through the mod; the mark is in nothing written to the session's state or the store, and in no text on the pane.
-- `scripts/check-surface.mjs` holds the mod to [`scripts/surface.txt`](scripts/surface.txt): 14 hooks, 13 engine calls, three environment variables read (`COLORFGBG`, `TERM_PROGRAM`, `LC_TERMINAL`), one state key. A new call or read fails the check until that file is changed, so it shows in the pull request. Whatever the file says, a call to `$.fs`, `$.process`, `$.model`, `$.agent`, `$.tool` or `$.audio`, or a `fetch` in the code, fails it.
+- `scripts/check-surface.mjs` holds the mod to [`scripts/surface.txt`](scripts/surface.txt): 15 hooks, 14 engine calls, three environment variables read (`COLORFGBG`, `TERM_PROGRAM`, `LC_TERMINAL`), one state key. A new call or read fails the check until that file is changed, so it shows in the pull request. Whatever the file says, a call to `$.fs`, `$.process`, `$.model`, `$.agent`, `$.tool` or `$.audio`, or a `fetch` in the code, fails it.
 
 ## 3. It costs next to nothing
 

@@ -4,6 +4,7 @@
 ./register.tsx hooks: classic.UserPromptSubmit
 ./register.tsx hooks: command.run{command=lot-map}
 ./register.tsx hooks: prompt.submit
+./register.tsx hooks: session.attach
 ./register.tsx hooks: session.compact
 ./register.tsx hooks: session.start
 ./register.tsx hooks: skill.prompt
@@ -16,6 +17,7 @@
 ./register.tsx calls: $.clock.now
 ./register.tsx calls: $.command.register
 ./register.tsx calls: $.env.get
+./register.tsx calls: $.session.surfaces
 ./register.tsx calls: $.session.usage
 ./register.tsx calls: $.state.get
 ./register.tsx calls: $.state.set
