@@ -548,8 +548,12 @@ test('a call a settings hook refused reads as blocked, with the hook lit and its
   on('clock.now', () => ({ value: 1_000_000 }))
   on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
   on('tool.call', () => ({ result: {} }))
+  let kept: Board = { entries: [], counts: {} }
+  on('state.set', ((_: unknown, e: { value?: { value?: Board } }, next: (e: unknown) => unknown) => ((kept = e.value?.value ?? kept), next(e))) as never)
 
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
+
+  expect(kept.entries.filter(e => e.station === 'shell').map(e => e.status)).toEqual(['block'])
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /остановил Bash/ }))?.text).toContain('Хуки')
@@ -1485,7 +1489,7 @@ test('guardedHooks is on unless switched off, in either spelling', () => {
   expect(setupFrom({ guardedHooks: 'false' }).guardedHooks).toBe(false)
 })
 
-test('with guardedHooks off a refused call still reads as blocked, and no hook of the five leaves a row', { options: { ...OWN, guardedHooks: false } }, async ($, on) => {
+test('with guardedHooks off a call a hook refused reads as failed, and no hook of the five leaves a row', { options: { ...OWN, guardedHooks: false } }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('classic.PreToolUse', () => ({ deny: 'JUDGE: found key sk-private\nCommand: secret' }))
   on('classic.UserPromptSubmit', () => ({ additionalContext: ['• [#1971 excerpt] тайный текст записи'] }))
@@ -1493,12 +1497,18 @@ test('with guardedHooks off a refused call still reads as blocked, and no hook o
   on('skill.prompt', (_, e) => ({ text: e.text }) as never)
   on('session.compact', () => ({ skip: 'test' }) as never)
   on('tool.call', () => ({ result: {} }))
+  let kept: Board = { entries: [], counts: {} }
+  on('state.set', ((_: unknown, e: { value?: { value?: Board } }, next: (e: unknown) => unknown) => ((kept = e.value?.value ?? kept), next(e))) as never)
 
   await $.classic.SessionStart({ source: 'startup' } as never)
   await $.classic.UserPromptSubmit({ prompt: 'привет', permission_mode: 'default' } as never)
   await $.skill.prompt({ skill: 'deploy', text: '' } as never)
   await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'kept', toolUses: [] }] } as never)
   await $.tool.call({ tool: 'Bash', command: 'git status', description: 'Показать статус' })
+
+  // The mark is the same for a blocked call and for a failed one, so the row's own status is read. Without its
+  // hook on classic.PreToolUse the mod cannot tell a refusal from an error: the call comes back as an error.
+  expect(kept.entries.filter(e => e.station === 'shell').map(e => e.status)).toEqual(['err'])
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /Показать статус/ }))?.text).toContain('✕')

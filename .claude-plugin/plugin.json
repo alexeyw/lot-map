@@ -96,7 +96,7 @@
       "type": "boolean",
       "title": "Hooks a guard skips",
       "default": true,
-      "description": "Turn off on a Team or Enterprise login where the transcript fills with notices that a lot-map hook was skipped. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; everything else stays."
+      "description": "Turn off on a Team or Enterprise login where the transcript gets notices that a lot-map hook was skipped. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; everything else stays."
     },
     "subagentNames": {
       "type": "boolean",
