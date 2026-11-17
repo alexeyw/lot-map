@@ -1487,6 +1487,32 @@ test('the text of a here-document is no command, whatever it says', () => {
   expect(stationOf('Get-Content a.txt', 'PowerShell')).toBe('files')
 })
 
+test('a here-document handed to a shell is that shell\'s script', () => {
+  for (const c of ['bash <<EOF\ncurl x\nEOF', "bash -s <<'EOF'\nset -e\nwget y\nEOF", 'sudo sh <<EOF\napt-get update\nEOF', 'echo start && zsh <<-EOF\n\tgit push\n\tEOF', 'bash <<EOF\necho hi']) {
+    if (c.endsWith('hi')) expect([c, stationOf(c)]).toEqual([c, 'shell'])
+    else expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  // The word that ends it is no command, and what follows is read as before.
+  expect(stationOf('bash <<EOF\necho hi\nEOF')).toBe('shell')
+  expect(stationOf('bash <<EOF\necho hi\nEOF\ncurl x')).toBe('web')
+  // A shell that was given a script, or a line with -c, reads the here-document as that script's input: text.
+  expect(stationOf('bash deploy.sh <<EOF\ncurl x\nEOF')).toBe('shell')
+  expect(stationOf('bash -c "cat > f" <<EOF\ncurl x\nEOF')).toBe('files')
+  // Another language's script is not read, and neither is text piped on to a shell.
+  expect(stationOf('python3 - <<PY\nimport os\ncurl = 1\nPY')).toBe('shell')
+  expect(stationOf('cat <<EOF | bash\ncurl x\nEOF')).toBe('shell')
+})
+
+test('the command docker runs in a container is the command that counts', () => {
+  for (const c of ['docker exec c curl x', 'docker exec -it -u root c curl x', 'docker run alpine wget x', 'docker run --rm -v "$PWD:/w" -w /w alpine wget x', 'docker run --rm alpine sh -c "curl x"', 'docker compose exec web curl x', 'docker compose run --rm web npm install', 'docker -H tcp://h:2375 exec c curl y', 'docker container exec c ping h', 'sudo docker exec c curl x']) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  // A name or a value that reads like a command is not one, and a command that stays in the container is Shell.
+  for (const c of ['docker exec c ls', 'docker run --name curl alpine ls', 'docker run -e A=1 --network=host img git status', 'docker run alpine', 'docker ps', 'docker exec c cat /etc/hosts', 'docker logs curl']) {
+    expect([c, stationOf(c)]).toEqual([c, 'shell'])
+  }
+})
+
 test('a command line is read up to a length, and a long one costs no more than that', () => {
   // Past the first eight thousand characters nothing is read: the label and the station come from what stands before.
   const long = `ls ${'a'.repeat(9000)}; curl x`

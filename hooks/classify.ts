@@ -107,6 +107,37 @@ const pastFlags = (words: string[], takes: { has(flag: string): boolean }): stri
   while (i < words.length && (words[i] ?? '').startsWith('-')) i += takes.has(words[i] ?? '') ? 2 : 1
   return words.slice(i)
 }
+/**
+ * `sudo curl` is curl, and so is the curl behind `env A=1`, `timeout 5` or `xargs`: the command run is the one that
+ * counts. `name` reads a command's name from a word.
+ */
+function unwrapped(words: string[], name: (word?: string) => string): string[] {
+  let rest = words
+  for (let depth = 0; depth < 6; depth++) {
+    const wrapper = WRAPPERS[name(rest[0])]
+    if (wrapper === undefined) break
+    if (wrapper.asks?.some(flag => rest[1] === flag) === true) break
+    rest = pastFlags(rest.slice(1), new Set(wrapper.takes ?? []))
+    let i = 0
+    while (i < rest.length && ASSIGNMENT.test(rest[i] ?? '')) i++
+    rest = rest.slice(i + (wrapper.skip ?? 0))
+  }
+  return rest
+}
+
+/** Flags of `docker run` and `docker exec` that stand alone; any other flag without `=` has a word of its own after it. */
+const DOCKER_ALONE = new Set(['-i', '-t', '-d', '-P', '-q', '-T', '--interactive', '--tty', '--detach', '--rm', '--init', '--privileged', '--publish-all', '--read-only', '--no-healthcheck', '--oom-kill-disable', '--quiet', '--no-deps', '--build', '--service-ports', '--use-aliases', '--no-TTY', '--remove-orphans', '--quiet-pull'])
+
+/** What `docker exec` or `docker run` runs in a container: the words after the container's or the image's name. */
+function insideContainer(words: string[]): string[] {
+  let i = 0
+  while (i < words.length && (words[i] ?? '').startsWith('-')) {
+    const flag = words[i] ?? ''
+    i += DOCKER_ALONE.has(flag) || flag.includes('=') || /^-[itdqPT]{2,}$/.test(flag) ? 1 : 2
+  }
+  return words.slice(i + 1)
+}
+
 const RUNNERS = new Set(['python', 'python3', 'bash', 'sh', 'zsh', 'node'])
 /** Shells that run a line handed to them with `-c`: the commands of that line are the ones that count. */
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
@@ -129,23 +160,28 @@ const unquoted = (word: string): string => {
  * A shell line without the text of its here-documents: what stands between `<<WORD` and the line that is `WORD` is
  * written somewhere, not run. One that never ends is text to the end. `<<<` is a here-string and `((a << b))` is
  * arithmetic: neither opens one.
+ * One handed to a shell that was given no script (`bash <<EOF`, `sudo sh -s <<EOF`) is that shell's script: its
+ * lines stay, as commands.
  */
 function withoutHereDocuments(command: string): string {
   if (!command.includes('<<')) return command
   const kept: string[] = []
-  const waiting: { word: string; tabs: boolean }[] = []
+  const waiting: { word: string; tabs: boolean; isRun: boolean }[] = []
   for (const line of command.split('\n')) {
     const open = waiting[0]
     if (open !== undefined) {
       const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
       if (text === open.word) waiting.shift()
+      else if (open.isRun) kept.push(line)
       continue
     }
     kept.push(line)
     for (const m of line.matchAll(/(?<!<)<<(?!<)(-?)\s*(["']?)([A-Za-z_][\w.]*)\2/g)) {
       const before = line.slice(0, m.index)
       if (before.lastIndexOf('((') > before.lastIndexOf('))')) continue
-      waiting.push({ word: m[3] ?? '', tabs: m[1] === '-' })
+      const feeds = unwrapped(segments(before).pop() ?? [], base)
+      const isRun = SHELLS.has(base(feeds[0])) && feeds.slice(1).every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
+      waiting.push({ word: m[3] ?? '', tabs: m[1] === '-', isRun })
     }
   }
   return kept.join('\n')
@@ -298,27 +334,14 @@ function classifyShell(command: string, description: string, setup: Setup, power
     if (words[i] === '&' || words[i] === '.') i++
     return words.slice(i)
   }
-  // `sudo curl` is curl, and so is the curl behind `env A=1`, `timeout 5` or `xargs`: the command run is the one that counts.
-  const unwrapped = (words: string[]): string[] => {
-    let rest = words
-    for (let depth = 0; depth < 6; depth++) {
-      const wrapper = WRAPPERS[name(rest[0])]
-      if (wrapper === undefined) break
-      if (wrapper.asks?.some(flag => rest[1] === flag) === true) break
-      rest = pastFlags(rest.slice(1), new Set(wrapper.takes ?? []))
-      let i = 0
-      while (i < rest.length && ASSIGNMENT.test(rest[i] ?? '')) i++
-      rest = rest.slice(i + (wrapper.skip ?? 0))
-    }
-    return rest
-  }
   /**
-   * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, and in place of
-   * `bash -c "…"` or `eval "…"` the commands of the line handed over. A script's name is not a line: `bash deploy.sh`
+   * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, the one that
+   * `docker exec` or `docker run` runs in a container, and in place of `bash -c "…"` or `eval "…"` the commands of
+   * the line handed over. A script's name is not a line: `bash deploy.sh`
    * is read no further. Shells inside shells are followed three deep.
    */
   const commands = (words: string[], deep = false, depth = 0): string[][] => {
-    const outer = unwrapped(words)
+    const outer = unwrapped(words, name)
     const head = name(outer[0])
     if (!powershell && depth < 3) {
       let line: string | undefined
@@ -338,6 +361,12 @@ function classifyShell(command: string, description: string, setup: Setup, power
         const end = tail.findIndex(w => w === '\\;' || unquoted(w) === ';' || w === '+')
         all.push(...commands(end < 0 ? tail : tail.slice(0, end), deep, depth + 1))
       })
+    }
+    if (head === 'docker' && depth < 3) {
+      let rest = pastFlags(outer.slice(1), DOCKER_TAKES)
+      if (rest[0] === 'compose') rest = pastFlags(rest.slice(1), DOCKER_TAKES)
+      if (rest[0] === 'container') rest = rest.slice(1)
+      if (rest[0] === 'exec' || rest[0] === 'run') all.push(...commands(insideContainer(rest.slice(1)), deep, depth + 1))
     }
     return all.filter(c => c.length > 0)
   }
