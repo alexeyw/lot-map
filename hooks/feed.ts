@@ -113,3 +113,14 @@ export function describeNow(board: Board, t: Strings): string {
   if (top === undefined) return `${t.idle}${context}${model}`
   return `${t.stations[top.station]}: ${top.label}${running.length > 1 ? t.andMore(running.length - 1) : ''}${context}`
 }
+
+/**
+ * Keeps the newest `max` of what a set or a map holds and drops the rest: both hand their keys back in the order
+ * they were added. For what the mod remembers between two events and may never be asked for again.
+ */
+export function keepNewest(kept: { readonly size: number; keys(): IterableIterator<string>; delete(key: string): boolean }, max: number): void {
+  for (const key of kept.keys()) {
+    if (kept.size <= max) break
+    kept.delete(key)
+  }
+}

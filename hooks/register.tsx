@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { MAP_ASPECT, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, formatTokens, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { MAP_ASPECT, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, formatTokens, keepNewest, memoryIds, nowParts, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 import { drawTerminalMap, terminalMap } from './terminal'
 
@@ -22,6 +22,8 @@ const SHARED_AT_MOST = 3
 const CREW = 12
 /** How many subagents' names are kept for their rows. */
 const CREW_NAMES = 32
+/** How many refusals are remembered until their calls come by: a call that never comes would stay for the whole session. */
+const REFUSALS_KEPT = 64
 /**
  * The widths, in CSS pixels, the editor may draw the map at. Its pane is a third of the panel tall and cannot be made
  * taller, so the person zooms the map out until it fits, rows and all. Past the last, the map is as wide as the pane.
@@ -222,6 +224,7 @@ export const register: Register = (on, options) => {
 
   // Calls a settings hook refused, so that the tool's own row reads as blocked and not as an error.
   // Loses nothing across a reload that matters: a reload never lands in the middle of a call.
+  // The newest REFUSALS_KEPT of them: a refusal whose call never reaches `tool.call` is dropped in its turn.
   const refused = new Set<string>()
 
   // The model the main loop last ran on: in this session, or else in the last session in this folder.
@@ -294,10 +297,7 @@ export const register: Register = (on, options) => {
         const name = clean(e.description, 40)
         if (started.agentId !== undefined && name !== '') {
           crew.set(started.agentId, name)
-          for (const id of crew.keys()) {
-            if (crew.size <= CREW_NAMES) break
-            crew.delete(id)
-          }
+          keepNewest(crew, CREW_NAMES)
         }
       } catch {
         // A name that cannot be kept is no reason to trouble the spawn.
@@ -414,7 +414,10 @@ export const register: Register = (on, options) => {
       const decided = await next(e)
       const endedAt = (await quietly(() => $.clock.now())) ?? startedAt
       if (decided.deny !== undefined) {
-        if (e.tool_use_id !== undefined) refused.add(e.tool_use_id)
+        if (e.tool_use_id !== undefined) {
+          refused.add(e.tool_use_id)
+          keepNewest(refused, REFUSALS_KEPT)
+        }
         await begin($, { station: 'hooks', label: (setup.hookReasons ? firstLine(decided.deny) : '') || t.stopped(e.tool), status: 'block', startedAt })
       } else if (decided.ask !== undefined) {
         await begin($, { station: 'hooks', label: t.askedPermission(e.tool), status: 'ok', startedAt, endedAt })

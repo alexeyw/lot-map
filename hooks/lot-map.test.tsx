@@ -4,7 +4,7 @@ import type { TestBody } from 'claude-code/testing'
 import type { Board } from '../types'
 import type { Entry } from '../types'
 import { paintBraille, rowsOf } from './braille'
-import { COLOR_NAMES, STATIONS, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, nowParts, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { COLOR_NAMES, STATIONS, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, keepNewest, memoryIds, nowParts, routeOf, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
@@ -560,6 +560,25 @@ test('a call a settings hook refused reads as blocked, with the hook lit and its
   expect((await ui.find({ type: 'Text', text: /Показать статус/ }))?.text).toContain('✕')
   expect(await ui.find({ type: 'Text', text: /JUDGE|sk-private|secret/ })).toBeUndefined()
   await ui.unmount()
+})
+
+test('what is remembered between two events is held to a count, the oldest dropped first', () => {
+  // A refusal waits for its call, a subagent's name for its steps: either may never come, and neither may stay for good.
+  const refused = new Set<string>()
+  for (let i = 0; i < 100; i++) {
+    refused.add(`call-${i}`)
+    keepNewest(refused, 64)
+  }
+  expect(refused.size).toBe(64)
+  expect(refused.has('call-35')).toBe(false)
+  expect(refused.has('call-36')).toBe(true)
+  expect(refused.has('call-99')).toBe(true)
+  const crew = new Map([['a', 'one'], ['b', 'two'], ['c', 'three']])
+  keepNewest(crew, 2)
+  expect([...crew.keys()]).toEqual(['b', 'c'])
+  // Under the count nothing goes.
+  keepNewest(crew, 2)
+  expect(crew.size).toBe(2)
 })
 
 test('with hookReasons on, the first line of a refusal shows and the rest does not', { options: { ...OWN, hookReasons: true } }, async ($, on) => {
