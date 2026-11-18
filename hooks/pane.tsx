@@ -4,7 +4,7 @@ import type { EngineInterface, RenderElement, RenderInputOf, RenderSurface } fro
 
 import type { Board, StationId } from '../types'
 import { change, quietly, readBoard } from './board'
-import { MAP_ASPECT, STATIONS, describeNow, drawMap, foldRows, formatMs, formatTokens, nowParts } from './map'
+import { LIST_ROWS, MAP_ASPECT, STATIONS, describeNow, drawMap, foldRows, formatMs, formatTokens, nowParts } from './map'
 import type { Setup } from './map'
 import { drawTerminalMap } from './terminal'
 import type { TerminalMap } from './terminal'
@@ -37,6 +37,20 @@ function zoomStep(zoom: number | undefined, by: -1 | 1): number | undefined {
 /** The pane's render input on any surface: `e.surface` narrows it. */
 type PaneInput = { [P in RenderSurface]: RenderInputOf<'Pane', P> }[RenderSurface]
 
+/**
+ * The rows the list under the map can take in a docked pane `bodyRows` tall, never fewer than `LIST_ROWS`.
+ * Over-guessing would push the running calls, the list's last rows, below the pane's bottom; under-guessing only leaves rows empty.
+ */
+function fillRows(bodyColumns: number, bodyRows: number): number {
+  // The 3 are the line of now and two rows to spare, for a row opened to read.
+  const room = Math.floor(bodyRows) - Math.ceil((bodyColumns * MAP_ASPECT) / 2) - 3
+  // shortcut: the map's height in rows is guessed from its width, a cell taken as twice as tall as wide, and each row
+  // of the list is taken as one cell, as a line of text with a plain button takes on the desktop. The cell's real shape
+  // and a row's height at each text size are not known here, and past 920 px the map stops growing, so a wide pane
+  // keeps some empty rows. Exact once a surface says how tall it drew the map.
+  return bodyColumns > 0 && Number.isFinite(room) && room > LIST_ROWS ? room : LIST_ROWS
+}
+
 /** The pane as it stands now. `above` is the terminal's map, for a person who asked for one. */
 export async function drawPane($: EngineInterface, e: PaneInput, setup: Setup, above: TerminalMap): Promise<RenderElement> {
   const { t } = setup
@@ -58,7 +72,11 @@ export async function drawPane($: EngineInterface, e: PaneInput, setup: Setup, a
     }
   }
 
-  const rows = foldRows(state.entries, undefined, setup.subagentNames).map(({ entry, times, tookMs, tokens, isShared }) => {
+  // Fill only in the desktop's docked pane: a terminal's map takes its height from the same rows, and the other
+  // surfaces and seats are untried.
+  const isDocked = e.surface === 'desktop' && e.props.placement !== 'inline' && e.props.placement !== 'widget'
+  const max = setup.logRows === 'fill' && isDocked ? fillRows(e.props.bodyColumns, e.props.scroll?.bodyRows) : LIST_ROWS
+  const rows = foldRows(state.entries, max, setup.subagentNames).map(({ entry, times, tookMs, tokens, isShared }) => {
     const isSwitch = entry.mark === 'switch'
     const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
     const whole = turnMs.get(entry.id)

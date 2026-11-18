@@ -29,6 +29,9 @@ function fold(row: Row, e: Entry, took: number): void {
 
 const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
 
+/** The rows under the map, as many as there have always been. */
+export const LIST_ROWS = 16
+
 /**
  * The newest rows first. Finished calls that follow one another at one station fold into a single row.
  * With `apart`, the calls of two subagents never share a row: each row may name its subagent, and a folded one names only the newest.
@@ -39,7 +42,7 @@ const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
  * Such rows take half the list at most, so the newest calls always have the other half. With more of them still
  * running than that, the last row stands for the rest as a folded row does: `+22`.
  */
-export function foldRows(entries: readonly Entry[], max = 16, apart = false): Row[] {
+export function foldRows(entries: readonly Entry[], max = LIST_ROWS, apart = false): Row[] {
   const rows: Row[] = []
   const running: Row[] = []
   // Set once a row was left out: from there on nothing is a neighbour of the last row.

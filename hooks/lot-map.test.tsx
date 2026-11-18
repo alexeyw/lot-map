@@ -1667,3 +1667,51 @@ test('with a surface attached at the start the pane is opened at once', async ($
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   expect(opens).toBe(1)
 })
+
+// A background call that keeps running, then calls enough that nothing folds: the board keeps 80.
+const crowd = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]): Promise<void> => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  let n = 0
+  on('tool.call', () => ({ result: n++ === 0 ? { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b9' } : {} }) as never)
+  await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Wait for the build', run_in_background: true })
+  for (let i = 0; i < 70; i++) await $.tool.call({ tool: i % 2 === 0 ? 'Read' : 'Bash', file_path: `/a/b/${i}.py`, command: 'make', description: `step ${i}` })
+}
+
+// The rows of the list under the map: each one starts with its mark.
+const listed = async ($: Parameters<TestBody>[0], surface: 'desktop' | 'terminal' | 'vscode' | 'mobile', bodyRows: number, placement: 'dock' | 'inline' | 'widget' = 'dock') => {
+  const ui = await $.ui.mount({ ...PANE, surface, props: { ...PANE.props, placement, scroll: { offset: 0, bodyRows } } })
+  const found = await ui.findAll({ type: 'Text', text: /^[·●✕◆] / })
+  await ui.unmount()
+  return found
+}
+
+test('logRows fill keeps 16 rows in a short docked pane on the desktop, the running call last', { options: { logRows: 'fill' } }, async ($, on) => {
+  await crowd($, on)
+  const rows = await listed($, 'desktop', 40)
+  expect(rows.length).toBe(16)
+  expect(JSON.stringify(rows[rows.length - 1])).toContain('Wait for the build')
+})
+
+test('logRows fill gives the list the rows left below the map, the running call still last', { options: { logRows: 'fill' } }, async ($, on) => {
+  await crowd($, on)
+  // 90 rows, the map guessed at 29 for 60 columns, the line of now and two to spare.
+  const rows = await listed($, 'desktop', 90)
+  expect(rows.length).toBe(58)
+  expect(JSON.stringify(rows[rows.length - 1])).toContain('Wait for the build')
+})
+
+test('the list keeps 16 rows by default, in a tall pane too', async ($, on) => {
+  await crowd($, on)
+  expect((await listed($, 'desktop', 90)).length).toBe(16)
+})
+
+test('logRows fill keeps 16 rows outside the desktop\'s docked pane', { options: { logRows: 'fill' } }, async ($, on) => {
+  await crowd($, on)
+  for (const surface of ['terminal', 'vscode', 'mobile'] as const) expect((await listed($, surface, 90)).length).toBe(16)
+  for (const placement of ['inline', 'widget'] as const) expect((await listed($, 'desktop', 90, placement)).length).toBe(16)
+})
+
+test('logRows is fill or 16, whatever else was set', () => {
+  expect(setupFrom({ logRows: 'fill' }).logRows).toBe('fill')
+  for (const value of ['16', 16, '24', true, undefined]) expect(setupFrom({ logRows: value }).logRows).toBe(16)
+})
