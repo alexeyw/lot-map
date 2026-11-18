@@ -245,7 +245,9 @@ test('principle 3: a tool call through the mod stays within its budget, and the 
 
 // ---- 4. A fault on the map never reaches the work ---------------------------------------------------
 
-test('principle 3: a frame of the terminal picture stays within its budget, at rest and with the map at work', () => {
+// It paints some ninety frames, 1.7 s on the machine PRINCIPLES.md names and once 5.06 s on a CI runner, past the test
+// kit's 5 s: the time allowed is for the whole test, and the budgets below still hold each frame.
+test('principle 3: a frame of the terminal picture stays within its budget, at rest and with the map at work', { timeoutMs: 30_000 }, () => {
   // What `terminalView: picture` does: the drawing is read once when the board changes, and then each frame is
   // painted and packed into a PNG, up to thirty times a second while something moves.
   const at = 1_033_000
