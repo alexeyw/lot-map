@@ -31,7 +31,9 @@ claude plugin install lot-map@lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows as well.
+The pane opens by itself when a session starts. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows and Linux as well.
+
+On a Team or Enterprise login the transcript may get notices like `lot-map: its classic.PreToolUse hook was skipped`. Turn `guardedHooks` off and they stop; [Options](#what-it-shows) says what the map loses for it.
 
 ## Updating
 
@@ -158,24 +160,14 @@ In the VS Code extension the pane is short, and the map drawn as wide as the pan
 
 ## Options
 
-The install offers them on a screen. Later, use `/config` in a terminal or `claude plugin configure`, then restart the session.
+The install offers them on a screen. Later, use `/config` in a terminal or `claude plugin configure`, then restart the session. They come in four groups below. Every one has a default, and the map works with none of them set.
+
+### How it looks
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `language` | `en` | `en`, `ru`, `es`, `fr`, `de`, `it` or `pt` |
 | `coreName` | `CLAUDE` | what the circle in the middle says, up to ten characters |
-| `memoryServers` | `memory` | MCP servers whose tools light Memory |
-| `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py` |
-| `memorySubcommands` | none | words after a memory command that the map may show, such as `add` or `search`; without them the command goes by its own name |
-| `memoryPaths` | none | parts of a path that make a file a memory |
-| `memoryLabels` | none | short names for memory tools, each as `tool=name` |
-| `serverStations` | none | put an MCP server's tools on a station of your choice, each as `server=station`, with `files`, `shell`, `web`, `browser`, `agents`, `skills` or `you`; the row still reads `server: tool`. What you set wins over the mod's own routes for the servers it knows. Memory keeps `memoryServers`, which wins if a server is in both; an unknown station is ignored |
-| `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
-| `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
-| `guardedHooks` | `true` | turn off on a Team or Enterprise login where the transcript gets notices like `lot-map: its classic.PreToolUse hook was skipped`. An organisation's guard keeps mods away from five events there, and with this off the mod adds no hook on them. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; a call a hook refused still gets its `✕`, as a failed call and not as a blocked one |
-| `subagentNames` | `false` | a subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters; off, it says only that it is a subagent |
-| `contextCost` | `false` | each row says about how many tokens the context grew by with its call's answer, and the map adds each station's sum to its count. An estimate, shown one step late; see [What each call adds to the context](#what-each-call-adds-to-the-context) |
-| `contextWindow` | `model` | what the ring and its percentage measure the context against: `model`, the model's whole window, as the status line does; or `compaction`, the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's. Without one, or with auto-compaction off, `compaction` shows the same as `model` |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 | `background` | `solid` | the map's own background, or `transparent`, which lets the pane behind it show through. The rim around the labels keeps the background's colour, so on a surface of another shade it shows as a faint halo |
 | `paneBackground` | `theme` | what the pane itself is painted with: `theme`, Claude Code's own; `transparent`, which lets the terminal behind it show through, wallpaper and blur included; or a colour as `#rrggbb`, to match an opaque terminal. A surface that cannot do it keeps its own. See [In a terminal](#in-a-terminal) |
@@ -183,6 +175,33 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
+
+### What it shows
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `hookReasons` | `false` | show the first line of a hook's refusal, up to 72 characters; off, the map says only which tool was stopped |
+| `guardedHooks` | `true` | turn off on a Team or Enterprise login where the transcript gets notices like `lot-map: its classic.PreToolUse hook was skipped`. An organisation's guard keeps mods away from five events there, and with this off the mod adds no hook on them. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; a call a hook refused still gets its `✕`, as a failed call and not as a blocked one |
+| `subagentNames` | `false` | a subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters; off, it says only that it is a subagent |
+| `contextCost` | `false` | each row says about how many tokens the context grew by with its call's answer, and the map adds each station's sum to its count. An estimate, shown one step late; see [What each call adds to the context](#what-each-call-adds-to-the-context) |
+| `contextWindow` | `model` | what the ring and its percentage measure the context against: `model`, the model's whole window, as the status line does; or `compaction`, the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's. Without one, or with auto-compaction off, `compaction` shows the same as `model` |
+
+### Memory and servers
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `memoryServers` | `memory` | MCP servers whose tools light Memory |
+| `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py` |
+| `memorySubcommands` | none | words after a memory command that the map may show, such as `add` or `search`; without them the command goes by its own name |
+| `memoryPaths` | none | parts of a path that make a file a memory |
+| `memoryLabels` | none | short names for memory tools, each as `tool=name` |
+| `serverStations` | none | put an MCP server's tools on a station of your choice, each as `server=station`, with `files`, `shell`, `web`, `browser`, `agents`, `skills` or `you`; the row still reads `server: tool`. What you set wins over the mod's own routes for the servers it knows. Memory keeps `memoryServers`, which wins if a server is in both; an unknown station is ignored |
+| `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
+
+### In a terminal only
+
+| Option | Default | Meaning |
+| --- | --- | --- |
 | `terminalView` | `text` | how the map looks in a terminal: `text`, the rows alone; `picture`, the map's picture above them in a terminal that shows pictures, but not in iTerm2; or `braille`, the map above them in braille dots, in any terminal whose font has braille. See [In a terminal](#in-a-terminal) |
 | `cellShape` | `2.4` | for the terminal picture: how many times taller a terminal cell is than it is wide, from 1.2 to 4, so that the picture fills its box; see [In a terminal](#in-a-terminal) |
 
@@ -192,7 +211,19 @@ For example, Russian labels and your own memory server:
 echo '{"language":"ru","memoryServers":"my-memory"}' | claude plugin configure lot-map@lot-map --values-stdin
 ```
 
-Lists are written with commas.
+The map itself in a terminal that shows no pictures:
+
+```bash
+echo '{"terminalView":"braille"}' | claude plugin configure lot-map@lot-map --values-stdin
+```
+
+No notices about skipped hooks on a Team or Enterprise login:
+
+```bash
+echo '{"guardedHooks":"false"}' | claude plugin configure lot-map@lot-map --values-stdin
+```
+
+Every value is written as a string, `"false"` and `"2.4"` too, and lists are written with commas.
 
 | Russian labels | `layout` set to `you-bottom` |
 | --- | --- |
