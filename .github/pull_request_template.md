@@ -22,3 +22,10 @@
 - [ ] For a change to how the map looks: a picture is attached
 
 <!-- If the mod now reads or keeps something it did not before, say what. -->
+
+## Whose code it is
+
+- [ ] I wrote this change myself, with or without an AI assistant, and it can be published under the repository's licence
+- [ ] Nothing in it is copied from elsewhere; or what is, is named below with its source and its licence
+
+<!-- Copied or adapted code: where it comes from and under which licence. -->
