@@ -828,7 +828,9 @@ test('a model that changes mid-session is a row of its own, and the first model 
   await ui.unmount()
 })
 
-test('a subagent circles the agents station until its loop ends, and its hanging call is settled then', { options: OWN }, async ($, on) => {
+// With a step left hanging on purpose this test takes 4.6 s on the machine PRINCIPLES.md names and 4.7 to 5.0 s on CI,
+// against the test kit's 5 s; where the time goes was not traced. It asserts nothing about time.
+test('a subagent circles the agents station until its loop ends, and its hanging call is settled then', { options: OWN, timeoutMs: 30_000 }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('turn.complete', () => ({ text: '' }))
   on('turn.step', async function* () {
