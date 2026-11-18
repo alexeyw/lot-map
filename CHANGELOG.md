@@ -2,6 +2,18 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.10.0 (2026-11-18)
+
+- New option `serverStations`: put an MCP server's tools on a station of your choice, each as `server=station`, with `files`, `shell`, `web`, `browser`, `agents`, `skills` or `you`. The row still reads `server: tool`. Memory keeps `memoryServers`, which wins if a server is in both. Contributed by arandevcode. (#55, #86)
+- New option `paneBackground`: `transparent` takes the pane's grey away in a terminal, so the terminal shows behind the map and the rows alike, wallpaper and blur included; a colour as `#rrggbb` paints the pane in it. `theme`, Claude Code's own, stays the default. Contributed by Wesley-Gomes. (#87, #88)
+- New option `guardedHooks`, on by default. On a Team or Enterprise login an organisation's guard keeps mods away from five events, and the transcript got notices like `lot-map: its classic.PreToolUse hook was skipped`. Turned off, the mod adds no hook on them. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; a call a hook refused still gets its `✕`, as a failed call and not as a blocked one. Reported by arandevcode and kjbrick, tested on a Team login by whermeling. (#54, #89, #91)
+- Fixed: in the desktop app a session can start before a surface is attached, and the transcript then got a `no-surface` line from the mod. The pane is opened at the start only where a surface is attached, and again when one joins. Described by kjbrick. (#54, #90)
+- Fixed: a `|`, `;` or `&&` inside quotes parted a shell command in two, so `grep -E "ssh|curl" log.txt` lit Shell and `git commit -m "fix: retry; curl fallback"` lit Network. A line is now read in one pass that knows which quotes it is in. With it, a single `&` ends a command, a comment is no command, a backslash at a line's end joins two lines, and a command inside `$(…)` or backticks counts inside double quotes and not inside single ones. (#92)
+- Shell commands land on the right station more often: a here-document handed to a shell (`bash <<EOF`) is read as that shell's script, and `docker exec`, `docker run` and the same two under `docker compose` are read by the command they run in the container. (#94)
+- The ids of calls a hook refused, which the mod remembers until each call comes by, are held to the newest 64. (#93)
+- README: the list of what the braille map leaves out has one more line, a subagent's call leaving from the Agents station; in braille every call flies from the centre. (#95)
+- Inside: a test holds an inventory of everything the first drawing shows against the braille map, and the check holds the README's list to it; `hooks/register.tsx` keeps the hooks, and the board, the pane and the sums of `contextCost` have files of their own. (#95, #96)
+
 ## 0.9.0 (2026-11-16)
 
 - Fixed: in iTerm2, `terminalView: picture` made iTerm2's memory grow without limit. iTerm2 keeps every picture it is sent until its tab is closed: measured in iTerm2 3.7.7, a moving map took about 2 MB a frame, 17 GB in five minutes. In iTerm2 the picture is now off and a line above the rows says so; `braille` gives the map there. kitty, Ghostty and other terminals keep the picture. For this the mod reads `TERM_PROGRAM` and `LC_TERMINAL`, which PRIVACY.md names. Reported by castigator. (#81, #82)

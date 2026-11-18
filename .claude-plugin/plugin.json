@@ -1,6 +1,6 @@
 {
   "name": "lot-map",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "A live map beside the chat: memory, files, shell, web, model, agents, skills and hooks light up as they are used",
   "author": {
     "name": "Aleksei Volodin",
@@ -135,7 +135,7 @@
       "type": "string",
       "title": "Pane background",
       "default": "theme",
-      "description": "What the pane is painted with: theme, Claude Code's own; transparent, which lets the terminal or the app behind it show through; or a colour written as #rrggbb."
+      "description": "What the pane is painted with: theme, Claude Code's own; transparent, which lets the terminal behind it show through; or a colour written as #rrggbb."
     },
     "colors": {
       "type": "string",
