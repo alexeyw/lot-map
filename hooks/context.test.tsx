@@ -77,6 +77,9 @@ test('contextCost is off unless set to true, and off it adds no figure anywhere'
   expect(setupFrom({}).contextCost).toBe(false)
   expect(setupFrom({ contextCost: 'true' }).contextCost).toBe(false)
   expect(setupFrom({ contextCost: true }).contextCost).toBe(true)
+  expect(setupFrom({}).contextWindow).toBe('model')
+  expect(setupFrom({ contextWindow: 'compaction' }).contextWindow).toBe('compaction')
+  expect(setupFrom({ contextWindow: 'whole' }).contextWindow).toBe('model')
 
   const k = kit($, on)
   await k.step(0)
@@ -286,4 +289,105 @@ test('principle 3: a step that answers forty calls costs about what a step that 
   console.log(`COST a model step through the mod and the test kit, with contextCost: answering no call ${median(bare).toFixed(2)}ms, answering forty ${median(busy).toFixed(2)}ms`)
   expect(median(busy)).toBeLessThan(15)
   expect(median(busy)).toBeLessThan(median(bare) * 3 + 2)
+})
+
+/** The engine for the ring's window: 450k tokens in a 1M window, and what `breakdown` answers per model, counted. */
+function windowKit($: Parameters<Body>[0], on: Parameters<Body>[1], breakdowns: Record<string, { rawMaxTokens: number; isAutoCompactEnabled: boolean } | undefined>) {
+  const asked: unknown[] = []
+  let model = 'claude-opus-5-5'
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('session.usage', (_, args) => {
+    const breakdown = (args as { breakdown?: string } | undefined)?.breakdown
+    if (breakdown !== undefined) asked.push(breakdown)
+    const context = { window: 1_000_000, percent: 45, tokens: 450_000 }
+    return { value: { startedAt: 0, context: breakdown === undefined || breakdowns[model] === undefined ? context : { ...context, breakdown: breakdowns[model] } } } as never
+  })
+  on('turn.step', async function* (_, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+  })
+  on('session.compact', () => ({ skip: 'test' }) as never)
+  return {
+    asked,
+    step: async (to: string, agentId?: string) => {
+      model = to
+      for await (const _ of $.turn.step({ turnId: 't1', index: 0, model: to, messageCount: 1, ...(agentId !== undefined ? { agentId } : {}) } as never)) void _
+    },
+    compact: (trigger: string, agentId?: string) =>
+      $.session.compact({ trigger, messages: [{ role: 'user', text: 'kept', toolUses: [] }], ...(agentId !== undefined ? { agentId } : {}) } as never),
+    ring: async (): Promise<string> => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+      const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+      await ui.unmount()
+      return source
+    },
+  }
+}
+
+const A = 'claude-opus-5-5'
+const B = 'claude-fable-5-2'
+const on600 = { rawMaxTokens: 600_000, isAutoCompactEnabled: true }
+const on500 = { rawMaxTokens: 500_000, isAutoCompactEnabled: true }
+
+test('with contextWindow compaction the ring measures against the auto-compact window, asked only at a session\'s first step, after a compaction and on a model change', { options: { contextWindow: 'compaction' } }, async ($, on) => {
+  const k = windowKit($, on, { [A]: on600, [B]: on500 })
+  await k.step(A)
+  expect(k.asked).toHaveLength(1)
+  expect(await k.ring()).toContain('>75%<')
+
+  // Another step on the same model and every drawing of the pane ask nothing.
+  await k.step(A)
+  for (const _ of [1, 2, 3]) await k.ring()
+  expect(k.asked).toHaveLength(1)
+
+  await k.step(B)
+  expect(k.asked).toHaveLength(2)
+  expect(await k.ring()).toContain('>90%<')
+
+  await k.compact('auto')
+  await k.step(B)
+  expect(k.asked).toHaveLength(3)
+
+  // A compaction that installs nothing, and a subagent's, are not the main window's.
+  await k.compact('precompute')
+  await k.compact('auto', 'a1')
+  await k.step(B)
+  await k.step('claude-haiku-5-5', 'a1')
+  expect(k.asked).toHaveLength(3)
+  expect(k.asked.every(detail => detail === 'summary')).toBe(true)
+})
+
+test('by default the ring measures against the model\'s window and the heavy call is never made', async ($, on) => {
+  const k = windowKit($, on, { [A]: on600, [B]: on500 })
+  await k.step(A)
+  await k.step(B)
+  await k.compact('auto')
+  await k.step(B)
+  expect(k.asked).toHaveLength(0)
+  expect(await k.ring()).toContain('>45%<')
+})
+
+test('with contextWindow compaction the ring keeps the model\'s window when there is no smaller one to measure against', { options: { contextWindow: 'compaction' } }, async ($, on) => {
+  // One model for each case, so that each is measured anew.
+  const k = windowKit($, on, {
+    [A]: undefined,
+    [B]: { rawMaxTokens: 1_000_000, isAutoCompactEnabled: true },
+    'claude-haiku-5-5': { rawMaxTokens: 600_000, isAutoCompactEnabled: false },
+  })
+  for (const model of [A, B, 'claude-haiku-5-5']) {
+    await k.step(model)
+    expect(await k.ring()).toContain('>45%<')
+  }
+  expect(k.asked).toHaveLength(3)
+})
+
+test('with contextWindow compaction the ring rounds to a whole percentage and stays full past the window', { options: { contextWindow: 'compaction' } }, async ($, on) => {
+  const k = windowKit($, on, {
+    [A]: { rawMaxTokens: 700_000, isAutoCompactEnabled: true },
+    [B]: { rawMaxTokens: 400_000, isAutoCompactEnabled: true },
+  })
+  await k.step(A)
+  expect(await k.ring()).toContain('>64%<')
+  await k.step(B)
+  expect(await k.ring()).toContain('>100%<')
+  expect(k.asked).toHaveLength(2)
 })

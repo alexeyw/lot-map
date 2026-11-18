@@ -48,6 +48,8 @@ export type Setup = {
   subagentNames: boolean
   /** Whether a row says about how much its call added to the context, and the desktop map each station's sum. */
   contextCost: boolean
+  /** What the ring and its percentage measure the context against: the model's whole window, or the auto-compact window where it is smaller. */
+  contextWindow: 'model' | 'compaction'
   theme: 'auto' | 'dark' | 'light'
   /** Whether the map paints its own ground, or leaves the surface it lies on showing through. */
   background: 'solid' | 'transparent'
@@ -108,6 +110,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     guardedHooks: !(options.guardedHooks === false || options.guardedHooks === 'false'),
     subagentNames: options.subagentNames === true,
     contextCost: options.contextCost === true,
+    contextWindow: options.contextWindow === 'compaction' ? 'compaction' : 'model',
     theme: options.theme === 'dark' || options.theme === 'light' ? options.theme : 'auto',
     background: options.background === 'transparent' ? 'transparent' : 'solid',
     paneBackground: paneBackgroundFrom(options.paneBackground),

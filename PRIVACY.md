@@ -23,6 +23,8 @@ The mod does not look for personal data and has no use for it. It takes a name f
 
 The mod asks for three things by itself, all environment variables, and only for the map in a terminal. `COLORFGBG`, with `terminalView` set to `picture` or `braille` and `theme` on `auto`: it holds the terminal's colour numbers, by which the map above the rows is painted light or dark. `TERM_PROGRAM` and `LC_TERMINAL`, with `terminalView` set to `picture`: they name the terminal program, and in iTerm2 the picture stays off. The mod keeps the two answers for the session, light or dark and iTerm2 or not, and nothing else from them, and reads no other variable.
 
+With `contextWindow` set to `compaction`, it also asks Claude Code how the context divides up, at a session's first model step and again after a compaction or a change of model. The answer names the memory files, MCP tools and skills in the context; the mod takes from it only the size of the auto-compact window, a number, and holds it in its own memory for the session, not in Claude Code's state.
+
 ## What it keeps
 
 - **During a session:** the rows of the map, which of them you opened to read whole, the counters under the stations and the last model step, in Claude Code's state for the session. With `contextCost` on, also a number of tokens on a row and a sum per station: how much the context grew, taken from the same figure as the ring's percentage. They are gone when the session ends.

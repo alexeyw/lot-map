@@ -3,7 +3,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Entry } from '../types'
-import { background, begin, change, charge, contextOf, finish, kept, newId, quietly, settle } from './board'
+import { background, begin, change, charge, compactionWindowOf, contextOf, finish, kept, newId, quietly, settle } from './board'
 import { stepCosts } from './cost'
 import { classify, clean, firstLine, keepNewest, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
@@ -49,6 +49,10 @@ export const register: Register = (on, options) => {
   // The one thing the map keeps between sessions, and only its name.
   let lastModel: string | undefined
   let modelKey = 'model'
+  // With `contextWindow` on `compaction`: the window, and the model it was measured for. Measuring costs a pass over the
+  // context, so it waits for the step that follows a change, not for a drawing.
+  let compactionWindow: number | undefined
+  let measuredFor: string | undefined
 
   // The pane as it is opened: with `paneBackground` set, the surface paints that under it, or nothing.
   const pane = { id: PANE, title: t.title, ...(setup.paneBackground === 'theme' ? {} : { backgroundColor: setup.paneBackground }) }
@@ -152,7 +156,11 @@ export const register: Register = (on, options) => {
       return yield* next(e)
     } finally {
       if (isMain) {
-        const context = await contextOf($)
+        if (setup.contextWindow === 'compaction' && measuredFor !== e.model) {
+          measuredFor = e.model
+          compactionWindow = await compactionWindowOf($)
+        }
+        const context = await contextOf($, compactionWindow)
         await finish($, id, 'ok', context.patch)
         await charge($, costs.stepEnded(answered, context.tokens))
       } else {
@@ -286,7 +294,10 @@ export const register: Register = (on, options) => {
       try {
         return await next(e)
       } finally {
-        await finish($, id, 'ok', (await contextOf($)).patch)
+        // A compaction of the main conversation is measured again at the next step; a precompute installs nothing,
+        // and a subagent's is not the main window.
+        if (e.agentId === undefined && e.trigger !== 'precompute') measuredFor = undefined
+        await finish($, id, 'ok', (await contextOf($, compactionWindow)).patch)
       }
     })
   }

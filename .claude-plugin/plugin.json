@@ -110,6 +110,16 @@
       "default": false,
       "description": "Each row says about how many tokens the context grew by with its call's answer, and the desktop map adds each station's sum to its count. An estimate: the growth of one model step, which also holds the model's own words, what hooks added and, at the start of a turn, the message, shared among that step's calls. It shows one step late, and a call whose step was the last of a turn gets none."
     },
+    "contextWindow": {
+      "type": "string",
+      "title": "What the ring measures against",
+      "options": [
+        "model",
+        "compaction"
+      ],
+      "default": "model",
+      "description": "What the ring around the centre and its percentage measure the context against: model, the model's whole window, as the status line does; or compaction, the auto-compact window, such as one set with autoCompactWindow, where it is smaller than the model's. Without one, or with auto-compaction off, compaction shows the same as model."
+    },
     "theme": {
       "type": "string",
       "title": "Colours",
