@@ -2,6 +2,16 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.12.0 (2026-11-19)
+
+- New option `openAtStart`: with `false` the pane stays closed when a session starts and opens on `/lot-map` alone. The map is kept from the session's first call all the same, so it is whole when it is opened. `true`, as before, stays the default. Suggested by Thombutter. (#116, #117)
+- The terminal picture is back in iTerm2, from iTerm2 3.7.8 on. iTerm2 3.7.7 kept every picture it was sent, so since 0.9.0 the mod drew none there; iTerm2 fixed that on its side. Measured in 3.7.8: 1466 frames in four and a half minutes left its memory between 327 and 351 MB. An earlier iTerm2, or one that does not give its version, keeps the rows and a line that says why. For this the mod reads `TERM_PROGRAM_VERSION` or `LC_TERMINAL_VERSION`, which PRIVACY.md names. Confirmed over a day of use by castigator. (#81, #118)
+- A time of an hour or more reads in hours and minutes: `1 h 5 min` where it read `65 min 0 s`, and `24 h 0 min` for a task that ran a day. Under an hour nothing changes. (#121)
+- Fixed: the list of a bash array was read as a command, so `arr=(a b c); ls` got the label `b` at the Shell station. The list is now read to its closing bracket and is no part of the command; a command run inside it, or kept in it to be run later, still shows as Network. (#124)
+- A new page, [docs/options.md](docs/options.md), shows the options that change what you see with a picture of each value, and `motion` as two GIFs. `scripts/option-pictures.mjs` paints the map's pictures with the mod's own code. (#126)
+- PRINCIPLES.md: what `contextWindow` set to `compaction` costs (15 ms at a session's first step with 34k tokens in the context; a long session is not measured), that with `guardedHooks` off the window is read again only on a change of model, and that the terminal picture's share of a processor core is the measuring machine's. (#122)
+- Inside: the surface check lists what each engine call is given first, so a call that asks for more than it did changes `scripts/surface.txt` (the `breakdown` of `contextWindow` had not), it reads every file of `hooks/`, and it runs under `TERM=linux`; two more tests of the principles; `hooks/raster.ts` is three files, `scene.ts`, `raster.ts` and `png.ts`; three more tests have the time they take on a slow runner. (#119, #120, #123, #125)
+
 ## 0.11.0 (2026-11-19)
 
 - New option `contextWindow`: with `compaction` the ring and its percentage measure the context against the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's; at 450k tokens of a 1M model with compaction at 600k it reads 75%, not 45%. `model`, as before, stays the default. For this the mod asks Claude Code how the context divides up, at a session's first model step and again after a compaction or a change of model, and takes only the window's size from the answer; PRIVACY.md says so. Contributed by philarete173. (#97, #101)
