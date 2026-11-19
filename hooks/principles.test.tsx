@@ -340,6 +340,20 @@ test('principle 4: with the engine refusing every call the mod makes, each event
   expect(await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'end' } as never)).toEqual(expect.objectContaining({ text: 'kept' }))
 })
 
+test('principle 4: a result that could fail when read never reaches the mod: the engine hands a hook plain data alone', async ($, on) => {
+  // The tool.call hook reads the result after the tool has answered, to tell a background task. A result whose
+  // fields throw when read would make that reading fail; the engine refuses such a result before any hook sees it.
+  const unreadable = new Proxy({}, { get: () => { throw new Error('unreadable') } })
+  on('tool.call', () => ({ result: unreadable }) as never)
+  let refusal = ''
+  try {
+    await $.tool.call({ tool: 'Read', file_path: '/a/b/kept.py' })
+  } catch (failure) {
+    refusal = String(failure)
+  }
+  expect(refusal).toContain('not plain data')
+})
+
 // ---- 5. A calm map ----------------------------------------------------------------------------------
 
 test('principle 5: ten stations, a label of at most 120 characters, and a drawing that does not grow with the session', () => {
