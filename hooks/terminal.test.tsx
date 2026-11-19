@@ -216,7 +216,8 @@ test('the painted map has its ground, its words and its lit stations where the d
   expect(warm(running, 127, 346, 30)).toBe(false)
 })
 
-test('what never moves is painted once a drawing, and the frames come out as if every shape were painted each time', () => {
+// On a slow CI runner this has taken from 2.3 s to past the default 5 s; the time here is no budget, only room.
+test('what never moves is painted once a drawing, and the frames come out as if every shape were painted each time', { timeoutMs: 30_000 }, () => {
   const now = 1_000_000
   // An animation of nothing makes every shape one that moves, so the painter paints the drawing whole, frame after frame.
   const nothing = { kind: 'value', attr: 'nothing', values: [0], keyTimes: undefined, begin: 0, dur: 1, repeat: 1, freeze: false }
