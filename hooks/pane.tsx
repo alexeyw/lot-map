@@ -5,7 +5,7 @@ import type { EngineInterface, RenderElement, RenderInputOf, RenderSurface } fro
 import type { Board, StationId } from '../types'
 import { change, quietly, readBoard } from './board'
 import { LIST_ROWS, MAP_ASPECT, STATIONS, describeNow, drawMap, foldRows, formatMs, formatTokens, nowParts } from './map'
-import type { Setup } from './map'
+import type { Row, Setup } from './map'
 import { drawTerminalMap } from './terminal'
 import type { TerminalMap } from './terminal'
 
@@ -37,18 +37,20 @@ function zoomStep(zoom: number | undefined, by: -1 | 1): number | undefined {
 /** The pane's render input on any surface: `e.surface` narrows it. */
 type PaneInput = { [P in RenderSurface]: RenderInputOf<'Pane', P> }[RenderSurface]
 
+/** How much taller than wide a cell of the desktop's pane is, taken on the low side: about 2.3 was measured on macOS and 2.5 on Linux. */
+const CELL_ASPECT = 2.2
+
 /**
- * The rows the list under the map can take in a docked pane `bodyRows` tall, never fewer than `LIST_ROWS`.
- * Over-guessing would push the running calls, the list's last rows, below the pane's bottom; under-guessing only leaves rows empty.
+ * Whether a docked pane `bodyRows` tall surely has room for more than `LIST_ROWS` rows below the map. Only then does
+ * the list fill the pane; a short one keeps today's 16.
  */
-function fillRows(bodyColumns: number, bodyRows: number): number {
+function isTall(bodyColumns: number, bodyRows: number): boolean {
   // The 3 are the line of now and two rows to spare, for a row opened to read.
-  const room = Math.floor(bodyRows) - Math.ceil((bodyColumns * MAP_ASPECT) / 2) - 3
-  // shortcut: the map's height in rows is guessed from its width, a cell taken as twice as tall as wide, and each row
-  // of the list is taken as one cell, as a line of text with a plain button takes on the desktop. The cell's real shape
-  // and a row's height at each text size are not known here, and past 920 px the map stops growing, so a wide pane
-  // keeps some empty rows. Exact once a surface says how tall it drew the map.
-  return bodyColumns > 0 && Number.isFinite(room) && room > LIST_ROWS ? room : LIST_ROWS
+  const room = Math.floor(bodyRows) - Math.ceil((bodyColumns * MAP_ASPECT) / CELL_ASPECT) - 3
+  // shortcut: the map's height in rows is guessed from its width, a cell taken as `CELL_ASPECT` times as tall as wide
+  // and a row of the list as one cell. A row's height at each text size is not known, and past 920 px the map stops
+  // growing, so a wide pane may keep 16 rows with room for more. Exact once a surface says how tall it drew the map.
+  return bodyColumns > 0 && Number.isFinite(room) && room > LIST_ROWS
 }
 
 /** The pane as it stands now. `above` is the terminal's map, for a person who asked for one. */
@@ -75,8 +77,9 @@ export async function drawPane($: EngineInterface, e: PaneInput, setup: Setup, a
   // Fill only in the desktop's docked pane: a terminal's map takes its height from the same rows, and the other
   // surfaces and seats are untried.
   const isDocked = e.surface === 'desktop' && e.props.placement !== 'inline' && e.props.placement !== 'widget'
-  const max = setup.logRows === 'fill' && isDocked ? fillRows(e.props.bodyColumns, e.props.scroll?.bodyRows) : LIST_ROWS
-  const rows = foldRows(state.entries, max, setup.subagentNames).map(({ entry, times, tookMs, tokens, isShared }) => {
+  const bodyRows = isDocked ? (e.props.scroll?.bodyRows ?? 0) : 0
+  const kept = foldRows(state.entries, LIST_ROWS, setup.subagentNames)
+  const drawRow = ({ entry, times, tookMs, tokens, isShared }: Row): RenderElement => {
     const isSwitch = entry.mark === 'switch'
     const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
     const whole = turnMs.get(entry.id)
@@ -120,7 +123,17 @@ export async function drawPane($: EngineInterface, e: PaneInput, setup: Setup, a
         </Box>
       </Box>
     )
-  })
+  }
+  const rows = kept.map(drawRow)
+  const shown = kept.filter(r => r.isHeld !== true).length
+  // A row past `shown` but under `LIST_ROWS` was cut from `kept` to make room for the held calls, so a running one
+  // there is in neither list. Past `LIST_ROWS`, what runs is held in `kept` or counted in its `+N`.
+  const older =
+    setup.logRows === 'fill' && isDocked && isTall(e.props.bodyColumns, bodyRows)
+      ? foldRows(state.entries, state.entries.length, setup.subagentNames)
+          .slice(shown)
+          .filter((r, i) => shown + i < LIST_ROWS || r.entry.status !== 'run')
+      : []
   const feed = rows.length > 0 ? rows : [<Text dimColor>{t.nothingYet}</Text>]
   // What runs now at the left, cut if it must be. Where there is no drawing to say them, the context and the model
   // stand at the right, whole; beside the drawing they would be said a second time.
@@ -178,6 +191,27 @@ export async function drawPane($: EngineInterface, e: PaneInput, setup: Setup, a
   const zoom = isEditor ? state.zoom : undefined
   const map = <Svg source={drawMap(state, now, setup)} alt={`${t.title}. ${describeNow(state, t)}`} {...(zoom !== undefined ? { width: zoom, height: Math.round(zoom * MAP_ASPECT) } : {})} />
   if (!isEditor) {
+    if (older.length > 0) {
+      // The newest and the older rows share the box the surface cuts at its bottom, so the oldest go first and a row
+      // opened to read only pushes older ones out. The held calls stay at the pane's bottom edge; no count of what fits is guessed.
+      return (
+        <Box flexDirection="column" height={Math.floor(bodyRows)}>
+          <Box flexDirection="column" flexShrink={0}>
+            {map}
+          </Box>
+          <Box flexDirection="column" flexShrink={0}>
+            {current}
+          </Box>
+          <Box flexDirection="column" flexShrink={1} minHeight={0} overflow="hidden">
+            {rows.slice(0, shown)}
+            {older.map(drawRow)}
+          </Box>
+          <Box flexDirection="column" flexShrink={0}>
+            {rows.slice(shown)}
+          </Box>
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column">
         {map}

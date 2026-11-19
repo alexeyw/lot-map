@@ -175,7 +175,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
-| `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16; the map's height is guessed on the safe side, so a few rows may stay empty. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
+| `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16. The oldest rows that do not fit are cut off at the bottom, above the calls still running. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
 
 ### What it shows
 

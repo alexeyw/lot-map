@@ -1669,46 +1669,123 @@ test('with a surface attached at the start the pane is opened at once', async ($
 })
 
 // A background call that keeps running, then calls enough that nothing folds: the board keeps 80.
-const crowd = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]): Promise<void> => {
+const crowd = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], calls = 70): Promise<void> => {
   on('clock.now', () => ({ value: 1_000_000 }))
   let n = 0
   on('tool.call', () => ({ result: n++ === 0 ? { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b9' } : {} }) as never)
   await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Wait for the build', run_in_background: true })
-  for (let i = 0; i < 70; i++) await $.tool.call({ tool: i % 2 === 0 ? 'Read' : 'Bash', file_path: `/a/b/${i}.py`, command: 'make', description: `step ${i}` })
+  for (let i = 0; i < calls; i++) await $.tool.call({ tool: i % 2 === 0 ? 'Read' : 'Bash', file_path: `/a/b/${i}.py`, command: 'make', description: `step ${i}` })
 }
 
-// The rows of the list under the map: each one starts with its mark.
-const listed = async ($: Parameters<TestBody>[0], surface: 'desktop' | 'terminal' | 'vscode' | 'mobile', bodyRows: number, placement: 'dock' | 'inline' | 'widget' = 'dock') => {
-  const ui = await $.ui.mount({ ...PANE, surface, props: { ...PANE.props, placement, scroll: { offset: 0, bodyRows } } })
-  const found = await ui.findAll({ type: 'Text', text: /^[·●✕◆] / })
+// The rows of the list under the map, each one starting with its mark, and every Box of the tree.
+const listed = async ($: Parameters<TestBody>[0], surface: 'desktop' | 'terminal' | 'vscode' | 'mobile', bodyRows: number, placement: 'dock' | 'inline' | 'widget' = 'dock', bodyColumns = 60) => {
+  const ui = await $.ui.mount({ ...PANE, surface, props: { ...PANE.props, bodyColumns, placement, scroll: { offset: 0, bodyRows } } })
+  const rows = await ui.findAll({ type: 'Text', text: /^[·●✕◆] / })
+  const boxes = await ui.findAll({ type: 'Box' })
   await ui.unmount()
-  return found
+  return { rows, boxes }
 }
+
+// Only the fill's tree cuts a box short and gives the root a height.
+const isCutting = (boxes: Awaited<ReturnType<typeof listed>>['boxes']): boolean => boxes.some(b => b.props.overflow === 'hidden' || b.props.height !== undefined)
+
+// The number a row ends on: `step 69` and `b/68.py` are rows 69 and 68.
+const numberOf = (row: { text?: string }): number => Number(/(\d+)(?:\.py)?$/.exec(row.text ?? '')?.[1])
 
 test('logRows fill keeps 16 rows in a short docked pane on the desktop, the running call last', { options: { logRows: 'fill' } }, async ($, on) => {
   await crowd($, on)
-  const rows = await listed($, 'desktop', 40)
+  const { rows, boxes } = await listed($, 'desktop', 40)
   expect(rows.length).toBe(16)
   expect(JSON.stringify(rows[rows.length - 1])).toContain('Wait for the build')
+  expect(isCutting(boxes)).toBe(false)
 })
 
-test('logRows fill gives the list the rows left below the map, the running call still last', { options: { logRows: 'fill' } }, async ($, on) => {
+test('logRows fill lists the newest and the older rows in one box the surface cuts, the running call held below it', { options: { logRows: 'fill' } }, async ($, on) => {
   await crowd($, on)
-  // 90 rows, the map guessed at 29 for 60 columns, the line of now and two to spare.
-  const rows = await listed($, 'desktop', 90)
-  expect(rows.length).toBe(58)
-  expect(JSON.stringify(rows[rows.length - 1])).toContain('Wait for the build')
+  // 90 rows tall, 60 columns wide: surely room for more than 16.
+  const { rows, boxes } = await listed($, 'desktop', 90)
+  expect(boxes[0]?.props.height).toBe(90)
+  expect(rows.length).toBe(71)
+  expect(rows.slice(0, 70).map(numberOf)).toEqual(Array.from({ length: 70 }, (_, i) => 69 - i))
+  expect(JSON.stringify(rows[70])).toContain('Wait for the build')
+  const cut = boxes.filter(b => b.props.overflow === 'hidden')
+  expect(cut.length).toBe(1)
+  expect(cut[0]?.props).toMatchObject({ minHeight: 0, flexShrink: 1 })
+  // The cut box holds steps 69 to 0 and nothing that runs: the running call is outside it.
+  expect(cut[0]?.text).not.toContain('●')
+  expect(cut[0]?.text).not.toContain('Wait for the build')
+  expect(cut[0]?.text).toContain('step 69')
+  expect(cut[0]?.text).toContain('b/0.py')
+  // The map and the line of now keep their size.
+  const fixed = boxes.filter(b => b.props.flexShrink === 0)
+  expect(fixed.some(b => (b.children?.[0] as { type?: string } | undefined)?.type === 'Svg')).toBe(true)
+  expect(fixed.some(b => b.text?.startsWith('Shell: Wait for the build'))).toBe(true)
+})
+
+test('logRows fill in a tall pane with 16 rows or fewer cuts nothing', { options: { logRows: 'fill' } }, async ($, on) => {
+  await crowd($, on, 9)
+  const { rows, boxes } = await listed($, 'desktop', 90)
+  expect(rows.length).toBe(10)
+  expect(isCutting(boxes)).toBe(false)
+})
+
+test('logRows fill loses no running call at the cut: it is in the box or held below it', { options: { logRows: 'fill' } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  let n = 0
+  // The first and third calls run on: F, then E, then D, then fifteen finished ones that fold into nothing.
+  on('tool.call', () => ({ result: n === 0 || n++ === 2 ? { stdout: '', stderr: '', interrupted: false, backgroundTaskId: `b${n}` } : {} }) as never)
+  await $.tool.call({ tool: 'Bash', command: 'sleep 1', description: 'Run F', run_in_background: true })
+  n = 1
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/E.py' })
+  await $.tool.call({ tool: 'Bash', command: 'sleep 2', description: 'Run D', run_in_background: true })
+  for (let i = 0; i < 15; i++) await $.tool.call({ tool: i % 2 === 0 ? 'Read' : 'Bash', file_path: `/a/b/${i}.py`, command: 'make', description: `step ${i}` })
+  const { rows, boxes } = await listed($, 'desktop', 90)
+  const label = (r: { text?: string }): string => (r.text ?? '').replace(/^[·●✕◆] \S+\s+/, '')
+  expect(rows.map(label)).toEqual([...Array.from({ length: 15 }, (_, i) => (14 - i) % 2 === 0 ? `b/${14 - i}.py` : `step ${14 - i}`), 'Run D', 'b/E.py', 'Run F'])
+  const cut = boxes.filter(b => b.props.overflow === 'hidden')
+  expect(cut[0]?.text).toContain('Run D')
+  expect(cut[0]?.text).toContain('b/E.py')
+  expect(cut[0]?.text).not.toContain('Run F')
+})
+
+test('logRows fill draws the cut box where a cell of 2.2 to 1 leaves room for more than 16 rows', { options: { logRows: 'fill' } }, async ($, on) => {
+  await crowd($, on)
+  // The maintainer's macOS pane, 39 rows by 37 columns, and a wide one where a cell of 2 to 1 sees no room.
+  for (const [bodyRows, bodyColumns] of [[39, 37], [62, 90]] as const) {
+    const { boxes } = await listed($, 'desktop', bodyRows, 'dock', bodyColumns)
+    expect(boxes.filter(b => b.props.overflow === 'hidden').length).toBe(1)
+    expect(boxes[0]?.props.height).toBe(bodyRows)
+  }
 })
 
 test('the list keeps 16 rows by default, in a tall pane too', async ($, on) => {
   await crowd($, on)
-  expect((await listed($, 'desktop', 90)).length).toBe(16)
+  const { rows, boxes } = await listed($, 'desktop', 90)
+  expect(rows.length).toBe(16)
+  expect(isCutting(boxes)).toBe(false)
 })
 
 test('logRows fill keeps 16 rows outside the desktop\'s docked pane', { options: { logRows: 'fill' } }, async ($, on) => {
   await crowd($, on)
-  for (const surface of ['terminal', 'vscode', 'mobile'] as const) expect((await listed($, surface, 90)).length).toBe(16)
-  for (const placement of ['inline', 'widget'] as const) expect((await listed($, 'desktop', 90, placement)).length).toBe(16)
+  for (const surface of ['terminal', 'vscode', 'mobile'] as const) {
+    const { rows, boxes } = await listed($, surface, 90)
+    expect(rows.length).toBe(16)
+    expect(isCutting(boxes)).toBe(false)
+  }
+  for (const placement of ['inline', 'widget'] as const) {
+    const { rows, boxes } = await listed($, 'desktop', 90, placement)
+    expect(rows.length).toBe(16)
+    expect(isCutting(boxes)).toBe(false)
+  }
+})
+
+test('foldRows marks a running call kept past the end as held, and no other row', () => {
+  const after = Array.from({ length: 20 }, (_, i) => entry(i % 2 === 0 ? 'files' : 'shell', 100 + i))
+  const running = entry('shell', 1, { status: 'run', endedAt: undefined, label: 'Run the long build' })
+  const rows = foldRows([running, ...after])
+  expect(rows.map(r => r.isHeld)).toEqual([...Array.from({ length: 15 }, () => undefined), true])
+  // Within the list it stands in its own place.
+  expect(foldRows([running, ...after.slice(0, 3)]).some(r => r.isHeld !== undefined)).toBe(false)
 })
 
 test('logRows is fill or 16, whatever else was set', () => {
