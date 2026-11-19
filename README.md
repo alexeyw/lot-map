@@ -164,6 +164,8 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 
 ### How it looks
 
+Each of these with a picture of its values: [How the options look](docs/options.md).
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `language` | `en` | `en`, `ru`, `es`, `fr`, `de`, `it` or `pt` |
