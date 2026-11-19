@@ -44,6 +44,8 @@ export type Setup = {
   hookReasons: boolean
   /** Whether the mod listens to the five events an organisation's guard keeps a mod away from. Off, it adds no hook on them. */
   guardedHooks: boolean
+  /** Whether the pane opens by itself when a session starts and when a surface joins. Off, it opens on `/lot-map` alone; the board is kept all the same. */
+  openAtStart: boolean
   /** Whether a subagent's model step says which subagent it is, by the description it was started with. Off, it says only that it is one. */
   subagentNames: boolean
   /** Whether a row says about how much its call added to the context, and the desktop map each station's sum. */
@@ -110,6 +112,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     hookRecords: options.hookRecords === true,
     hookReasons: options.hookReasons === true,
     guardedHooks: !(options.guardedHooks === false || options.guardedHooks === 'false'),
+    openAtStart: options.openAtStart !== false,
     subagentNames: options.subagentNames === true,
     contextCost: options.contextCost === true,
     contextWindow: options.contextWindow === 'compaction' ? 'compaction' : 'model',

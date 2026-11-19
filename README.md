@@ -31,7 +31,7 @@ claude plugin install lot-map@lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows and Linux as well.
+The pane opens by itself when a session starts; with `openAtStart` off it waits for `/lot-map`. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows and Linux as well.
 
 On a Team or Enterprise login the transcript may get notices like `lot-map: its classic.PreToolUse hook was skipped`. Turn `guardedHooks` off and they stop; [Options](#what-it-shows) says what the map loses for it.
 
@@ -175,6 +175,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
+| `openAtStart` | `true` | whether the pane opens by itself when a session starts. With `false` it stays closed until you type `/lot-map`; the map is kept from the session's first call all the same, so it is whole when you open it |
 | `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16. The oldest rows that do not fit are cut off at the bottom, above the calls still running. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
 
 ### What it shows

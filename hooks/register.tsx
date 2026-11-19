@@ -67,9 +67,11 @@ export const register: Register = (on, options) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
     // Where no surface is attached yet, as in the desktop app at its start, an open has nowhere to go and the
     // engine says so in the transcript. The pane is opened once a surface joins instead. If the roster cannot
-    // be read, the open is tried as before.
-    const surfaces = await quietly(() => $.session.surfaces())
-    if (surfaces === undefined || surfaces.length > 0) void quietly(() => $.ui.open(pane))
+    // be read, the open is tried as before. With `openAtStart` off the pane waits for `/lot-map`.
+    if (setup.openAtStart) {
+      const surfaces = await quietly(() => $.session.surfaces())
+      if (surfaces === undefined || surfaces.length > 0) void quietly(() => $.ui.open(pane))
+    }
     await quietly(async () => {
       const minimized = (await $.store.get('paneMin')) === true
       const kept = await $.store.get('mapZoom')
@@ -85,7 +87,7 @@ export const register: Register = (on, options) => {
   })
 
   on('session.attach', async ($, e, next) => {
-    void quietly(() => $.ui.open(pane))
+    if (setup.openAtStart) void quietly(() => $.ui.open(pane))
     return next(e)
   })
 
