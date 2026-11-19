@@ -7,8 +7,10 @@ import type { Board } from '../types'
 import { brailleSize, nextFrameIn, packCells, paintBraille } from './braille'
 import { describeNow, drawMap } from './map'
 import type { Setup } from './map'
-import { endlessEvery, imageSource, nextChangeIn, paint, parseMap, scaleFor } from './raster'
-import type { Scene } from './raster'
+import { imageSource } from './png'
+import { paint, scaleFor } from './raster'
+import { endlessEvery, nextChangeIn, parseMap } from './scene'
+import type { Scene } from './scene'
 
 const MAP_KEY = 'map'
 /** Pixels per unit of the drawing: about what a docked pane shows on a sharp screen. The Image's size limit may take it lower. */
@@ -47,7 +49,7 @@ export type Picture = {
   showsPictures: boolean | undefined
   /** Under `auto`, until the first drawing has asked the terminal whether it is light or dark. */
   isSchemeUnknown: boolean
-  /** Whether this terminal keeps every picture it is sent (iTerm2): unknown until the first drawing has asked. No picture there. */
+  /** Whether this terminal keeps every picture it is sent (iTerm2 before 3.7.8): unknown until the first drawing has asked. No picture there. */
   keepsFrames: boolean | undefined
 }
 
@@ -79,13 +81,32 @@ async function settleScheme($: EngineInterface, map: Picture | Braille): Promise
 /** iTerm2 by what it tells a program: `TERM_PROGRAM` in its own window, `LC_TERMINAL` over ssh and inside tmux. */
 export const isITerm2 = (termProgram: string | undefined, lcTerminal: string | undefined): boolean => termProgram === 'iTerm.app' || lcTerminal === 'iTerm2'
 
+/** The first iTerm2 that frees a picture drawn over: 3.7.8. */
+const ITERM2_FREES_FROM = [3, 7, 8] as const
+
+/** Whether a version as iTerm2 writes it, `3.7.8` or `3.7.8beta1`, is 3.7.8 or later. One it does not give, or that does not read as numbers, is not. */
+export function freesFrames(version: string | undefined): boolean {
+  const parts = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(version ?? '')
+  if (parts === null) return false
+  for (let i = 0; i < ITERM2_FREES_FROM.length; i++) {
+    const part = Number(parts[i + 1] ?? 0)
+    if (part !== ITERM2_FREES_FROM[i]) return part > ITERM2_FREES_FROM[i]!
+  }
+  return true
+}
+
 /**
- * Whether the terminal keeps every picture it is sent. iTerm2 3.7.7 does, until the tab is closed: about 2 MB a frame,
- * 17 GB in five minutes of a moving map (issue #81). Where nothing can be read, no.
+ * Whether the terminal keeps every picture it is sent. iTerm2 before 3.7.8 does, until the tab is closed: in 3.7.7
+ * about 2 MB a frame, 17 GB in five minutes of a moving map (issue #81). 3.7.8 holds level: 1466 frames in four and a
+ * half minutes, 327 to 351 MB (measured on 2026-11-19). The version stands beside the name that told of iTerm2:
+ * `TERM_PROGRAM_VERSION` in its own window, `LC_TERMINAL_VERSION` over ssh and inside tmux. Where nothing can be read, no.
  */
 async function keepsFrames($: EngineInterface): Promise<boolean> {
   try {
-    return isITerm2(await $.env.get('TERM_PROGRAM'), await $.env.get('LC_TERMINAL'))
+    const termProgram = await $.env.get('TERM_PROGRAM')
+    const lcTerminal = await $.env.get('LC_TERMINAL')
+    if (!isITerm2(termProgram, lcTerminal)) return false
+    return !freesFrames(termProgram === 'iTerm.app' ? await $.env.get('TERM_PROGRAM_VERSION') : await $.env.get('LC_TERMINAL_VERSION'))
   } catch {
     return false
   }
@@ -104,7 +125,7 @@ export function terminalPicture(setup: Setup): Picture | undefined {
   return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto', keepsFrames: undefined }
 }
 
-/** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures; in iTerm2, a line saying why there is none. */
+/** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures; in iTerm2 before 3.7.8, a line saying why there is none. */
 export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', 'terminal'>, board: Board, now: number, picture: Picture): Promise<RenderElement | undefined> {
   if (picture.keepsFrames === undefined) picture.keepsFrames = await keepsFrames($)
   if (picture.keepsFrames) {

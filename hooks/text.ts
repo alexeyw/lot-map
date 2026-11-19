@@ -45,6 +45,7 @@ export type Strings = {
   ms: (n: number) => string
   seconds: (s: string) => string
   minutes: (m: number, s: number) => string
+  hours: (h: number, m: number) => string
 }
 
 const en: Strings = {
@@ -85,7 +86,7 @@ const en: Strings = {
   running: 'running',
   nothingYet: 'Nothing yet.',
   noCounts: 'No counts yet.',
-  noPictureHere: "No picture in iTerm2: it keeps every frame in memory. See the README.",
+  noPictureHere: "No picture in iTerm2 before 3.7.8: it keeps every frame in memory. See the README.",
   idle: 'Nothing is running.',
   context: 'context',
   andMore: n => ` and ${n} more`,
@@ -99,6 +100,7 @@ const en: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const ru: Strings = {
@@ -139,7 +141,7 @@ const ru: Strings = {
   running: 'идёт',
   nothingYet: 'Пока ничего не было.',
   noCounts: 'Счётчики пусты.',
-  noPictureHere: "В iTerm2 картинки нет: он держит в памяти каждый кадр. См. README.",
+  noPictureHere: "В iTerm2 до 3.7.8 картинки нет: он держит в памяти каждый кадр. См. README.",
   idle: 'Ожидание',
   context: 'контекст',
   andMore: n => ` и ещё ${n}`,
@@ -153,6 +155,7 @@ const ru: Strings = {
   ms: n => `${n} мс`,
   seconds: s => `${s} с`,
   minutes: (m, s) => `${m} мин ${s} с`,
+  hours: (h, m) => `${h} ч ${m} мин`,
 }
 
 const es: Strings = {
@@ -193,7 +196,7 @@ const es: Strings = {
   running: 'en curso',
   nothingYet: 'Todavía nada.',
   noCounts: 'Aún no hay recuentos.',
-  noPictureHere: "Sin imagen en iTerm2: guarda en memoria cada fotograma. Ver el README.",
+  noPictureHere: "Sin imagen en iTerm2 anterior a 3.7.8: guarda en memoria cada fotograma. Ver el README.",
   idle: 'No hay nada en ejecución.',
   context: 'contexto',
   andMore: n => ` y ${n} más`,
@@ -207,6 +210,7 @@ const es: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const fr: Strings = {
@@ -247,7 +251,7 @@ const fr: Strings = {
   running: 'en cours',
   nothingYet: 'Rien pour le moment.',
   noCounts: 'Aucun compteur pour le moment.',
-  noPictureHere: "Pas d'image dans iTerm2 : il garde chaque image en mémoire. Voir le README.",
+  noPictureHere: "Pas d'image dans iTerm2 avant 3.7.8 : il garde chaque image en mémoire. Voir le README.",
   idle: 'Rien en cours.',
   context: 'contexte',
   andMore: n => ` et ${n} de plus`,
@@ -261,6 +265,7 @@ const fr: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const de: Strings = {
@@ -301,7 +306,7 @@ const de: Strings = {
   running: 'läuft',
   nothingYet: 'Noch nichts.',
   noCounts: 'Noch keine Zählerstände.',
-  noPictureHere: "Kein Bild in iTerm2: Es behält jedes Einzelbild im Speicher. Siehe README.",
+  noPictureHere: "Kein Bild in iTerm2 vor 3.7.8: Es behält jedes Einzelbild im Speicher. Siehe README.",
   idle: 'Nichts läuft.',
   context: 'Kontext',
   andMore: n => ` und ${n} weitere`,
@@ -315,6 +320,7 @@ const de: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} Min. ${s} s`,
+  hours: (h, m) => `${h} Std. ${m} Min.`,
 }
 
 const it: Strings = {
@@ -355,7 +361,7 @@ const it: Strings = {
   running: 'in corso',
   nothingYet: 'Ancora niente.',
   noCounts: 'Ancora nessun conteggio.',
-  noPictureHere: "Nessuna immagine in iTerm2: tiene in memoria ogni fotogramma. Vedi il README.",
+  noPictureHere: "Nessuna immagine in iTerm2 prima della 3.7.8: tiene in memoria ogni fotogramma. Vedi il README.",
   idle: 'Niente in esecuzione.',
   context: 'contesto',
   andMore: n => ` e altri ${n}`,
@@ -369,6 +375,7 @@ const it: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 // European Portuguese.
@@ -410,7 +417,7 @@ const pt: Strings = {
   running: 'em curso',
   nothingYet: 'Ainda nada.',
   noCounts: 'Ainda sem contagens.',
-  noPictureHere: "Sem imagem no iTerm2: ele guarda cada quadro na memória. Veja o README.",
+  noPictureHere: "Sem imagem no iTerm2 antes da 3.7.8: ele guarda cada quadro na memória. Veja o README.",
   idle: 'Nada em execução.',
   context: 'contexto',
   andMore: n => ` e mais ${n}`,
@@ -424,6 +431,7 @@ const pt: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const TABLES = new Map<unknown, Strings>([['en', en], ['ru', ru], ['es', es], ['fr', fr], ['de', de], ['it', it], ['pt', pt]])

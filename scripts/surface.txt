@@ -30,6 +30,28 @@
 ./register.tsx env writes: nothing
 ./register.tsx env reads: COLORFGBG
 ./register.tsx env reads: LC_TERMINAL
+./register.tsx env reads: LC_TERMINAL_VERSION
 ./register.tsx env reads: TERM_PROGRAM
+./register.tsx env reads: TERM_PROGRAM_VERSION
 ./register.tsx state writes: lot-map.board
 ./register.tsx state reads: lot-map.board
+./board.ts arguments: $.session.usage{breakdown='summary'}
+./pane.tsx arguments: $.store.set('mapZoom')
+./pane.tsx arguments: $.store.set('paneMin')
+./pane.tsx arguments: $.ui.resolve(not written out)
+./register.tsx arguments: $.command.register{name='lot-map', description}
+./register.tsx arguments: $.store.get('mapZoom')
+./register.tsx arguments: $.store.get('paneMin')
+./register.tsx arguments: $.store.get(not written out)
+./register.tsx arguments: $.store.set(not written out)
+./register.tsx arguments: $.ui.open(not written out)
+./terminal.tsx arguments: $.clock.after(not written out)
+./terminal.tsx arguments: $.env.get('COLORFGBG')
+./terminal.tsx arguments: $.env.get('LC_TERMINAL')
+./terminal.tsx arguments: $.env.get('LC_TERMINAL_VERSION')
+./terminal.tsx arguments: $.env.get('TERM_PROGRAM')
+./terminal.tsx arguments: $.env.get('TERM_PROGRAM_VERSION')
+./terminal.tsx arguments: $.ui.blit{requestId, key, cells, columns, rows}
+./terminal.tsx arguments: $.ui.blit{requestId, key, source}
+./terminal.tsx arguments: $.ui.invalidate('ui.render')
+./terminal.tsx arguments: $.ui.resolve(not written out)

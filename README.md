@@ -31,7 +31,7 @@ claude plugin install lot-map@lot-map
 
 In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `alexeyw/lot-map`, then **Add plugin**.
 
-The pane opens by itself when a session starts. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows and Linux as well.
+The pane opens by itself when a session starts; with `openAtStart` off it waits for `/lot-map`. In a terminal it needs at least 144 columns, otherwise type `/lot-map`, and it draws text only unless you ask for the map, as a picture or in braille dots: see [In a terminal](#in-a-terminal). Built and tested on Claude Code 2.1.321 on macOS; users report it working on Windows and Linux as well.
 
 On a Team or Enterprise login the transcript may get notices like `lot-map: its classic.PreToolUse hook was skipped`. Turn `guardedHooks` off and they stop; [Options](#what-it-shows) says what the map loses for it.
 
@@ -113,7 +113,7 @@ The braille map draws the sums for every station or for none. Where its grid has
 
 A terminal shows the rows alone. With `terminalView` set to `picture`, a terminal that shows pictures, such as kitty or Ghostty, gets the map as a picture above the rows, moving as it does in the desktop app. Claude Code must draw in fullscreen. If the pane stands under the conversation and not beside it, Claude Code is drawing on the main screen, and the rows stay alone: type `/tui fullscreen`, or start it as `CLAUDE_CODE_NO_FLICKER=1 claude`. Inside tmux, set `allow-passthrough on` and `focus-events on`. Any other terminal shows the rows alone, as before, and so does a pane narrower than 24 columns.
 
-In iTerm2 the picture is off, and a line above the rows says so. iTerm2 keeps every picture it is sent until its tab is closed: in iTerm2 3.7.7 a moving map took about 2 MB a frame, 17 GB in five minutes (#81). The mod knows iTerm2 by `TERM_PROGRAM`, and by `LC_TERMINAL` over ssh or inside tmux. For the map there, set `terminalView` to `braille`.
+In iTerm2 the picture needs iTerm2 3.7.8 or later. An earlier one keeps every picture it is sent until its tab is closed: in iTerm2 3.7.7 a moving map took about 2 MB a frame, 17 GB in five minutes (#81). There the picture is off, and a line above the rows says so; update iTerm2, or set `terminalView` to `braille`. The mod knows iTerm2 by `TERM_PROGRAM`, and by `LC_TERMINAL` over ssh or inside tmux, and its version by `TERM_PROGRAM_VERSION` or `LC_TERMINAL_VERSION`; where the version is not given, the picture stays off.
 
 The mod paints the picture itself, from the same drawing as the desktop app's, with letters from the X.Org misc-fixed bitmap fonts, which are in the public domain; [FONTS.md](FONTS.md) says where they come from. It paints up to five frames a second while anything on the map moves. The core breathes in the picture only while something runs, smoothly for ten minutes after the map last changed and then a frame every five seconds; at rest the picture stands still once the trails have faded.
 
@@ -164,6 +164,8 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 
 ### How it looks
 
+Each of these with a picture of its values: [How the options look](docs/options.md).
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `language` | `en` | `en`, `ru`, `es`, `fr`, `de`, `it` or `pt` |
@@ -175,6 +177,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
+| `openAtStart` | `true` | whether the pane opens by itself when a session starts. With `false` it stays closed until you type `/lot-map`; the map is kept from the session's first call all the same, so it is whole when you open it |
 | `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16. The oldest rows that do not fit are cut off at the bottom, above the calls still running. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
 
 ### What it shows
@@ -185,7 +188,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `guardedHooks` | `true` | turn off on a Team or Enterprise login where the transcript gets notices like `lot-map: its classic.PreToolUse hook was skipped`. An organisation's guard keeps mods away from five events there, and with this off the mod adds no hook on them. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; a call a hook refused still gets its `✕`, as a failed call and not as a blocked one |
 | `subagentNames` | `false` | a subagent's model step says which subagent it is, by the few words it was started with, up to 40 characters; off, it says only that it is a subagent |
 | `contextCost` | `false` | each row says about how many tokens the context grew by with its call's answer, and the map adds each station's sum to its count. An estimate, shown one step late; see [What each call adds to the context](#what-each-call-adds-to-the-context) |
-| `contextWindow` | `model` | what the ring and its percentage measure the context against: `model`, the model's whole window, as the status line does; or `compaction`, the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's. Without one, or with auto-compaction off, `compaction` shows the same as `model` |
+| `contextWindow` | `model` | what the ring and its percentage measure the context against: `model`, the model's whole window, as the status line does; or `compaction`, the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's. Without one, or with auto-compaction off, `compaction` shows the same as `model`. The window is read at a session's first model step, after a compaction and on a change of model; with `guardedHooks` off, not after a compaction |
 
 ### Memory and servers
 
@@ -203,7 +206,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `terminalView` | `text` | how the map looks in a terminal: `text`, the rows alone; `picture`, the map's picture above them in a terminal that shows pictures, but not in iTerm2; or `braille`, the map above them in braille dots, in any terminal whose font has braille. See [In a terminal](#in-a-terminal) |
+| `terminalView` | `text` | how the map looks in a terminal: `text`, the rows alone; `picture`, the map's picture above them in a terminal that shows pictures, in iTerm2 from 3.7.8; or `braille`, the map above them in braille dots, in any terminal whose font has braille. See [In a terminal](#in-a-terminal) |
 | `cellShape` | `2.4` | for the terminal picture: how many times taller a terminal cell is than it is wide, from 1.2 to 4, so that the picture fills its box; see [In a terminal](#in-a-terminal) |
 
 For example, Russian labels and your own memory server:
@@ -290,7 +293,7 @@ claude plugin validate .
 
 Words live in `hooks/text.ts`; a new language is one more table there and one more value of `language` in `.claude-plugin/plugin.json`.
 
-The terminal picture is painted by `hooks/raster.ts`, which reads the drawing `drawMap` makes. A test paints every kind of drawing and fails on anything the painter does not know, so a change to the drawing that needs more of SVG shows there first. Another, `the terminal picture's font has every letter the map writes, in every language`, names the letters a new language needs added to `hooks/font.ts`; [FONTS.md](FONTS.md) says how to make that file again.
+The terminal picture is made by three files: `hooks/scene.ts` reads the drawing `drawMap` makes, `hooks/raster.ts` paints it, and `hooks/png.ts` packs the pixels for the terminal. A test paints every kind of drawing and fails on anything the painter does not know, so a change to the drawing that needs more of SVG shows there first. Another, `the terminal picture's font has every letter the map writes, in every language`, names the letters a new language needs added to `hooks/font.ts`; [FONTS.md](FONTS.md) says how to make that file again.
 
 The braille map is drawn by `hooks/braille.ts`: a second drawing of the same board, which takes its stations from `STATIONS` and its timings from `hooks/draw.ts`. Tests in `hooks/braille.test.tsx` hold it to every station under both layouts, and one in `hooks/lot-map.test.tsx` to the names of every language. Something new on the map is either drawn there too or added to the list of what braille leaves out, in [In a terminal](#the-map-in-braille-dots): the `INVENTORY` in `hooks/braille.test.tsx` has a line for each thing the first drawing shows, a test holds both drawings to it, and `scripts/check-surface.mjs` holds that list to the same lines.
 

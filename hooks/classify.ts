@@ -96,7 +96,7 @@ const WRAPPERS: Record<string, { takes?: readonly string[]; skip?: number; asks?
   xargs: { takes: ['-n', '-I', '-P', '-L', '-d', '-E', '-s', '-a', '-J', '-R'] },
   watch: { takes: ['-n', '--interval'] },
 }
-const ASSIGNMENT = /^[A-Za-z_]\w*=/
+const ASSIGNMENT = /^[A-Za-z_]\w*\+?=/
 /** Flags of git and of docker that take a word after them and come before the subcommand. */
 const GIT_TAKES = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])
 const DOCKER_TAKES = new Set(['-c', '--context', '-H', '--host', '--config', '-l', '--log-level', '-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory'])
@@ -192,8 +192,19 @@ const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-
 const PS_NEUTRAL_WORDS = new Set(['write-host', 'write-output', 'set-location', 'sl', 'get-location', 'gl', 'start-sleep', 'select-object', 'select', 'where-object', 'where', '?', 'foreach-object', 'foreach', '%', 'sort-object', 'measure-object', 'measure', 'format-table', 'ft', 'format-list', 'fl', 'out-string', 'out-null'])
 const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'test-connection', 'test-netconnection', 'resolve-dnsname', 'start-bitstransfer'])
 
-/** A command being read: its text so far, the quote open in it, and what closes it when it stands inside another. */
-type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`' }
+/**
+ * A command being read: its text so far, the quote open in it, and what closes it when it stands inside another.
+ * `array` marks the list of a bash array, `name=(a b c)`, with the brackets open inside it: its words are values,
+ * not the command, so the list is read to its `)` and taken out of the command it stands in. A deep reading keeps
+ * the list as a piece of its own, so that `cmd=(curl -s …); "${cmd[@]}"` is still found, and a command run inside it,
+ * `$(…)`, is taken out as anywhere else.
+ */
+type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`'; array?: number }
+
+/** What stands right before the `(` of an array: `name=` or `name+=` at a word's start. */
+const BEFORE_AN_ARRAY = /(?:^|[\s;&|({])[A-Za-z_]\w*\+?=$/
+/** How much of the text before a `(` is looked at for that name, so that a long line costs no more for its brackets. */
+const ARRAY_NAME_ROOM = 120
 
 /**
  * A shell line cut into its commands. `&&`, `||`, `;`, `|`, `&` and a line's end part two commands only outside
@@ -249,7 +260,22 @@ function pieces(line: string, deep: boolean, powershell: boolean): string[] {
       i++
     } else if (c === '#' && /^$|\s$/.test(top.text.slice(-1))) {
       while (i + 1 < line.length && line[i + 1] !== '\n') i++
-    } else if (c === '\n' || c === ';' || c === '|') cut(top)
+    } else if (top.array !== undefined && c === '\n') top.text += ' '
+    else if (top.array !== undefined && inside === '' && c === '(' && !deep) top.array++
+    else if (top.array !== undefined && c === ')' && top.array > 0) top.array--
+    else if (top.array !== undefined && c === ')') {
+      // The list ends, and the command goes on after it.
+      if (deep) cut(top)
+      open.pop()
+      ;(open[open.length - 1] as Reading).text += ' '
+    } else if (top.array !== undefined && (c === ';' || c === '|' || c === '&')) {
+      // No list holds one of these bare: this was no array. Its text goes back where it stood, and the mark is read again.
+      open.pop()
+      ;(open[open.length - 1] as Reading).text += `(${top.text}`
+      i--
+    } else if (c === '(' && inside === '' && !powershell && top.text.endsWith('=') && BEFORE_AN_ARRAY.test(top.text.slice(-ARRAY_NAME_ROOM)))
+      open.push({ text: '', quote: '', close: ')', array: 0 })
+    else if (c === '\n' || c === ';' || c === '|') cut(top)
     else if (c === '&' && (next === '&' || !powershell)) {
       // `2>&1` and `&>file` send output somewhere; they end no command.
       if (next !== '&' && (next === '>' || /[<>]/.test(line[i - 1] ?? ''))) top.text += c
@@ -263,6 +289,13 @@ function pieces(line: string, deep: boolean, powershell: boolean): string[] {
       // A `)` that closes nothing is a `case` pattern's: what follows it is a command.
       if (top.close === c && open.length > 1) open.pop()
     } else top.text += c
+  }
+  // A list never closed was no array: its text stays with the command it stood in.
+  for (let n = open.length - 1; n > 0; n--) {
+    const reading = open[n] as Reading
+    if (reading.array === undefined) continue
+    ;(open[n - 1] as Reading).text += `(${reading.text}`
+    open.splice(n, 1)
   }
   for (const reading of open) out.push(reading.text)
   return out
@@ -577,7 +610,12 @@ export function formatMs(ms: number, t: Strings): string {
   // Rounded before the unit is chosen, so that no part reaches the size of the next unit: never `1 min 60 s`.
   const tenths = Math.round(ms / 100)
   const seconds = Math.round(ms / 1000)
-  return Math.round(ms) < 1000 ? t.ms(Math.max(1, Math.round(ms))) : tenths < 600 ? t.seconds((tenths / 10).toFixed(1)) : t.minutes(Math.floor(seconds / 60), seconds % 60)
+  if (Math.round(ms) < 1000) return t.ms(Math.max(1, Math.round(ms)))
+  if (tenths < 600) return t.seconds((tenths / 10).toFixed(1))
+  if (seconds < 3600) return t.minutes(Math.floor(seconds / 60), seconds % 60)
+  // From an hour on, hours and whole minutes: a background task that ran a day reads `24 h 0 min`, not `1440 min 0 s`.
+  const minutes = Math.round(seconds / 60)
+  return t.hours(Math.floor(minutes / 60), minutes % 60)
 }
 
 /**

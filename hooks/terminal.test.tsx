@@ -3,8 +3,10 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import type { Board, Entry } from '../types'
 import { TRAIL_FADE_MS, TRAIL_HOLD_MS, drawMap, setupFrom } from './map'
-import { ENDLESS_FOR_MS, FASTEST_MS, MAX_IMAGE_BYTES, endlessEvery, fromBase64, imageSource, nextChangeIn, paint, parseMap, valueAt } from './raster'
-import { isITerm2, schemeFrom } from './terminal'
+import { MAX_IMAGE_BYTES, fromBase64, imageSource } from './png'
+import { paint } from './raster'
+import { ENDLESS_FOR_MS, FASTEST_MS, endlessEvery, nextChangeIn, parseMap, valueAt } from './scene'
+import { freesFrames, isITerm2, schemeFrom } from './terminal'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -216,7 +218,8 @@ test('the painted map has its ground, its words and its lit stations where the d
   expect(warm(running, 127, 346, 30)).toBe(false)
 })
 
-test('what never moves is painted once a drawing, and the frames come out as if every shape were painted each time', () => {
+// On a slow CI runner this has taken from 2.3 s to past the default 5 s; the time here is no budget, only room.
+test('what never moves is painted once a drawing, and the frames come out as if every shape were painted each time', { timeoutMs: 30_000 }, () => {
   const now = 1_000_000
   // An animation of nothing makes every shape one that moves, so the painter paints the drawing whole, frame after frame.
   const nothing = { kind: 'value', attr: 'nothing', values: [0], keyTimes: undefined, begin: 0, dur: 1, repeat: 1, freeze: false }
@@ -464,7 +467,7 @@ for (const [what, variables, isLight] of [
   })
 }
 
-// ---- iTerm2 keeps every picture it is sent (issue #81): no picture there -----------------------------
+// ---- iTerm2 before 3.7.8 keeps every picture it is sent (issue #81): no picture there ----------------
 
 test('iTerm2 is known by TERM_PROGRAM in its own window and by LC_TERMINAL over ssh or inside tmux', () => {
   expect(isITerm2('iTerm.app', undefined)).toBe(true)
@@ -475,11 +478,28 @@ test('iTerm2 is known by TERM_PROGRAM in its own window and by LC_TERMINAL over 
   expect(isITerm2(undefined, undefined)).toBe(false)
 })
 
+test('iTerm2 frees its pictures from 3.7.8 on; a version it does not give counts as an earlier one', () => {
+  expect(freesFrames('3.7.8')).toBe(true)
+  expect(freesFrames('3.7.10')).toBe(true)
+  expect(freesFrames('3.8')).toBe(true)
+  expect(freesFrames('4.0.0')).toBe(true)
+  expect(freesFrames('3.7.8beta1')).toBe(true)
+  expect(freesFrames('3.7.7')).toBe(false)
+  expect(freesFrames('3.7')).toBe(false)
+  expect(freesFrames('3.6.9')).toBe(false)
+  expect(freesFrames('2.9.20')).toBe(false)
+  expect(freesFrames('')).toBe(false)
+  expect(freesFrames('nightly')).toBe(false)
+  expect(freesFrames(undefined)).toBe(false)
+})
+
 for (const [what, variables] of [
-  ['in its own window', { TERM_PROGRAM: 'iTerm.app' }],
-  ['over ssh or inside tmux', { TERM_PROGRAM: 'tmux', LC_TERMINAL: 'iTerm2' }],
+  ['3.7.7 in its own window', { TERM_PROGRAM: 'iTerm.app', TERM_PROGRAM_VERSION: '3.7.7' }],
+  ['of no version in its own window', { TERM_PROGRAM: 'iTerm.app' }],
+  ['3.7.7 over ssh or inside tmux', { TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.5a', LC_TERMINAL: 'iTerm2', LC_TERMINAL_VERSION: '3.7.7' }],
+  ['of no version over ssh or inside tmux', { TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.9', LC_TERMINAL: 'iTerm2' }],
 ] as const) {
-  test(`in iTerm2, ${what}, the picture is off: a line says why, the rows stay and no frame is sent`, { options: PICTURE }, async ($, on) => {
+  test(`in iTerm2 ${what} the picture is off: a line says why, the rows stay and no frame is sent`, { options: PICTURE }, async ($, on) => {
     const clock = mock.clock(on, { now: 1_000_000 })
     mock.env(on, variables)
     let frames = 0
@@ -493,10 +513,34 @@ for (const [what, variables] of [
 
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ type: 'Image' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /No picture in iTerm2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /No picture in iTerm2 before 3\.7\.8/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Build it/ })).toBeDefined()
     await clock.advance(5000)
     expect(frames).toBe(0)
+    await ui.unmount()
+  })
+}
+
+for (const [what, variables] of [
+  ['in its own window', { TERM_PROGRAM: 'iTerm.app', TERM_PROGRAM_VERSION: '3.7.8' }],
+  ['over ssh or inside tmux', { TERM_PROGRAM: 'tmux', TERM_PROGRAM_VERSION: '3.5a', LC_TERMINAL: 'iTerm2', LC_TERMINAL_VERSION: '3.7.8' }],
+] as const) {
+  test(`in iTerm2 3.7.8, ${what}, the picture is back and its frames are sent`, { options: PICTURE }, async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    mock.env(on, variables)
+    let frames = 0
+    on('ui.blit', () => {
+      frames++
+      return { value: {} }
+    })
+    on('tool.call', () => ({ result: { backgroundTaskId: 'b1' } }))
+    await $.tool.call({ tool: 'Bash', command: 'make', description: 'Build it', run_in_background: true })
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Image' }))?.key).toBe('map')
+    expect(await ui.find({ type: 'Text', text: /No picture in iTerm2/ })).toBeUndefined()
+    await clock.advance(5000)
+    expect(frames).toBeGreaterThan(0)
     await ui.unmount()
   })
 }
