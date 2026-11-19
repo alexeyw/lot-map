@@ -489,8 +489,13 @@ export function valueAt(shape: Shape, attr: string, base: number, t: number): nu
   return v
 }
 
-/** The quickest the map is painted again, in ms: thirty frames a second. */
-export const FASTEST_MS = 33
+/**
+ * The quickest the map is painted again, in ms: five frames a second. It was thirty at first, and in kitty 0.50 none
+ * of those reached the screen while the map moved: of twenty shots of the window taken while a command ran, none
+ * showed a map at 33, 66 or 125 ms a frame, and all twenty did at 200 (2026-11-18, macOS; PRINCIPLES.md has it).
+ * Why the quicker frames are not shown is not known here; a frame is about 150 KB as base64.
+ */
+export const FASTEST_MS = 200
 
 /** How long after a drawing is made its endless animations move smoothly while something runs: the core's breath, and the beat and the hands of what runs. */
 export const ENDLESS_FOR_MS = 600_000
@@ -503,7 +508,7 @@ export function endlessEvery(t: number, isBusy: boolean): number | undefined {
   return t < ENDLESS_FOR_MS ? FASTEST_MS : ENDLESS_LATER_MS
 }
 
-/** How often an animation of this length wants a frame: thirty a second for a pulse, a glow or a breath; rarely for the clock hands. */
+/** How often an animation of this length wants a frame: five a second for a pulse, a glow or a breath; rarely for the clock hands. */
 const everyFor = (dur: number): number => (dur <= 10_000 ? FASTEST_MS : Math.min(10_000, Math.max(1000, dur / 60)))
 
 /** How long until the drawing next looks different, in ms, or undefined if it never will. Endless animations count only given `endlessEvery`. */

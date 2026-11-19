@@ -165,7 +165,7 @@ test('the picture is painted again only while something moves, and the core brea
   // At rest only the core breathes, and that alone is no reason to paint unless endless animations count.
   expect(nextChangeIn(rest, 0)).toBeUndefined()
   expect(nextChangeIn(rest, 0, 500)).toBeGreaterThanOrEqual(500)
-  // They count only while something runs: at thirty frames a second for ten minutes, then every five seconds.
+  // They count only while something runs: at five frames a second for ten minutes, then every five seconds.
   // A map at rest waits for the next change.
   expect(endlessEvery(0, true)).toBe(FASTEST_MS)
   expect(endlessEvery(ENDLESS_FOR_MS - 1, true)).toBe(FASTEST_MS)
@@ -395,9 +395,10 @@ test('the picture moves while something moves, and stands still at rest', { opti
   const probed = frames.length
   expect(probed).toBeGreaterThan(0)
   expect(frames[0]).toMatchObject({ requestId: 'lot-map', key: 'map' })
-  // The pulse flies out and back: thirty frames a second.
+  // The pulse flies out and back: five frames a second, and no more than that.
   await clock.advance(1000)
-  expect(frames.length).toBeGreaterThanOrEqual(probed + 28)
+  expect(frames.length).toBeGreaterThanOrEqual(probed + 4)
+  expect(frames.length).toBeLessThanOrEqual(probed + 6)
   // Nothing runs, so once the station's glow has faded (3.2 s) the core's breath alone sends no frames.
   await clock.advance(3000)
   const landed = frames.length
@@ -486,7 +487,7 @@ for (const [what, variables] of [
       frames++
       return { value: {} }
     })
-    // A call left running, which elsewhere keeps the picture moving at thirty frames a second.
+    // A call left running, which elsewhere keeps the picture moving at five frames a second.
     on('tool.call', () => ({ result: { backgroundTaskId: 'b1' } }))
     await $.tool.call({ tool: 'Bash', command: 'make', description: 'Build it', run_in_background: true })
 

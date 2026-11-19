@@ -249,7 +249,7 @@ test('principle 3: a tool call through the mod stays within its budget, and the 
 // kit's 5 s: the time allowed is for the whole test, and the budgets below still hold each frame.
 test('principle 3: a frame of the terminal picture stays within its budget, at rest and with the map at work', { timeoutMs: 30_000 }, () => {
   // What `terminalView: picture` does: the drawing is read once when the board changes, and then each frame is
-  // painted and packed into a PNG, up to thirty times a second while something moves.
+  // painted and packed into a PNG, up to five times a second while something moves.
   const at = 1_033_000
   const figures: string[] = []
   for (const [name, board] of [['at rest', { entries: [], counts: {} } as Board], ['at work', busy()]] as const) {
@@ -257,8 +257,8 @@ test('principle 3: a frame of the terminal picture stays within its budget, at r
     const reading = timed(15, () => { parseMap(svg) })
     const scene = parseMap(svg)
     const scale = scaleFor(scene, SCALE)
-    const painting = timed(15, i => { paint(scene, i * 33, scale) })
-    const frame = timed(15, i => { imageSource(paint(scene, i * 33, scale)) })
+    const painting = timed(15, i => { paint(scene, i * 200, scale) })
+    const frame = timed(15, i => { imageSource(paint(scene, i * 200, scale)) })
     const size = paint(scene, 0, scale)
     figures.push(`${name}: reading the drawing ${reading.toFixed(2)}ms | painting ${painting.toFixed(2)}ms | painted and packed ${frame.toFixed(2)}ms (${size.width}x${size.height})`)
     expect(reading).toBeLessThan(READING_BUDGET_MS)
