@@ -1456,6 +1456,30 @@ test('the bracket that closes a subshell is no part of its last command: `(cd su
   expect(stationOf('case $x in a) make ;; ls) make ;; esac')).toBe('shell')
 })
 
+test('the list of a bash array is values, not the command: `arr=(a b c); ls` is ls', () => {
+  const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
+  expect(stationOf('arr=(a b c); ls')).toBe('files')
+  expect(labelOf('arr=(a b c); ls')).toBe('ls')
+  expect(labelOf('arr=(a b c) ls')).toBe('ls')
+  expect(labelOf('x=1 arr=(a b) cat f.txt')).toBe('cat')
+  expect(labelOf('a=(1 2) b=(3 4); cat f.txt')).toBe('cat')
+  expect(labelOf('arr+=(d e); ls')).toBe('ls')
+  // Quotes, brackets and line ends inside the list are the list's.
+  expect(labelOf('arr=("a b" \'c)\' d); ls')).toBe('ls')
+  expect(labelOf('arr=(a (b) c); ls')).toBe('ls')
+  expect(stationOf('arr=(\n  one\n  two\n); ls')).toBe('files')
+  expect(labelOf('urls=(https://a.example.com https://b.example.com); ls')).toBe('ls')
+  // The network still shows: after the list, run inside it, and kept in it to be run later.
+  expect(stationOf('arr=(a b c); curl https://example.com/x')).toBe('web')
+  expect(labelOf('arr=(a b c); curl https://example.com/x')).toBe('curl')
+  expect(stationOf('arr=($(curl -s https://example.com/list)); echo ${arr[0]}')).toBe('web')
+  expect(stationOf('arr=(`curl -s https://example.com/list`); ls')).toBe('web')
+  expect(stationOf('cmd=(curl -s https://example.com/x); "${cmd[@]}"')).toBe('web')
+  // What only looks like a list is read as before: a list never closed, and one cut by a `;`.
+  expect(stationOf('echo a=(b; curl https://example.com/x')).toBe('web')
+  expect(stationOf('arr=(a b; curl https://example.com/x')).toBe('web')
+})
+
 test('a command inside a loop, a condition, a group or a negation is still the command', () => {
   expect(stationOf('for u in a b; do curl $u; done')).toBe('web')
   expect(stationOf('if curl -sf x; then echo ok; fi')).toBe('web')
