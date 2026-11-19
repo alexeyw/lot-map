@@ -137,7 +137,8 @@ test('principle 2: no tool puts content on its label, whatever its input carries
   for (const tool of TOOLS) expect(`${tool}: ${classify(tool, inputFor(tool), PLAIN).label}`).not.toContain(MARK)
 })
 
-test('principle 2: nothing a session carries reaches what the mod keeps or draws', async ($, on) => {
+// Eighty-seven calls through the mod: up to 3.8 s on a slow CI runner, against a default of 5 s.
+test('principle 2: nothing a session carries reaches what the mod keeps or draws', { timeoutMs: 30_000 }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   const kept: unknown[] = []
   for (const write of ['state.set', 'store.set']) on(write as never, ((_: unknown, e: unknown, next: (e: unknown) => unknown) => (kept.push(e), next(e))) as never)
@@ -274,7 +275,8 @@ test('principle 3: naming a call, drawing the map and folding the rows each stay
   expect(long).toBeLessThan(20)
 })
 
-test('principle 3: a tool call through the mod stays within its budget, and the two hundredth costs what the first did', async ($, on) => {
+// The budget is the one the test checks; this is only room for a slow CI runner, where the whole test has taken 4 s.
+test('principle 3: a tool call through the mod stays within its budget, and the two hundredth costs what the first did', { timeoutMs: 30_000 }, async ($, on) => {
   let clock = 1_000_000
   on('clock.now', () => ({ value: clock++ }))
   on('tool.call', () => ({ result: {} }))
