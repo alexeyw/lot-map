@@ -98,6 +98,12 @@
       "default": true,
       "description": "Turn off on a Team or Enterprise login where the transcript gets notices that a lot-map hook was skipped. The map then loses the Hooks station, the records a hook adds, the row of a typed slash command and the mark of a compaction; everything else stays."
     },
+    "openAtStart": {
+      "type": "boolean",
+      "title": "Open the pane when a session starts",
+      "default": true,
+      "description": "Off, the pane stays closed until you type /lot-map. The map is kept from the session's first call all the same, so it is whole when you open it."
+    },
     "subagentNames": {
       "type": "boolean",
       "title": "Name subagents in the rows",

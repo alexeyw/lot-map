@@ -1668,6 +1668,31 @@ test('with a surface attached at the start the pane is opened at once', async ($
   expect(opens).toBe(1)
 })
 
+test('with openAtStart off the pane opens on the command alone, and the map holds what came before', { options: { openAtStart: false } }, async ($, on) => {
+  let opens = 0
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('session.surfaces', () => ({ value: ['desktop'] }) as never)
+  on('ui.open', () => {
+    opens++
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }) as never)
+  on('tool.call', () => ({ result: {} }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.session.attach({ clientId: 'c1', surface: 'desktop' } as never)
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/kept.py' })
+  expect(opens).toBe(0)
+
+  expect((await $.command.run({ command: 'lot-map', args: '' } as never))?.text).toBe('Work map opened.')
+  expect(opens).toBe(1)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /kept\.py/ })).toBeDefined()
+  await ui.unmount()
+})
+
 // A background call that keeps running, then calls enough that nothing folds: the board keeps 80.
 const crowd = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], calls = 70): Promise<void> => {
   on('clock.now', () => ({ value: 1_000_000 }))
