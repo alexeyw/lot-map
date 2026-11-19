@@ -2,6 +2,18 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.11.0 (2026-11-19)
+
+- New option `contextWindow`: with `compaction` the ring and its percentage measure the context against the auto-compact window, such as one set with `autoCompactWindow`, where it is smaller than the model's; at 450k tokens of a 1M model with compaction at 600k it reads 75%, not 45%. `model`, as before, stays the default. For this the mod asks Claude Code how the context divides up, at a session's first model step and again after a compaction or a change of model, and takes only the window's size from the answer; PRIVACY.md says so. Contributed by philarete173. (#97, #101)
+- New option `logRows`: with `fill`, in the desktop app's docked pane the list under the map takes the rows the pane has left below the map. The oldest rows that do not fit are cut off at the bottom, above the calls still running. `16`, as before, stays the default; a terminal, the editor and the mobile app keep 16. Contributed by philarete173. (#98, #102)
+- `contextCost`: each station's sum is on every drawing of the map, where it was on the desktop map alone: VS Code's map and the terminal picture show `9 · 180k`, the braille map writes it after the count, `Files 9 +180k`, and a terminal that shows the rows alone has it in its line of counts. The braille map draws the sums for every station or for none: where its grid has no room for them all, the names stay whole and the rows keep their figures. Contributed by Obsessi0n. (#80, #105)
+- Fixed: the terminal picture was painted up to thirty times a second, and in kitty none of those frames reached the screen while the map moved; the picture came back only when everything stood still. It now gets a frame five times a second, and each is shown: measured in kitty 0.50 on macOS, of twenty shots of the window taken while a command ran, none showed a map at 33 ms a frame and all twenty did at 200 ms. That is about a tenth of a processor core where it was six tenths. Why the quicker frames are not shown is not known. (#109, #110)
+- Fixed: a row's time could show a part as large as the next unit: `1 min 60 s`, `60.0 s`, `1000 ms`. A time is now rounded before its unit is chosen, so 119.5 seconds reads `2 min 0 s`; a time exactly on half a tenth rounds up, so 1150 ms reads `1.2 s`. Contributed by Shyam-Makwana. (#112)
+- Fixed: a command that ends a subshell was read with the closing bracket on its name, so `(cd sub; ls)` lit Shell where `cd sub && ls` lights Files, and `(ls)` got the label `ls)`. Contributed by Shyam-Makwana. (#113)
+- README: the options are in four groups, how it looks, what it shows, memory and servers, in a terminal only; the Install section says what to do about the notices on a Team or Enterprise login; two more examples of `claude plugin configure`, with every value written as a string. (#106)
+- The pull request form asks whose code it is: that the author wrote the change, and where anything copied comes from and under which licence. (#104)
+- Inside: the check runs a second time on the newest Claude Code, on every pull request and once a day, and blocks no merge; two tests that ran close to the test kit's five seconds have the time they take. (#107, #108)
+
 ## 0.10.0 (2026-11-18)
 
 - New option `serverStations`: put an MCP server's tools on a station of your choice, each as `server=station`, with `files`, `shell`, `web`, `browser`, `agents`, `skills` or `you`. The row still reads `server: tool`. Memory keeps `memoryServers`, which wins if a server is in both. Contributed by arandevcode. (#55, #86)
