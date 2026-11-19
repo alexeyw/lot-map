@@ -83,7 +83,7 @@ A pulse flies out when something starts and returns when it ends. Refusals and e
 - **Subagents.** Each one still at work circles the Agents station as a small dot, and its calls start from there.
 - **The answer.** One wide ring leaves the centre when the answer is ready.
 
-Below the map are a line that says what runs now, and the last 16 rows: `●` running, `·` done, `✕` failed or blocked, `◆` a change of model. Finished calls that follow one another at one station fold into one row, marked `+2` for the two it stands for besides the one named. A call still running is never pushed out of the list by what came after it: it stays as the last row until it ends, so the list and the map say the same. Such rows take half the list at most; with more still running than that, the last one is marked `+22` for the rest.
+Below the map are a line that says what runs now, and the last 16 rows (with `logRows` set to `fill`, as many as the desktop pane has room for): `●` running, `·` done, `✕` failed or blocked, `◆` a change of model. Finished calls that follow one another at one station fold into one row, marked `+2` for the two it stands for besides the one named. A call still running is never pushed out of the list by what came after it: it stays as the last row until it ends, so the list and the map say the same. Such rows take half the list at most; with more still running than that, the last one is marked `+22` for the rest.
 
 Each row is one line. Its words are cut at the pane's edge; its time stands in a column at the right, with a dash for what took none, such as a message arriving, and on the answer's row the length of the whole turn. A row with a long label has a `▸` before its time: press it to read the row whole, and again to close it. One row is open at a time. In a terminal the line of now also holds the context percentage and the model at its right, since no drawing is there to show them.
 
@@ -175,6 +175,7 @@ The install offers them on a screen. Later, use `/config` in a terminal or `clau
 | `layout` | `you-top` | where you are on the map: `you-top`, or `you-bottom`, which turns the ring half a turn so that you are at the bottom and the network and the browser at the top |
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
+| `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16. The oldest rows that do not fit are cut off at the bottom, above the calls still running. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
 
 ### What it shows
 

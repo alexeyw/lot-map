@@ -185,6 +185,16 @@
       "default": "footnote",
       "description": "The size of the rows under the map: caption is smaller, body larger. A terminal has one size and ignores it."
     },
+    "logRows": {
+      "type": "string",
+      "title": "Rows under the map",
+      "options": [
+        "16",
+        "fill"
+      ],
+      "default": "16",
+      "description": "How many rows the list under the map shows: 16, or fill, as many as the pane has room for below the map, never fewer than 16. Fill is for the desktop app's docked pane; a terminal, the editor and the mobile app keep 16."
+    },
     "terminalView": {
       "type": "string",
       "title": "Terminal view",

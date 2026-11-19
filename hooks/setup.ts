@@ -63,6 +63,8 @@ export type Setup = {
   motion: 'full' | 'reduced'
   /** The size of the words under the map, a step on the surface's own scale. A terminal has one size. */
   textSize: 'caption' | 'footnote' | 'body'
+  /** How many rows the list under the map shows: 16, or as many as the desktop's docked pane has room for. */
+  logRows: 16 | 'fill'
   /** How the map looks in a terminal: the rows alone, as always, or above them the map's picture, or the map in braille dots. */
   terminalView: 'text' | 'picture' | 'braille'
   /** How many times taller a terminal cell is than it is wide: what sizes the picture's box of cells. The engine does not say. */
@@ -118,6 +120,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     layout: options.layout === 'you-bottom' ? 'you-bottom' : 'you-top',
     motion: options.motion === 'reduced' ? 'reduced' : 'full',
     textSize: options.textSize === 'caption' || options.textSize === 'body' ? options.textSize : 'footnote',
+    logRows: options.logRows === 'fill' ? 'fill' : 16,
     terminalView: options.terminalView === 'picture' || options.terminalView === 'braille' ? options.terminalView : 'text',
     cellShape: cellShapeFrom(options.cellShape),
   }
