@@ -7,8 +7,10 @@ import type { Board } from '../types'
 import { brailleSize, nextFrameIn, packCells, paintBraille } from './braille'
 import { describeNow, drawMap } from './map'
 import type { Setup } from './map'
-import { endlessEvery, imageSource, nextChangeIn, paint, parseMap, scaleFor } from './raster'
-import type { Scene } from './raster'
+import { imageSource } from './png'
+import { paint, scaleFor } from './raster'
+import { endlessEvery, nextChangeIn, parseMap } from './scene'
+import type { Scene } from './scene'
 
 const MAP_KEY = 'map'
 /** Pixels per unit of the drawing: about what a docked pane shows on a sharp screen. The Image's size limit may take it lower. */

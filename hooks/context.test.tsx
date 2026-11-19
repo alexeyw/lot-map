@@ -4,7 +4,8 @@ import { expect, test } from 'claude-code/testing'
 import { paintBraille, rowsOf, sumsFit } from './braille'
 import { charged, stepCosts } from './cost'
 import { STATIONS, drawMap, formatTokens, foldRows, setupFrom } from './map'
-import { hasGlyph, paint, parseMap } from './raster'
+import { hasGlyph, paint } from './raster'
+import { parseMap } from './scene'
 import type { Board, Entry } from '../types'
 
 const PANE = {

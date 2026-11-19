@@ -3,7 +3,9 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import { STATIONS, classify, clean, drawMap, foldRows, setupFrom } from './map'
-import { imageSource, paint, parseMap, scaleFor } from './raster'
+import { imageSource } from './png'
+import { paint, scaleFor } from './raster'
+import { parseMap } from './scene'
 import { SCALE } from './terminal'
 
 const PANE = {
