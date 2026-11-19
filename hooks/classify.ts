@@ -569,6 +569,15 @@ function classifyShell(command: string, description: string, setup: Setup, power
       return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
+  // A command the person put on a station: found wherever a command is, so behind `sudo`, in a line handed to
+  // `bash -c` and in a container as well. The row keeps its label. Memory was asked first, so it wins.
+  for (const words of run) {
+    const head = name(words[0])
+    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
+    for (const [command, station] of setup.commandStations) {
+      if (named(head, command) || named(script, command)) return { station, label }
+    }
+  }
   // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
   const reaches = (): boolean => {
     followed = 0

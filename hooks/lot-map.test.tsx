@@ -265,6 +265,48 @@ test('serverStations ignores an entry whose station is unknown, or is memory, th
   expect(setupFrom({ serverStations: 7 }).serverStations.size).toBe(0)
 })
 
+test('commandStations puts a named command on the station the person chose, wherever the line runs it', () => {
+  const setup = setupFrom({ commandStations: ['agent-dispatch=agents', 'gh = skills'] })
+  const shell = (command: string, description = '') => classify('Bash', { command, description }, setup)
+  expect(shell('agent-dispatch wait 20260101-000000-order --json')).toEqual({ station: 'agents', label: 'agent-dispatch' })
+  // The row keeps the description Claude wrote for it, as any shell command does.
+  expect(shell('agent-dispatch wait 20260101-000000-order', 'Wait for the order')).toEqual({ station: 'agents', label: 'Wait for the order' })
+  // Wherever a command is found: behind another command, in a line handed to a shell, in a container, after `&&`.
+  expect(shell('sudo agent-dispatch submit --order order.md').station).toBe('agents')
+  expect(shell('env AGENT_DISPATCH_HOME=/tmp/home agent-dispatch status').station).toBe('agents')
+  expect(shell('bash -c "cd /tmp && agent-dispatch accept 20260101-000000-order"').station).toBe('agents')
+  expect(shell('docker exec box agent-dispatch status').station).toBe('agents')
+  expect(shell('cd /tmp && timeout 60 agent-dispatch redo 20260101-000000-order').station).toBe('agents')
+  // A name counts as it does in memoryCommands: the command, a script named for it, never a longer word.
+  expect(shell('python3 bin/agent-dispatch-wait.py 20260101-000000-order').station).toBe('agents')
+  expect(shell('agent-dispatcher run').station).toBe('shell')
+  expect(shell('echo agent-dispatch').station).toBe('shell')
+  // What the person sets wins over what the command's name says: gh reaches the network, and stays where it was put.
+  expect(shell('gh pr list').station).toBe('skills')
+  expect(classify('Bash', { command: 'gh pr list' }, setupFrom({})).station).toBe('web')
+  // PowerShell is read the same way.
+  expect(classify('PowerShell', { command: 'agent-dispatch.exe status' }, setup).station).toBe('agents')
+})
+
+test('commandStations ignores an entry whose station is unknown, or is memory, the model or hooks', () => {
+  const odd = setupFrom({ commandStations: ['a=nowhere', 'b=memory', 'c=model', 'd=hooks', 'e=', '=files', 'no-equals', 'f=files'] })
+  expect([...odd.commandStations]).toEqual([['f', 'files']])
+  expect(classify('Bash', { command: 'a run' }, odd).station).toBe('shell')
+  expect(classify('Bash', { command: 'f run' }, odd).station).toBe('files')
+  expect(setupFrom({}).commandStations.size).toBe(0)
+  expect(setupFrom({ commandStations: 7 }).commandStations.size).toBe(0)
+  // A string works as well as a list.
+  expect([...setupFrom({ commandStations: 'one=agents, two = you' }).commandStations]).toEqual([['one', 'agents'], ['two', 'you']])
+})
+
+test('a command named in memoryCommands and in commandStations goes to Memory', () => {
+  const both = setupFrom({ memoryCommands: ['recall'], commandStations: ['recall=files', 'deploy=agents'] })
+  expect(classify('Bash', { command: 'recall search notes' }, both).station).toBe('memory')
+  // Memory is asked first for the whole line, so it wins when the line runs both.
+  expect(classify('Bash', { command: 'deploy now && recall add note' }, both).station).toBe('memory')
+  expect(classify('Bash', { command: 'deploy now' }, both).station).toBe('agents')
+})
+
 test('a server named in memoryServers and in serverStations goes to Memory', () => {
   const both = setupFrom({ memoryServers: ['recall'], serverStations: ['recall=files'] })
   expect(classify('mcp__recall__search', {}, both)).toEqual({ station: 'memory', label: 'search' })

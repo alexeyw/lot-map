@@ -200,6 +200,7 @@ Each of these with a picture of its values: [How the options look](docs/options.
 | `memoryPaths` | none | parts of a path that make a file a memory |
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |
 | `serverStations` | none | put an MCP server's tools on a station of your choice, each as `server=station`, with `files`, `shell`, `web`, `browser`, `agents`, `skills` or `you`; the row still reads `server: tool`. What you set wins over the mod's own routes for the servers it knows. Memory keeps `memoryServers`, which wins if a server is in both; an unknown station is ignored |
+| `commandStations` | none | put a shell command on a station of your choice, each as `command=station`, with the stations `serverStations` takes; the row keeps its label. A name counts as it does in `memoryCommands`, and it is found wherever a command is: behind `sudo` or `env`, in a line handed to `bash -c`, in a container. What you set wins over what the command's name says, so `gh=agents` keeps `gh` off Network. Memory keeps `memoryCommands`, which wins if a command is in both; an unknown station is ignored |
 | `hookRecords` | `false` | turn on if a hook of yours adds memory records numbered like `[#123]`; they appear on Memory by number only. Such a number in the text of any hook counts, not only a memory hook's |
 
 ### In a terminal only
