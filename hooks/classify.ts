@@ -577,7 +577,12 @@ export function formatMs(ms: number, t: Strings): string {
   // Rounded before the unit is chosen, so that no part reaches the size of the next unit: never `1 min 60 s`.
   const tenths = Math.round(ms / 100)
   const seconds = Math.round(ms / 1000)
-  return Math.round(ms) < 1000 ? t.ms(Math.max(1, Math.round(ms))) : tenths < 600 ? t.seconds((tenths / 10).toFixed(1)) : t.minutes(Math.floor(seconds / 60), seconds % 60)
+  if (Math.round(ms) < 1000) return t.ms(Math.max(1, Math.round(ms)))
+  if (tenths < 600) return t.seconds((tenths / 10).toFixed(1))
+  if (seconds < 3600) return t.minutes(Math.floor(seconds / 60), seconds % 60)
+  // From an hour on, hours and whole minutes: a background task that ran a day reads `24 h 0 min`, not `1440 min 0 s`.
+  const minutes = Math.round(seconds / 60)
+  return t.hours(Math.floor(minutes / 60), minutes % 60)
 }
 
 /**

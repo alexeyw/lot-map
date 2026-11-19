@@ -45,6 +45,7 @@ export type Strings = {
   ms: (n: number) => string
   seconds: (s: string) => string
   minutes: (m: number, s: number) => string
+  hours: (h: number, m: number) => string
 }
 
 const en: Strings = {
@@ -99,6 +100,7 @@ const en: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const ru: Strings = {
@@ -153,6 +155,7 @@ const ru: Strings = {
   ms: n => `${n} мс`,
   seconds: s => `${s} с`,
   minutes: (m, s) => `${m} мин ${s} с`,
+  hours: (h, m) => `${h} ч ${m} мин`,
 }
 
 const es: Strings = {
@@ -207,6 +210,7 @@ const es: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const fr: Strings = {
@@ -261,6 +265,7 @@ const fr: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const de: Strings = {
@@ -315,6 +320,7 @@ const de: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} Min. ${s} s`,
+  hours: (h, m) => `${h} Std. ${m} Min.`,
 }
 
 const it: Strings = {
@@ -369,6 +375,7 @@ const it: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 // European Portuguese.
@@ -424,6 +431,7 @@ const pt: Strings = {
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
+  hours: (h, m) => `${h} h ${m} min`,
 }
 
 const TABLES = new Map<unknown, Strings>([['en', en], ['ru', ru], ['es', es], ['fr', fr], ['de', de], ['it', it], ['pt', pt]])
