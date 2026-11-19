@@ -4,7 +4,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Board, Entry } from '../types'
 import { ENDLESS_FOR_MS, FRAME_MS, brailleSize, nextFrameIn, packCells, paintBraille, placesOf, rowsOf } from './braille'
 import { STATIONS, drawMap, setupFrom } from './map'
-import { fromBase64 } from './raster'
+import { fromBase64 } from './png'
 
 const PANE = {
   plugin: 'lot-map',

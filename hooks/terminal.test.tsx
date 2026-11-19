@@ -3,7 +3,9 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import type { Board, Entry } from '../types'
 import { TRAIL_FADE_MS, TRAIL_HOLD_MS, drawMap, setupFrom } from './map'
-import { ENDLESS_FOR_MS, FASTEST_MS, MAX_IMAGE_BYTES, endlessEvery, fromBase64, imageSource, nextChangeIn, paint, parseMap, valueAt } from './raster'
+import { MAX_IMAGE_BYTES, fromBase64, imageSource } from './png'
+import { paint } from './raster'
+import { ENDLESS_FOR_MS, FASTEST_MS, endlessEvery, nextChangeIn, parseMap, valueAt } from './scene'
 import { freesFrames, isITerm2, schemeFrom } from './terminal'
 import { stringsFor } from './text'
 
