@@ -1,10 +1,15 @@
 # Every pull request and every push to main or next: the plugin validates, its tests pass, and it hooks and calls only what is listed.
+# Once on the Claude Code version the tests are known to pass on, and once on the newest one, which blocks no merge.
 name: check
 
 on:
   pull_request:
   push:
     branches: [main, next]
+  # Once a day on main, so that a new Claude Code that breaks the mod shows without waiting for a pull request.
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,5 +42,33 @@ jobs:
       - name: Test
         run: claude plugin test .
       # What the mod hooks and calls is what scripts/surface.txt lists, and nothing that reaches outside the session.
+      - name: Surface
+        run: node scripts/check-surface.mjs
+
+  # The same steps on the newest Claude Code. A new version changes what the engine does around a mod, and both
+  # faults fixed in 0.10.0 (#54) were of that kind and were found by people, not by the tests. On a pull request or
+  # a push a failure here is shown and blocks nothing; on the daily run it fails the run, so that it is noticed.
+  latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: ${{ github.event_name != 'schedule' }}
+    env:
+      DISABLE_AUTOUPDATER: 1
+      DISABLE_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install the newest Claude Code
+        run: npm install --global @anthropic-ai/claude-code@latest
+      - name: Which version this is
+        run: claude --version
+      - name: Validate
+        run: claude plugin validate .
+      - name: Test
+        run: claude plugin test .
       - name: Surface
         run: node scripts/check-surface.mjs

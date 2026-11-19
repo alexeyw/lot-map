@@ -273,11 +273,19 @@ const WORDS = /(?:\\[\s\S]|[^\s"'\\]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?)+/g
 /** PowerShell's words: there a backslash is a path's and nothing more. */
 const PS_WORDS = /(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g
 
+/** Whether a word ends with a `)` that nothing in it opened, quoted text aside: `ls)` and `$(date))` do, `$(date)` and `"a)"` do not. */
+const closesMore = (word: string): boolean => {
+  const bare = word.replace(/\\[\s\S]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?/g, '_')
+  return bare.endsWith(')') && bare.split(')').length > bare.split('(').length
+}
+
 /**
  * The words of each command in a shell line, leading assignments taken off. Quotes stay: a quoted word is an argument.
  * `deep` adds each command run inside another: see `pieces`.
  */
 function segments(command: string, deep = false, constructs = false, powershell = false): string[][] {
+  // How many subshells stand open: the `(` before a command opens one, and a later command's `)` closes it.
+  let subshells = 0
   return pieces(command, deep, powershell)
     .map(part => part.match(powershell ? PS_WORDS : WORDS) ?? [])
     .map(words => {
@@ -289,9 +297,20 @@ function segments(command: string, deep = false, constructs = false, powershell 
       for (;;) {
         const head = rest[0] ?? ''
         if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
-        else if (head.startsWith('(') && !head.startsWith('((')) rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
-        else break
+        else if (head.startsWith('(') && !head.startsWith('((')) {
+          subshells++
+          rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
+        } else break
       }
+      // `(cd sub; ls)` ends with `ls`, not `ls)`. With no subshell open the `)` is a `case` pattern's and stays.
+      rest = rest.flatMap(word => {
+        let w = word
+        while (subshells > 0 && closesMore(w)) {
+          w = w.slice(0, -1)
+          subshells--
+        }
+        return w === '' ? [] : [w]
+      })
       return NO_COMMAND.has(rest[0] ?? '') ? [] : rest
     })
     .filter(words => words.length > 0)
@@ -555,7 +574,10 @@ export function shortModel(model: string): string {
 }
 
 export function formatMs(ms: number, t: Strings): string {
-  return ms < 1000 ? t.ms(Math.max(1, Math.round(ms))) : ms < 60000 ? t.seconds((ms / 1000).toFixed(1)) : t.minutes(Math.floor(ms / 60000), Math.round((ms % 60000) / 1000))
+  // Rounded before the unit is chosen, so that no part reaches the size of the next unit: never `1 min 60 s`.
+  const tenths = Math.round(ms / 100)
+  const seconds = Math.round(ms / 1000)
+  return Math.round(ms) < 1000 ? t.ms(Math.max(1, Math.round(ms))) : tenths < 600 ? t.seconds((tenths / 10).toFixed(1)) : t.minutes(Math.floor(seconds / 60), seconds % 60)
 }
 
 /**

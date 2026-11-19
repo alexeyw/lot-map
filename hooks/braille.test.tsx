@@ -128,7 +128,7 @@ test('the braille map shows what the first drawing counts: calls, faults, how ma
 // It catches what is drawn from a board these lines hold; a new field of the board needs its line written.
 
 type Side = { board: Board; now?: number; options?: Record<string, unknown> }
-type Line = { shows: string; a: Side; b: Side; withSums?: boolean; leftOut?: string }
+type Line = { shows: string; a: Side; b: Side; leftOut?: string }
 
 const at = (board: Board, now = NOW, options?: Record<string, unknown>): Side => ({ board, now, ...(options === undefined ? {} : { options }) })
 const one = (entries: Entry[], more: Partial<Board> = {}): Board => ({ entries, counts: {}, ...more })
@@ -163,7 +163,7 @@ const INVENTORY: Line[] = [
   { shows: 'two pulses side by side', a: at(one([entry('files', NOW - 300, { id: 'a' }), entry('files', NOW - 300, { id: 'b' })])), b: at(one([entry('files', NOW - 300, { id: 'a' })])), leftOut: 'pulses side by side' },
   { shows: 'what a hook brought, counted apart', a: at(one([], { counts: { memory: 5 }, pushed: 2 })), b: at(one([], { counts: { memory: 5 } })), leftOut: "memory's second count" },
   { shows: 'a subagent\'s call leaving from Agents', a: at(one([entry('files', NOW - 300, { from: 'agents', agentId: 'x' })])), b: at(one([entry('files', NOW - 300)])), leftOut: "a subagent's call leaving from the Agents station" },
-  { shows: 'what a station\'s calls added to the context', a: at(one([], { counts: { files: 3 }, spent: { files: 14_000 } }), NOW, { contextCost: true }), b: at(one([], { counts: { files: 3 } }), NOW, { contextCost: true }), withSums: true, leftOut: "the braille map show the rows' figures and not the sums" },
+  { shows: 'what a station\'s calls added to the context', a: at(one([], { counts: { files: 3 }, spent: { files: 14_000 } }), NOW, { contextCost: true }), b: at(one([], { counts: { files: 3 } }), NOW, { contextCost: true }) },
 ]
 
 // Left out as well, and not to be shown by two boards: they are on every map or never apart from what flies.
@@ -172,10 +172,10 @@ const INVENTORY: Line[] = [
 // leftOut: 'the rings where a pulse lands and where the model changes'
 
 test('everything the first drawing shows is in the braille map too, or is left out of it whole and by name', () => {
-  const first = (side: Side, withSums: boolean): string => drawMap(side.board, side.now ?? NOW, setupFrom(side.options ?? {}), withSums)
+  const first = (side: Side): string => drawMap(side.board, side.now ?? NOW, setupFrom(side.options ?? {}))
   const second = (side: Side): string => packCells(paintBraille(side.board, side.now ?? NOW, setupFrom(side.options ?? {}), 60, 21))
   for (const line of INVENTORY) {
-    expect([line.shows, first(line.a, line.withSums === true) !== first(line.b, line.withSums === true)]).toEqual([line.shows, true])
+    expect([line.shows, first(line.a) !== first(line.b)]).toEqual([line.shows, true])
     expect([line.shows, second(line.a) !== second(line.b)]).toEqual([line.shows, line.leftOut === undefined])
   }
   // The lines stay apart: a line is one thing.

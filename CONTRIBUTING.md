@@ -44,7 +44,7 @@ claude --plugin-dir .
 
 It takes the place of an installed lot-map for that session and starts with the default options. Afterwards you may find the engine's types in `.claude-plugin/types/` and a `tsconfig.json` beside them, for your editor; both are ignored by git.
 
-CI runs all three on every pull request. On your first one a maintainer has to approve the run, so it may wait a little.
+CI runs all three on every pull request. On your first one a maintainer has to approve the run, so it may wait a little. A second job, `latest`, runs them on the newest Claude Code: if it fails and `plugin` passes, the newer engine does something the tests did not expect, which is worth a line in your pull request and does not block it.
 
 ## A pull request
 
@@ -87,4 +87,4 @@ Please translate a language you speak.
 
 ## Licence
 
-By contributing you agree that your work is published under the repository's [licence](LICENSE).
+By contributing you agree that your work is published under the repository's [licence](LICENSE). The pull request form asks you to confirm that the change is yours to give, and to name the source and the licence of anything in it that you copied or adapted.

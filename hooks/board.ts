@@ -128,11 +128,25 @@ export async function settle($: EngineInterface, task: string, status: Status): 
   })
 }
 
-/** How full the context window is, as the status line has it, and its tokens; costs nothing. */
-export async function contextOf($: EngineInterface): Promise<{ patch: Pick<Board, 'context'>; tokens: number | undefined }> {
+/**
+ * The auto-compact window, when it is below the model's. The call estimates the whole context, so it is made only at a
+ * session's first model step, the first after a compaction and the first on another model, never for a drawing.
+ */
+export async function compactionWindowOf($: EngineInterface): Promise<number | undefined> {
+  const context = await quietly(async () => (await $.session.usage({ breakdown: 'summary' })).context)
+  const raw = context?.breakdown?.rawMaxTokens
+  return typeof raw === 'number' && raw > 0 && raw < (context?.window ?? 0) && context?.breakdown?.isAutoCompactEnabled !== false ? raw : undefined
+}
+
+/**
+ * How full the context window is, as the status line has it, and its tokens; costs nothing. With a `window`, the
+ * auto-compact window from `compactionWindowOf`, the percentage is the tokens over that instead.
+ */
+export async function contextOf($: EngineInterface, window?: number): Promise<{ patch: Pick<Board, 'context'>; tokens: number | undefined }> {
   const context = await quietly(async () => (await $.session.usage()).context)
+  const percent = window !== undefined && typeof context?.tokens === 'number' ? Math.min(100, Math.round((context.tokens / window) * 100)) : context?.percent
   return {
-    patch: typeof context?.percent === 'number' ? { context: context.percent } : {},
+    patch: typeof percent === 'number' ? { context: percent } : {},
     tokens: typeof context?.tokens === 'number' ? context.tokens : undefined,
   }
 }

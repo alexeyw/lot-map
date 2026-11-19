@@ -159,7 +159,7 @@ type Scene = {
   names: Strings['stations']
   isStill: boolean
   shift: number
-  /** The context each station's calls added, with `contextCost` on, where the count line says it too. */
+  /** The context each station's calls added, with `contextCost` on: the count line says it too. */
   spent: Board['spent'] | undefined
 }
 
@@ -251,11 +251,8 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
 }
 
 
-/**
- * The board as one SVG. With `withSpent`, and `contextCost` on, each station's count line also says how much of the
- * context its calls added; for now only the desktop map asks for that.
- */
-export function drawMap(board: Board, now: number, setup: Setup, withSpent = false): string {
+/** The board as one SVG. With `contextCost` on, each station's count line also says how much of the context its calls added. */
+export function drawMap(board: Board, now: number, setup: Setup): string {
   const c: Palette = { ...(setup.theme === 'light' ? LIGHT : DARK), ...setup.colors }
   // How many places the ring is turned. The stations keep their order, so the far side of the person is always the network.
   const shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
@@ -292,7 +289,7 @@ export function drawMap(board: Board, now: number, setup: Setup, withSpent = fal
     if (worn > 0) body += `${line} stroke="${s.id === 'memory' ? c.mem : c.accent}" opacity="${n1(worn * 0.55)}"/>`
   })
 
-  const scene: Scene = { entries: recent, board, now, c, names: setup.t.stations, isStill, shift, spent: withSpent && setup.contextCost ? board.spent : undefined }
+  const scene: Scene = { entries: recent, board, now, c, names: setup.t.stations, isStill, shift, spent: setup.contextCost ? board.spent : undefined }
   const drawn = STATIONS.map((s, i) => station(s, i, scene))
   body += drawn.map(d => d.under).join('')
   body += trail(recent, now, c, isStill, shift)

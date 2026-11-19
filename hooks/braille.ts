@@ -4,7 +4,7 @@
 // drawing, and names none of them itself. What it leaves out of the first drawing is listed in the README.
 // Nothing here touches the engine.
 import type { Board, Entry, StationId } from '../types'
-import { shortModel } from './classify'
+import { formatTokens, shortModel } from './classify'
 import { ALARM_MS, DONE_MS, GLOW_MS, PULSE_MS, SWITCH_MS } from './draw'
 import { DARK, LIGHT } from './palette'
 import type { Palette } from './palette'
@@ -243,6 +243,34 @@ export function placesOf(setup: Setup, columns: number, rows: number): { id: Sta
   return ringOf(setup, columns, rows).places.map(p => ({ id: p.id, column: p.x / 2 - 2, row: p.y / 4 - 1, nameRow: p.isUpper ? p.y / 4 - 2 : p.y / 4 + 1 }))
 }
 
+/** The most a station's sum takes after its count: a space and `+999k`. */
+const SUM_WIDTH = 6
+
+/**
+ * Whether every station's name has room for its count and its sum of `contextCost` on a grid of this size: whole, on
+ * the grid, and clear of the other names, of the other stations' nodes and of the core. The sums are drawn for every
+ * station or for none, so a narrow pane keeps its names whole and leaves the sums to the rows.
+ *
+ * It goes by the widest a sum gets and by how many digits each count has, not by what the sums are now: the answer
+ * changes when a count gains a digit, and not each time a sum grows.
+ */
+export function sumsFit(setup: Setup, columns: number, rows: number, counts: Board['counts']): boolean {
+  const { cx, mid, places } = ringOf(setup, columns, rows)
+  const names = places.map(p => {
+    const width = setup.t.stations[p.id].length + 1 + String(Math.max(1, counts[p.id] ?? 0)).length + SUM_WIDTH
+    const row = p.isUpper ? p.y / 4 - 2 : p.y / 4 + 1
+    return { id: p.id, row, from: Math.round(p.x / 2 - width / 2), to: Math.round(p.x / 2 - width / 2) + width }
+  })
+  // A cell between two things, so that a sum does not read as part of the next name.
+  const meets = (from: number, to: number, otherFrom: number, otherTo: number): boolean => from < otherTo + 1 && otherFrom < to + 1
+  return names.every(name => {
+    if (name.row < 0 || name.row >= rows || name.from < 0 || name.to > columns) return false
+    if (names.some(other => other.id !== name.id && other.row === name.row && meets(name.from, name.to, other.from, other.to))) return false
+    if (places.some(p => p.id !== name.id && (name.row === p.y / 4 - 1 || name.row === p.y / 4) && meets(name.from, name.to, p.x / 2 - 2, p.x / 2 + 2))) return false
+    return !(Math.abs(name.row - mid) <= 2 && meets(name.from, name.to, cx / 2 - CORE_RX / 2, cx / 2 + CORE_RX / 2))
+  })
+}
+
 // ---- the map -------------------------------------------------------------------------------------
 
 const isBad = (e: Entry): boolean => e.status === 'block' || e.status === 'err'
@@ -358,11 +386,17 @@ export function paintBraille(board: Board, now: number, setup: Setup, columns: n
     centred(shortModel(board.model).slice(0, 14), mid + 1, switched >= 0 && switched < SWITCH_MS ? ink.hot : ink.label)
   }
 
+  // With `contextCost`, about how much each station's calls added to the context, after its count and in its name's
+  // colour: for every station, or for none where the grid has no room for them all. It carries the plus the rows'
+  // figures do: without it a count and a sum under a thousand read as one number, `3 690`.
+  const spent = setup.contextCost && sumsFit(setup, columns, rows, board.counts) ? board.spent : undefined
+
   places.forEach((p, i) => {
     const st = states[i]
     if (st === undefined) return
     const faults = board.faults?.[p.id] ?? 0
-    const name = `${names[p.id]}${st.count > 0 ? ` ${st.count}` : ''}`
+    const tokens = spent?.[p.id] ?? 0
+    const name = `${names[p.id]}${st.count > 0 ? ` ${st.count}` : ''}${tokens > 0 ? ` +${formatTokens(tokens)}` : ''}`
     // Beside the name: how many run at once, and what went wrong since the last message.
     const many = st.running > 1 ? ` x${st.running}` : ''
     const wrong = faults > 0 ? ` !${faults > 99 ? '99+' : faults}` : ''
