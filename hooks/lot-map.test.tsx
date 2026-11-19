@@ -370,7 +370,29 @@ test('a time never shows a part as large as the next unit: no `1000 ms`, `60.0 s
   expect(formatMs(59_960, t)).toBe('1 min 0 s')
   expect(formatMs(89_400, t)).toBe('1 min 29 s')
   expect(formatMs(119_500, t)).toBe('2 min 0 s')
-  expect(formatMs(3_599_999, t)).toBe('60 min 0 s')
+  expect(formatMs(3_599_400, t)).toBe('59 min 59 s')
+})
+
+test('from an hour on a time reads in hours and whole minutes, in every language, and no part reaches the next unit', () => {
+  const t = stringsFor('en')
+  expect(formatMs(3_599_999, t)).toBe('1 h 0 min')
+  expect(formatMs(3_600_000, t)).toBe('1 h 0 min')
+  expect(formatMs(3_629_000, t)).toBe('1 h 0 min')
+  expect(formatMs(3_630_000, t)).toBe('1 h 1 min')
+  expect(formatMs(3_900_000, t)).toBe('1 h 5 min')
+  expect(formatMs(7_199_000, t)).toBe('2 h 0 min')
+  expect(formatMs(86_400_000, t)).toBe('24 h 0 min')
+  expect(formatMs(3_900_000, stringsFor('ru'))).toBe('1 ч 5 мин')
+  expect(formatMs(3_900_000, stringsFor('de'))).toBe('1 Std. 5 Min.')
+  for (const language of ['en', 'ru', 'es', 'fr', 'de', 'it', 'pt'] as const) {
+    // Every minute of two days: the minutes never read 60, and the unit before them is never `min` with seconds after.
+    for (let minute = 60; minute <= 2880; minute++) {
+      const written = formatMs(minute * 60_000 + 29_000, stringsFor(language))
+      const [hours, minutes] = written.match(/\d+/g)!.map(Number)
+      expect(hours).toBe(Math.floor(minute / 60))
+      expect(minutes).toBe(minute % 60)
+    }
+  }
 })
 
 test('hook helpers', () => {
