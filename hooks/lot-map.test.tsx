@@ -1419,6 +1419,21 @@ test('thirty background tasks still running take half the list, the last of them
 
 const stationOf = (command: string, tool = 'Bash') => classify(tool, { command }, STRANGER).station
 
+test('the bracket that closes a subshell is no part of its last command: `(cd sub; ls)` ends with ls', () => {
+  expect(stationOf('(cd sub && ls)')).toBe('files')
+  expect(stationOf('(cd sub; ls) > out.txt')).toBe('files')
+  expect(stationOf('( cd sub; ls )')).toBe('files')
+  expect(stationOf('(cd sub && cat "a)")')).toBe('files')
+  expect(stationOf('if (cd sub && grep -q x a.txt); then echo yes; fi')).toBe('files')
+  expect(classify('Bash', { command: '(ls)' }, STRANGER).label).toBe('ls')
+  expect(classify('Bash', { command: '(cd notes && recall)' }, setupFrom({ memoryCommands: ['recall'] })).station).toBe('memory')
+  // What ran beside it still counts, and the network still shows.
+  expect(stationOf('(cd sub && make)')).toBe('shell')
+  expect(stationOf('(cd sub && git push)')).toBe('web')
+  // With no subshell open the bracket is a `case` pattern's, and a pattern is no command.
+  expect(stationOf('case $x in a) make ;; ls) make ;; esac')).toBe('shell')
+})
+
 test('a command inside a loop, a condition, a group or a negation is still the command', () => {
   expect(stationOf('for u in a b; do curl $u; done')).toBe('web')
   expect(stationOf('if curl -sf x; then echo ok; fi')).toBe('web')
