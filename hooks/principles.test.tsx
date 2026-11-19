@@ -167,6 +167,58 @@ test('principle 2: nothing a session carries reaches what the mod keeps or draws
   await ui.unmount()
 })
 
+test('principle 2: of what the context holds, asked for with contextWindow compaction, only the window\'s size is kept or drawn', { options: { contextWindow: 'compaction' } }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  const kept: unknown[] = []
+  for (const write of ['state.set', 'store.set']) on(write as never, ((_: unknown, e: unknown, next: (e: unknown) => unknown) => (kept.push(e), next(e))) as never)
+  // The breakdown as /context gives it: it names memory files, MCP tools, agents and skills. Each name carries the mark.
+  const named = (name: string) => ({ name: `${MARK} ${name}`, path: `/home/someone/${MARK}/${name}`, serverName: `${MARK} server`, agentType: `${MARK} agent`, source: MARK, tokens: 1200 })
+  const breakdown = {
+    categories: [{ name: `${MARK} category`, kind: 'used', tokens: 450_000, color: MARK }],
+    totalTokens: 450_000,
+    maxTokens: 600_000,
+    rawMaxTokens: 600_000,
+    autocompactSource: MARK,
+    percentage: 75,
+    gridRows: [[{ categoryName: MARK, color: MARK }]],
+    model: `${MARK} model`,
+    memoryFiles: [named('CLAUDE.md')],
+    mcpTools: [named('search')],
+    agents: [named('reviewer')],
+    slashCommands: { totalCommands: 3, includedCommands: 3, tokens: 100, commands: [named('deploy')] },
+    skills: { totalSkills: 2, includedSkills: 2, tokens: 100, skillFrontmatter: [named('pdf')] },
+    isAutoCompactEnabled: true,
+    apiUsage: null,
+  }
+  let asked = 0
+  on('session.usage', (_, args) => {
+    const detailed = (args as { breakdown?: string } | undefined)?.breakdown !== undefined
+    if (detailed) asked++
+    const context = { window: 1_000_000, percent: 45, tokens: 450_000 }
+    return { value: { startedAt: 0, context: detailed ? { ...context, breakdown } : context } } as never
+  })
+  on('turn.step', async function* (_, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+  })
+  for await (const _ of $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 1 } as never)) void _
+
+  // The answer was asked for and used: the ring stands at 450k of 600k.
+  expect(asked).toBe(1)
+  const written = JSON.stringify(kept)
+  expect(written).toContain('claude-opus-5-5')
+  expect(written).not.toContain(MARK)
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    if (surface === 'desktop') {
+      const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+      expect(source).toContain('>75%<')
+      expect(source).not.toContain(MARK)
+    }
+    expect(await ui.find({ type: 'Text', text: new RegExp(MARK) })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
 // ---- 3. It costs next to nothing --------------------------------------------------------------------
 
 // Each budget is many times what was measured (PRINCIPLES.md has the figures and the machine), so that a slow
