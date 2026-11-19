@@ -71,9 +71,12 @@ Measured on 2026-11-13, Apple M1 Pro, Claude Code 2.1.321, after a warm-up, thre
 
 A broken board must not stop a tool call, a message or a turn. It is held twice: every engine call the mod makes goes through `quietly`, which swallows a failure, and no hook has a `.catch`, so the engine skips a hook that fails and carries on with the event. (`claude plugin validate` lists these as `gating hook without .catch`. For a mod that guards something that would be a fault; for one that only watches it is the point.)
 
+One hook does more than pass the event on after it: `tool.call` reads the result that came back, to tell a call that went on in the background, and its `catch` hands a failure on as it came. A failure in that reading would look like the tool's own. It cannot come from the result: a result must be plain data, what JSON holds, and the engine refuses anything else before the mod's hook sees it (the test below holds this on the engine the tests run on). Looking in plain data for a task's id throws nothing, and closing the row goes through `quietly`.
+
 **Checked by:**
 
 - `principle 4: with the engine refusing every call the mod makes, each event still goes through`: state, store, clock and usage all throw; eight events still return what came from beneath.
+- `principle 4: a result that could fail when read never reaches the mod: the engine hands a hook plain data alone`: a result whose fields throw when read is refused by the engine as not plain data.
 - `a broken board never stops the tool` and `a broken board never stops a model step` in `hooks/lot-map.test.tsx`.
 
 ## 5. A calm map
