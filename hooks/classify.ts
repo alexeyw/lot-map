@@ -44,9 +44,10 @@ const isMemoryPath = (path: string, setup: Setup): boolean => {
 }
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
-/** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way. */
+/** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way:
+ * so do the shell's own words that set a variable, an option or the folder. `source`, `.`, `eval`, `trap` and `alias` run code of their own and stay Shell's. */
 const FILE_WORDS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg', 'find', 'ls', 'wc', 'cp', 'mv', 'mkdir', 'touch', 'diff', 'cmp', 'sort', 'uniq', 'cut', 'tr', 'awk', 'tee', 'stat', 'file', 'du', 'tree', 'ln', 'basename', 'dirname', 'realpath', 'jq', 'rm', 'rmdir'])
-const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read'])
+const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read', 'local', 'declare', 'typeset', 'readonly', 'unset', 'shopt', 'umask', 'pushd', 'popd', 'wait'])
 const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup', 'nmap', 'http', 'https', 'kubectl', 'aws', 'gcloud', 'az'])
 /** Commands that reach the network only with some of their subcommands. */
 const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {

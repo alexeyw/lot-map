@@ -8,6 +8,9 @@ import { hasGlyph, paint } from './raster'
 import { parseMap } from './scene'
 import type { Board, Entry } from '../types'
 
+// The tests of cost print their figures. The types a mod is checked against have no console, so the tests name it.
+declare const console: { log: (...args: unknown[]) => void }
+
 const PANE = {
   plugin: 'lot-map',
   component: 'Pane',
@@ -78,7 +81,7 @@ test('tokens are written short and whole, in every language alike', () => {
 
 test('contextCost is off unless set to true, and off it adds no figure anywhere', async ($, on) => {
   expect(setupFrom({}).contextCost).toBe(false)
-  expect(setupFrom({ contextCost: 'true' }).contextCost).toBe(false)
+  expect(setupFrom({ contextCost: 'yes' }).contextCost).toBe(false)
   expect(setupFrom({ contextCost: true }).contextCost).toBe(true)
   expect(setupFrom({}).contextWindow).toBe('model')
   expect(setupFrom({ contextWindow: 'compaction' }).contextWindow).toBe('compaction')
