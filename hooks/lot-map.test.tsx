@@ -8,6 +8,9 @@ import { COLOR_NAMES, STATIONS, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, d
 import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
+// The tests of cost print their figures. The types a mod is checked against have no console, so the tests name it.
+declare const console: { log: (...args: unknown[]) => void }
+
 const PANE = {
   plugin: 'lot-map',
   component: 'Pane',
@@ -1456,6 +1459,27 @@ test('the bracket that closes a subshell is no part of its last command: `(cd su
   expect(stationOf('case $x in a) make ;; ls) make ;; esac')).toBe('shell')
 })
 
+test('a word of the shell that sets a variable, an option or the folder says nothing either way: `local x=1; ls` is Files', () => {
+  const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
+  for (const c of ['local x=1; ls', 'declare -a arr=(a b); ls', 'typeset -i n=1; ls', 'readonly X=1; ls', 'unset X; ls', 'shopt -s globstar; ls **/*.ts', 'umask 022; cp a b', 'pushd d; ls; popd', 'wait; ls']) {
+    expect(stationOf(c)).toBe('files')
+  }
+  // The label is the line's first word, as it is for `export X=1; ls`: only the station changes.
+  expect(labelOf('local x=1; ls')).toBe('local')
+  expect(labelOf('export x=1; ls')).toBe('export')
+  // Alone they are still the shell's, and so is anything real beside them.
+  expect(stationOf('unset X')).toBe('shell')
+  expect(stationOf('shopt -s globstar; make')).toBe('shell')
+  // The network still shows, after them and inside what they set.
+  expect(stationOf('local x=1; curl https://example.com/x')).toBe('web')
+  expect(stationOf('declare x=$(curl -s https://example.com/x); ls')).toBe('web')
+  expect(stationOf('readonly X=`curl -s https://example.com/x`; ls')).toBe('web')
+  // These run code of their own: Shell.
+  for (const c of ['source env.sh; ls', '. env.sh; ls', 'eval "$x"; ls', 'trap "rm f" EXIT; ls', 'alias l=ls; ls']) {
+    expect(stationOf(c)).toBe('shell')
+  }
+})
+
 test('the list of a bash array is values, not the command: `arr=(a b c); ls` is ls', () => {
   const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
   expect(stationOf('arr=(a b c); ls')).toBe('files')
@@ -1648,6 +1672,21 @@ test('guardedHooks is on unless switched off, in either spelling', () => {
   expect(setupFrom({ guardedHooks: 'nonsense' }).guardedHooks).toBe(true)
   expect(setupFrom({ guardedHooks: false }).guardedHooks).toBe(false)
   expect(setupFrom({ guardedHooks: 'false' }).guardedHooks).toBe(false)
+})
+
+test('every on-off option reads the same way: true or false, either as a word in a string, and anything else is its default', () => {
+  const ON = ['guardedHooks', 'openAtStart'] as const
+  const OFF = ['hookRecords', 'hookReasons', 'subagentNames', 'contextCost'] as const
+  for (const name of [...ON, ...OFF]) {
+    expect(setupFrom({ [name]: true })[name]).toBe(true)
+    expect(setupFrom({ [name]: 'true' })[name]).toBe(true)
+    expect(setupFrom({ [name]: false })[name]).toBe(false)
+    expect(setupFrom({ [name]: 'false' })[name]).toBe(false)
+  }
+  for (const odd of [undefined, null, '', 'yes', 'TRUE', 1, 0, []]) {
+    for (const name of ON) expect(setupFrom({ [name]: odd })[name]).toBe(true)
+    for (const name of OFF) expect(setupFrom({ [name]: odd })[name]).toBe(false)
+  }
 })
 
 test('with guardedHooks off a call a hook refused reads as failed, and no hook of the five leaves a row', { options: { ...OWN, guardedHooks: false } }, async ($, on) => {
