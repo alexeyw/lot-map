@@ -15,7 +15,7 @@ The pictures of the map are painted by the mod's own code from one made-up sessi
 | `coreName` | `CLAUDE`<br><img src="options/default.png" width="300" alt="The circle in the middle says CLAUDE"> | `HOME`<br><img src="options/core-name-own.png" width="300" alt="The circle in the middle says HOME"> |
 | `language` | `en`<br><img src="options/default.png" width="300" alt="The stations named in English"> | `ru`<br><img src="options/language-ru.png" width="300" alt="The stations named in Russian"> |
 
-`theme` comes as `auto`: dark on a dark surface and light on a light one. `language` also takes `es`, `fr`, `de`, `it` and `pt`.
+`theme` comes as `auto`: dark on a dark surface and light on a light one. `language` also takes `es`, `fr`, `de`, `it`, `pt` and `vi`.
 
 ## Motion
 

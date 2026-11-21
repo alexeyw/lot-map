@@ -18,6 +18,10 @@ const WANTED = [
   ...range(0x400, 0x45f),
   0x2013, 0x2014, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2026, 0x20ac,
   0x2190, 0x2191, 0x2192, 0x2193, 0x25c6,
+  // The two letters Vietnamese station names need beyond the ranges above: `ạ` (Bạn, Mạng) and `ỹ` (Kỹ năng).
+  // Both are in every regular size; the bold size has neither, so in bold the regular letter is struck twice,
+  // as it already is for the four Cyrillic letters the bold font lacks.
+  0x1ea1, 0x1ef9,
 ]
 
 function parse(path) {

@@ -168,7 +168,7 @@ Each of these with a picture of its values: [How the options look](docs/options.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `language` | `en` | `en`, `ru`, `es`, `fr`, `de`, `it` or `pt` |
+| `language` | `en` | `en`, `ru`, `es`, `fr`, `de`, `it`, `pt` or `vi` |
 | `coreName` | `CLAUDE` | what the circle in the middle says, up to ten characters |
 | `theme` | `auto` | the map's colours: `dark`, `light`, or `auto`, which is dark on a dark surface and light on a light one |
 | `background` | `solid` | the map's own background, or `transparent`, which lets the pane behind it show through. The rim around the labels keeps the background's colour, so on a surface of another shade it shows as a faint halo |
