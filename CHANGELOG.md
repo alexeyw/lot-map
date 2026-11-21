@@ -2,6 +2,14 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.12.1 (2026-11-20)
+
+- Fixed: a `case` was not read by its branches. The `|` of a pattern cut it in two, so `case x in a|b) ls;; *) cat f;; esac` got the label `b)` at the Shell station, and a command on the line of the `case` itself was not read at all. A pattern is now read to its bracket and is no command, and what each branch runs is: that line is `ls` at Files. A network command in a branch shows as Network, as before. (#132)
+- Fixed: a line that begins with a word of the shell which only sets something went to Shell: `local x=1; ls`, `unset X; ls`, `pushd d; ls; popd`. `local`, `declare`, `typeset`, `readonly`, `unset`, `shopt`, `umask`, `pushd`, `popd` and `wait` now say nothing either way, as `export` and `cd` did, so these are Files. `source`, `.`, `eval`, `trap` and `alias` stay Shell's. (#130)
+- The six on-off options are read one way: `true`, `false`, or either word as a string, as a settings file written by hand may hold it; anything else keeps the default. Before, `guardedHooks` took the string `'false'`, `openAtStart` did not, and `hookRecords`, `hookReasons`, `subagentNames` and `contextCost` took no string. Set through `claude plugin configure` nothing changes. (#130)
+- README: the title is Lot Map for Claude Code, and it links a [page that plays the map in the browser](https://alexeyw.github.io/lot-map/) on the mod's own code. (#129)
+- Inside: the check holds the seven stills of [docs/options.md](docs/options.md) against what the mod paints now, pixel by pixel, so a change to the drawing that leaves a picture behind fails; `background-transparent.png` is painted again for it, laid over its colour by the script and not by ffmpeg; the tests name `console`, and the validator's seven warnings are gone. (#130, #131)
+
 ## 0.12.0 (2026-11-19)
 
 - New option `openAtStart`: with `false` the pane stays closed when a session starts and opens on `/lot-map` alone. The map is kept from the session's first call all the same, so it is whole when it is opened. `true`, as before, stays the default. Suggested by Thombutter. (#116, #117)
