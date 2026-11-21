@@ -288,6 +288,21 @@ test('commandStations puts a named command on the station the person chose, wher
   expect(classify('PowerShell', { command: 'agent-dispatch.exe status' }, setup).station).toBe('agents')
 })
 
+test('a line that runs a placed command and another command that reaches the network goes to Network', () => {
+  const setup = setupFrom({ commandStations: ['agent-dispatch=agents', 'gh=agents'] })
+  const at = (command: string) => classify('Bash', { command }, setup).station
+  expect(at('agent-dispatch status && curl https://example.com/x')).toBe('web')
+  expect(at('agent-dispatch status; npm install left-pad')).toBe('web')
+  // Also where the other command sits in brackets, which the search for the network reads on its own.
+  expect(at('agent-dispatch submit --order "$(curl -s https://example.com/order.md)"')).toBe('web')
+  // A placed command that reaches the network by its own name stays where it was put, alone or beside another placed one.
+  expect(at('gh pr list')).toBe('agents')
+  expect(at('agent-dispatch status && gh pr list')).toBe('agents')
+  expect(at('echo "$(gh pr list)" && agent-dispatch status')).toBe('agents')
+  // A line with nothing else that reaches the network stays as well.
+  expect(at('agent-dispatch status && ls')).toBe('agents')
+})
+
 test('commandStations ignores an entry whose station is unknown, or is memory, the model or hooks', () => {
   const odd = setupFrom({ commandStations: ['a=nowhere', 'b=memory', 'c=model', 'd=hooks', 'e=', '=files', 'no-equals', 'f=files'] })
   expect([...odd.commandStations]).toEqual([['f', 'files']])

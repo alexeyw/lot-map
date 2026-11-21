@@ -85,7 +85,7 @@
       "multiple": true,
       "title": "Commands on a station",
       "default": [],
-      "description": "Put a shell command on a station of the map, each written as command=station. The stations are files, shell, web, browser, agents, skills and you. A name counts as it does in memoryCommands: the command itself, or a name that begins with it and a hyphen, an underscore or a dot. Memory keeps memoryCommands, which wins if a command is in both. A command without an entry, or with an unknown station, goes where the mod puts it."
+      "description": "Put a shell command on a station of the map, each written as command=station. The stations are files, shell, web, browser, agents, skills and you. A name counts as it does in memoryCommands: the command itself, or a name that begins with it and a hyphen, an underscore or a dot. Memory keeps memoryCommands, which wins if a command is in both. A line that also runs another command that reaches the network goes to Network. A command without an entry, or with an unknown station, goes where the mod puts it."
     },
     "hookRecords": {
       "type": "boolean",
