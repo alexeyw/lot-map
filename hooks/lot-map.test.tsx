@@ -1664,6 +1664,47 @@ test('the text of a here-document is no command, whatever it says', () => {
   expect(stationOf('Get-Content a.txt', 'PowerShell')).toBe('files')
 })
 
+test('a << inside quotes or in a comment opens no here-document, and the lines after it are read', () => {
+  expect(stationOf('grep -n "std::cout << value" src/main.cpp\ncurl -s https://x.io')).toBe('web')
+  expect(stationOf("sed -i 's/<<OLD/<<NEW/' f.txt\ncurl -s https://x.io")).toBe('web')
+  expect(stationOf("grep -n $'a << b' f.txt\ncurl -s https://x.io")).toBe('web')
+  expect(stationOf('ls # see cat <<EOF below\ncurl -s https://x.io')).toBe('web')
+  expect(stationOf('echo "one\ntwo <<EOF three"\ncurl -s https://x.io')).toBe('web')
+  expect(stationOf('grep -n "std::cout << value" src/main.cpp\nmake')).toBe('shell')
+  expect(stationOf('grep -n "std::cout << value" src/main.cpp\nwc -l src/main.cpp')).toBe('files')
+  // A real one beside quoted words is still one, whatever its mark is written in.
+  expect(stationOf('cat "my file" - <<EOF > out.txt\ncurl x\nEOF')).toBe('files')
+  expect(stationOf("grep -c 'a << b' - <<EOF\ncurl x\nEOF")).toBe('files')
+  expect(stationOf('cat <<\\EOF > f\ncurl x\nEOF')).toBe('files')
+  expect(stationOf('cat << "EOF" > f\ncurl x\nEOF\nmake')).toBe('shell')
+  // One for a shell with its errors sent on is that shell's script, as before.
+  expect(stationOf('bash -s 2>&1 <<EOF\ncurl x\nEOF')).toBe('web')
+  expect(stationOf('sh 2> log.txt <<EOF\ncurl x\nEOF')).toBe('web')
+  expect(stationOf('bash deploy.sh 2>&1 <<EOF\ncurl x\nEOF')).toBe('shell')
+  expect(stationOf('ls; bash <<EOF\ncurl x\nEOF')).toBe('web')
+  // In a line handed to a shell a here-document's text is no command either.
+  expect(stationOf('bash -c "cat <<EOF > f\ncurl x\nEOF\nls"')).toBe('files')
+  expect(stationOf('bash -c "cat <<EOF > f\ntext\nEOF\ncurl x"')).toBe('web')
+})
+
+test('here-document marks cost no more than the line read, however many stand on it', () => {
+  const few = 'cat <<A '.repeat(1000) // 8,000 characters, as many as are read
+  const many = 'cat <<A '.repeat(50_000) // 400,000 characters
+  for (let i = 0; i < 3; i++) stationOf(few)
+  const t0 = performance.now()
+  stationOf(few)
+  const fewMs = performance.now() - t0
+  const t1 = performance.now()
+  stationOf(many)
+  stationOf(`${'x=$((a << b)); '.repeat(20_000)}curl x`)
+  stationOf(`${'cat <<A; '.repeat(20_000)}`)
+  const manyMs = performance.now() - t1
+  // Before: 8,000 characters took half a second through the mod, 48,000 six seconds, and four times as long for twice as many.
+  console.log(`COST naming 1,000 here-document marks on a line: ${fewMs.toFixed(1)} ms; three lines of 180,000 to 400,000 characters of them: ${manyMs.toFixed(1)} ms`)
+  expect(fewMs).toBeLessThan(300)
+  expect(manyMs).toBeLessThan(600)
+})
+
 test('a here-document handed to a shell is that shell\'s script', () => {
   for (const c of ['bash <<EOF\ncurl x\nEOF', "bash -s <<'EOF'\nset -e\nwget y\nEOF", 'sudo sh <<EOF\napt-get update\nEOF', 'echo start && zsh <<-EOF\n\tgit push\n\tEOF', 'bash <<EOF\necho hi']) {
     if (c.endsWith('hi')) expect([c, stationOf(c)]).toEqual([c, 'shell'])
