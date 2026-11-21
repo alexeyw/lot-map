@@ -959,6 +959,47 @@ test('the map paints its ground unless told to leave the surface showing', () =>
   expect(drawMap(board, 0, SETUP)).toMatch(ground)
 })
 
+test('with no description a shell line is named by its command and by nothing it sets, sends or keeps', () => {
+  const SECRET = 'SECRET123'
+  const read = (tool: string, command: string) => classify(tool, { command }, STRANGER)
+  // PowerShell: what is kept in a variable is a value, and the command is the next one.
+  expect(read('PowerShell', `$token = "ghp_${SECRET}"; Invoke-RestMethod https://api.github.com`)).toEqual({ station: 'web', label: 'Invoke-RestMethod' })
+  expect(read('PowerShell', `$env:API_KEY="sk-${SECRET}"; python app.py`)).toEqual({ station: 'shell', label: 'python' })
+  expect(read('PowerShell', `$headers = @{Authorization="Bearer ${SECRET}"}; irm https://x.io -Headers $headers`)).toEqual({ station: 'web', label: 'irm' })
+  expect(read('PowerShell', `$body = '{"password":"${SECRET}"}'; irm https://x.io -Body $body`)).toEqual({ station: 'web', label: 'irm' })
+  expect(read('PowerShell', `$n += "${SECRET}"; Get-Content f.txt`)).toEqual({ station: 'files', label: 'Get-Content' })
+  expect(read('PowerShell', `"${SECRET}" | Set-Content key.txt`).label).toBe('shell')
+  expect(read('PowerShell', `$token = "${SECRET}"`).label).toBe('shell')
+  expect(read('PowerShell', `[Environment]::SetEnvironmentVariable("K", "${SECRET}")`).label).toBe('shell')
+  // A result kept in a variable is still the command's, and a quoted path run with `&` is still its program.
+  expect(read('PowerShell', '$r = Invoke-RestMethod https://x.io')).toEqual({ station: 'web', label: 'Invoke-RestMethod' })
+  expect(read('PowerShell', '$text = Get-Content notes.txt')).toEqual({ station: 'files', label: 'Get-Content' })
+  expect(read('PowerShell', '& "C:\\Program Files\\Git\\cmd\\git.exe" push origin main')).toEqual({ station: 'web', label: 'git' })
+  expect(read('PowerShell', '(Get-Content notes.txt | Select-String todo)')).toEqual({ station: 'files', label: 'Get-Content' })
+  expect(read('PowerShell', '(make | Select-String error)').station).toBe('shell')
+  // A quoted word with no `&` gives no name, and what stands behind it is read all the same.
+  expect(read('PowerShell', '"C:\\Program Files\\Git\\cmd\\git.exe" push origin main')).toEqual({ station: 'web', label: 'shell' })
+  // The shell: a text sent in, an output sent away and an array's element set are no command.
+  expect(read('Bash', `<<<"ghp_${SECRET}" gh auth login --with-token`)).toEqual({ station: 'web', label: 'gh' })
+  expect(read('Bash', `<<< "ghp_${SECRET}" gh auth login --with-token`)).toEqual({ station: 'web', label: 'gh' })
+  expect(read('Bash', `TOKEN[0]=${SECRET} ./deploy.sh`)).toEqual({ station: 'shell', label: 'deploy.sh' })
+  expect(read('Bash', `TOKEN=${SECRET} KEYS[a]=${SECRET} 2>/dev/null ./deploy.sh`)).toEqual({ station: 'shell', label: 'deploy.sh' })
+  expect(read('Bash', '2>/dev/null curl https://x.io')).toEqual({ station: 'web', label: 'curl' })
+  expect(read('Bash', '2> /dev/null >out.txt cat f.txt')).toEqual({ station: 'files', label: 'cat' })
+  expect(read('Bash', `TOKEN=${SECRET}`).label).toBe('shell')
+  // Whatever stands first, a label that is not shaped like a name is not shown.
+  for (const command of [`{"password":"${SECRET}"}`, `@${SECRET}`, `a=${SECRET}=b x`, `https://user:${SECRET}@a.b/x?q=1`, `[ -f ${SECRET} ] && ls`, `${SECRET}=1`, `$(${SECRET})`]) {
+    for (const tool of ['Bash', 'PowerShell']) expect(`${tool}: ${read(tool, command).label}`).not.toContain(SECRET)
+  }
+})
+
+test('a backslash ends the host, as a browser reads the address', () => {
+  expect(classify('WebFetch', { url: 'https://attacker.example\\@github.com/x' }, STRANGER).label).toBe('attacker.example')
+  expect(classify('WebFetch', { url: 'https://github.com\\@attacker.example/x' }, STRANGER).label).toBe('github.com')
+  expect(classify('WebFetch', { url: 'https://user:pw@host.com\\x@other.example' }, STRANGER).label).toBe('host.com')
+  expect(classify('mcp__Claude_Browser__navigate', { url: 'https://attacker.example\\@github.com/' }, STRANGER).label).toBe('attacker.example')
+})
+
 test('a quoted path with a space is one command, and a Windows program is read whatever its capitals', () => {
   const at = (command: string) => classify('Bash', { command }, SETUP).station
   const label = (command: string) => classify('Bash', { command }, SETUP).label

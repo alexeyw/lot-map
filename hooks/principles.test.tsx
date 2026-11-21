@@ -142,6 +142,25 @@ test('principle 2: no tool puts content on its label, whatever its input carries
   for (const tool of TOOLS) expect(`${tool}: ${classify(tool, inputFor(tool), PLAIN).label}`).not.toContain(MARK)
 })
 
+test('principle 2: a shell line with no description is named by its command, wherever the content stands in it', () => {
+  // The model may leave the description out. Then the label is the first command's name, and no value, text or address.
+  const LINES: Record<'Bash' | 'PowerShell', string[]> = {
+    Bash: [
+      `curl -H "token: ${MARK}" https://a.b/${MARK}`, `TOKEN=${MARK} ./deploy.sh`, `TOKEN[0]=${MARK} ./deploy.sh`, `<<<"${MARK}" gh auth login --with-token`,
+      `2>/tmp/${MARK} make`, `>${MARK} echo done`, `export TOKEN=${MARK}; make`, `env TOKEN=${MARK} make`, `${MARK}=1 make`, `echo ${MARK} | gh auth login`,
+      `TOKEN="${MARK}"`, `: ${MARK}`, `[ "$X" = "${MARK}" ] && make`, `case ${MARK} in ${MARK}) make ;; esac`, `arr=(${MARK} ${MARK}); make`,
+    ],
+    PowerShell: [
+      `$token = "${MARK}"; Invoke-RestMethod https://a.b`, `$env:KEY="${MARK}"; python app.py`, `$h = @{Authorization="Bearer ${MARK}"}; irm https://a.b`,
+      `$body = '{"password":"${MARK}"}'; irm https://a.b`, `$x += "${MARK}"`, `"${MARK}" | Set-Content key.txt`, `[Environment]::SetEnvironmentVariable("K", "${MARK}")`,
+      `$token="${MARK}"`, `@{a="${MARK}"}`, `Invoke-RestMethod https://a.b -Headers @{Authorization="${MARK}"}`, `$r = irm "https://a.b/${MARK}"`,
+    ],
+  }
+  for (const tool of ['Bash', 'PowerShell'] as const) {
+    for (const command of LINES[tool]) expect(`${tool}: ${classify(tool, { command }, PLAIN).label}`).not.toContain(MARK)
+  }
+})
+
 // Eighty-seven calls through the mod: up to 3.8 s on a slow CI runner, against a default of 5 s.
 test('principle 2: nothing a session carries reaches what the mod keeps or draws', { timeoutMs: 30_000 }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
