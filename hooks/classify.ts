@@ -20,13 +20,14 @@ const HOST = /^(?:[\p{L}\p{N}.-]+|\[[0-9a-f:.]+\])(?::\d+)?$/iu
  */
 function hostOf(url: string): string {
   const [, scheme = '', rest = ''] = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
-  const end = rest.search(/[/?#]/)
+  // A backslash ends the host as a slash does: that is how a browser and `new URL` read `https://a.example\@b.example/`.
+  const end = rest.search(/[/?#\\]/)
   const first = end < 0 ? rest : rest.slice(0, end)
   const beyond = end < 0 ? '' : rest.slice(end)
   let host = first.split('@').pop() ?? ''
   if (!first.startsWith('[') && !first.includes('@') && first.includes(':') && beyond.includes('@')) {
     // `name:word` before an `@` further on: a port if the word is a number, or else a login and a password.
-    host = /:\d+$/.test(first) ? '' : (rest.slice(rest.lastIndexOf('@') + 1).split(/[/?#]/)[0] ?? '')
+    host = /:\d+$/.test(first) ? '' : (rest.slice(rest.lastIndexOf('@') + 1).split(/[/?#\\]/)[0] ?? '')
   }
   return HOST.test(host) ? host.slice(0, 40) : scheme
 }
@@ -97,7 +98,25 @@ const WRAPPERS: Record<string, { takes?: readonly string[]; skip?: number; asks?
   xargs: { takes: ['-n', '-I', '-P', '-L', '-d', '-E', '-s', '-a', '-J', '-R'] },
   watch: { takes: ['-n', '--interval'] },
 }
-const ASSIGNMENT = /^[A-Za-z_]\w*\+?=/
+/** A word that sets a variable before a command: `NAME=…`, `NAME+=…`, `NAME[i]=…`. Its value is no command and no name. */
+const ASSIGNMENT = /^[A-Za-z_]\w*(?:\[[^\]]*\])?\+?=/
+/** A word that sends input or output somewhere, as it may stand before a command: `2>/dev/null`, `<<<"text"`, `>out`, `&>log`. */
+const REDIRECTION = /^(?:\d+|&)?(?:>>|>\||<<<|<<-|<<|<>|>&|<&|>|<)/
+/**
+ * Where a command begins among a piece's words: past the assignments and the redirections before it. What they
+ * hold is content, a value or a text, and none of it may be taken for the command's name.
+ */
+function start(words: string[]): number {
+  let i = 0
+  for (;;) {
+    const word = words[i] ?? ''
+    const sent = REDIRECTION.exec(word)
+    if (ASSIGNMENT.test(word)) i++
+    // `2> file` has its target in the next word, `2>file` in the same one.
+    else if (sent !== null) i += word.length === sent[0].length ? 2 : 1
+    else return Math.min(i, words.length)
+  }
+}
 /** Flags of git and of docker that take a word after them and come before the subcommand. */
 const GIT_TAKES = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])
 const DOCKER_TAKES = new Set(['-c', '--context', '-H', '--host', '--config', '-l', '--log-level', '-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory'])
@@ -119,9 +138,7 @@ function unwrapped(words: string[], name: (word?: string) => string): string[] {
     if (wrapper === undefined) break
     if (wrapper.asks?.some(flag => rest[1] === flag) === true) break
     rest = pastFlags(rest.slice(1), new Set(wrapper.takes ?? []))
-    let i = 0
-    while (i < rest.length && ASSIGNMENT.test(rest[i] ?? '')) i++
-    rest = rest.slice(i + (wrapper.skip ?? 0))
+    rest = rest.slice(start(rest) + (wrapper.skip ?? 0))
   }
   return rest
 }
@@ -383,8 +400,7 @@ function segments(command: string, deep = false, constructs = false, powershell 
   return parts
     .map((part, n) => {
       const words = part.match(powershell ? PS_WORDS : WORDS) ?? []
-      let i = 0
-      while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) i++
+      const i = start(words)
       if (!constructs) return words.slice(i)
       if (follow && cases > 0) {
         // `;;`, `;&` and `;;&` end a branch: an empty piece right after a `;`. The next thing is a pattern.
@@ -425,13 +441,47 @@ function memoryLabel(words: string[], setup: Setup): string {
 /** The line of a shell tool. `powershell` adds PowerShell's own command names and reads every name in lower case. */
 function classifyShell(command: string, description: string, setup: Setup, powershell = false): Classified {
   const name = (word?: string): string => (powershell ? base(word).toLowerCase() : base(word))
-  // PowerShell runs a quoted path with `&` and keeps results in `$name = ...`: neither is the command.
+  /**
+   * PowerShell's own piece of a line. It runs a quoted path with `&` and keeps results in `$name = ...`: neither is
+   * the command. What is kept may be a command's result, `$r = Invoke-RestMethod …`, and then that is the command;
+   * or a value, `$token = "…"`, `$h = @{…}`, `$env:KEY="…"`, and then the piece runs nothing and names nothing. A
+   * piece that begins with a quoted word and no `&` is still read for what it may run, so that nothing hides behind
+   * it, but that word is a text and gives no name: `texts` keeps such pieces.
+   */
+  const texts = new Set<string[]>()
   const own = (words: string[]): string[] => {
     if (!powershell) return words
-    let i = 0
-    if (/^\$[\w:]+$/.test(words[0] ?? '') && words[1] === '=') i = 2
-    if (words[i] === '&' || words[i] === '.') i++
-    return words.slice(i)
+    let rest = words
+    const first = rest[0] ?? ''
+    // `(Get-Content f | Select-String x)`: the bracket groups, and the command stands right after it.
+    const ungrouped = (): void => {
+      const bare = (rest[0] ?? '').replace(/^\(+/, '')
+      if (bare !== (rest[0] ?? '')) rest = bare === '' ? rest.slice(1) : [bare, ...rest.slice(1)]
+    }
+    if (first.startsWith('$')) {
+      // `$name = value`, `$name=value`, `$name += value`: the value is what follows the `=`.
+      const at = first.search(/[-+*/]?=/)
+      if (at >= 0) {
+        const value = first.slice(at).replace(/^[-+*/]?=/, '')
+        rest = value === '' ? rest.slice(1) : [value, ...rest.slice(1)]
+      } else if (/^[-+*/]?=$/.test(rest[1] ?? '')) rest = rest.slice(2)
+      else if (/^[-+*/]?=/.test(rest[1] ?? '')) rest = [(rest[1] ?? '').replace(/^[-+*/]?=/, ''), ...rest.slice(2)]
+      // A variable alone, or its method or member: no command.
+      else return []
+      ungrouped()
+      // A command's name is a bare word. Anything else after the `=` is a value.
+      if (rest[0] !== '&' && rest[0] !== '.' && !/^[A-Za-z][\w.:\\/-]*$/.test(rest[0] ?? '')) return []
+    }
+    ungrouped()
+    if (rest[0] === '&' || rest[0] === '.') return rest.slice(1)
+    if (/^[@{\[]/.test(rest[0] ?? '')) return []
+    if (/^["']/.test(rest[0] ?? '')) texts.add(rest)
+    return rest
+  }
+  /** The label of a line the model wrote no description for: the first command's name, and never anything that is not shaped like a name. */
+  const nameOnly = (word: string | undefined): string => {
+    const found = base(word ?? '')
+    return /^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(found) ? found : 'shell'
   }
   /**
    * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, the one that
@@ -493,7 +543,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
   // What is read: the line without the text of its here-documents, and no more than its first part.
   const read = (powershell ? command : withoutHereDocuments(command)).slice(0, READ)
   const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
-  const label = description.trim() || base(lines[0]?.[0] ?? 'shell')
+  const label = description.trim() || (lines[0] !== undefined && texts.has(lines[0]) ? 'shell' : nameOnly(lines[0]?.[0]))
   const run = lines.flatMap(words => commands(words))
   for (const words of run) {
     const head = name(words[0])
