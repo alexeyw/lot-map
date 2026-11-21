@@ -1459,6 +1459,38 @@ test('the bracket that closes a subshell is no part of its last command: `(cd su
   expect(stationOf('case $x in a) make ;; ls) make ;; esac')).toBe('shell')
 })
 
+test('a `case` is read by its branches: a pattern is no command, with `a|b)` too, and what each branch runs is', () => {
+  const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
+  expect(stationOf('case x in a|b) ls;; *) cat f;; esac')).toBe('files')
+  expect(labelOf('case x in a|b) ls;; *) cat f;; esac')).toBe('ls')
+  expect(stationOf('case $1 in a) ls ;; esac')).toBe('files')
+  expect(stationOf('case $1 in a|b|c) ls ;; d|e) cat f ;; esac')).toBe('files')
+  expect(stationOf('case $1 in (a|b) ls ;; (*) cat f ;; esac')).toBe('files')
+  expect(stationOf('case "$1" in "a b"|c ) ls ;; * ) cat f ;; esac')).toBe('files')
+  expect(stationOf('case $1 in\n  a|b)\n    ls\n    ;;\n  *)\n    cat f\n    ;;\nesac')).toBe('files')
+  expect(stationOf('case $1 in a) ls ;& b) cat f ;;& c) wc -l f ;; esac')).toBe('files')
+  expect(stationOf('(case $1 in a|b) ls ;; esac)')).toBe('files')
+  expect(stationOf('for f in *; do case $f in *.ts|*.tsx) cat "$f" ;; esac; done')).toBe('files')
+  expect(stationOf('case $1 in a) case $2 in x|y) ls ;; esac ;; b) cat f ;; esac')).toBe('files')
+  // A pattern that reads like a command is still a pattern.
+  expect(stationOf('case $x in make|rm) ls ;; esac')).toBe('files')
+  expect(stationOf('case $x in make) ls ;; esac')).toBe('files')
+  // But one choice of several named like a network command still lights Network: the search for the network cuts at
+  // every bracket and follows no `case`, and it errs that way.
+  expect(stationOf('case $x in make|curl) ls ;; esac')).toBe('web')
+  // What a branch runs still counts: every command of it, on one line or several, and after the `esac`.
+  expect(stationOf('case x in a|b) ls;; *) make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls; make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;\n make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls | make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;; esac; make')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;; esac; cat f')).toBe('files')
+  // And the network still shows, in any branch and in the word the `case` looks at.
+  expect(stationOf('case x in a|b) ls;; *) curl https://example.com/x;; esac')).toBe('web')
+  expect(stationOf('case x in a|b) curl https://example.com/x;; esac')).toBe('web')
+  expect(stationOf('case $(curl -s https://example.com/x) in a|b) ls;; esac')).toBe('web')
+})
+
 test('a word of the shell that sets a variable, an option or the folder says nothing either way: `local x=1; ls` is Files', () => {
   const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
   for (const c of ['local x=1; ls', 'declare -a arr=(a b); ls', 'typeset -i n=1; ls', 'readonly X=1; ls', 'unset X; ls', 'shopt -s globstar; ls **/*.ts', 'umask 022; cp a b', 'pushd d; ls; popd', 'wait; ls']) {
