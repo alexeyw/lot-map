@@ -323,6 +323,27 @@ test('principle 3: a tool call through the mod stays within its budget, and the 
 
 // ---- 4. A fault on the map never reaches the work ---------------------------------------------------
 
+// A slow reading is a fault too: the mod names a call before the call runs, so the call waits for the naming.
+test('principle 4: a line nested as deep as it can be holds its call no longer than any other', { timeoutMs: 60_000 }, async ($, on) => {
+  let ranAt = 0
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => {
+    ranAt = now()
+    return { result: {} }
+  })
+  // An ordinary call first: the first call through the mod in a test also pays for starting it.
+  await $.tool.call({ tool: 'Bash', command: 'ls', description: 'List' } as never)
+  const waited: number[] = []
+  for (const command of [`${'find . -exec '.repeat(19)}ls`, `${'find . -exec '.repeat(600)}ls`, `${'sh -c "sh -c \\"sh -c ls\\""; '.repeat(250)}`]) {
+    const started = now()
+    await $.tool.call({ tool: 'Bash', command, description: 'Find' } as never)
+    waited.push(ranAt - started)
+  }
+  console.log(`COST before a nested line's call runs: ${waited.map(ms => `${ms.toFixed(1)}ms`).join(', ')}`)
+  // The first of these took ten seconds before the tool beneath ran. The budget is many times what they take now.
+  for (const ms of waited) expect(ms).toBeLessThan(500)
+})
+
 // It paints some ninety frames, 1.7 s on the machine PRINCIPLES.md names and once 5.06 s on a CI runner, past the test
 // kit's 5 s: the time allowed is for the whole test, and the budgets below still hold each frame.
 test('principle 3: a frame of the terminal picture stays within its budget, at rest and with the map at work', { timeoutMs: 30_000 }, () => {

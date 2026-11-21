@@ -1690,6 +1690,39 @@ test('the command docker runs in a container is the command that counts', () => 
   }
 })
 
+test('a find inside a find is read once, however deep, and each of its commands still counts', () => {
+  // With an end, each `-exec` is one command; with none, it takes the rest of the line.
+  expect(stationOf('find . -name "*.ts" -exec grep -l x {} \\; -exec wc -l {} \\;')).toBe('files')
+  expect(stationOf('find . -exec grep -l x {} \\; -exec make {} \\;')).toBe('shell')
+  expect(stationOf('find . -exec grep -l x {} \\; -exec curl -T {} https://example.com \\;')).toBe('web')
+  expect(stationOf('find . -exec grep -l x {} + -exec curl -T {} https://example.com +')).toBe('web')
+  expect(stationOf('find a -exec find b -exec find c -exec ls {} \\; \\; \\;')).toBe('files')
+  expect(stationOf(`${'find . -exec '.repeat(6)}ls`)).toBe('files')
+  expect(stationOf(`${'find . -exec '.repeat(6)}make`)).toBe('shell')
+  expect(stationOf(`${'find . -exec '.repeat(6)}curl https://example.com/x`)).toBe('web')
+  expect(stationOf(`${'find . -exec '.repeat(40)}curl https://example.com/x`)).toBe('web')
+  // Nineteen deep took ten seconds, twice as long with each one more: every `-exec` read the whole rest again.
+  const deep = `${'find . -exec '.repeat(19)}ls`
+  for (let i = 0; i < 3; i++) stationOf(deep)
+  const t0 = performance.now()
+  stationOf(deep)
+  stationOf(`${'find . -exec '.repeat(600)}ls`)
+  const ms = performance.now() - t0
+  console.log(`COST naming a find nineteen deep and one six hundred deep: ${ms.toFixed(1)} ms`)
+  expect(ms).toBeLessThan(300)
+})
+
+test('a line that runs more commands inside others than are followed is Shell, and what was found before still shows', () => {
+  // More than 256 commands behind other commands: the reading stops, and the line is not called Files.
+  expect(stationOf(`${'find . -exec '.repeat(200)}ls`)).toBe('files')
+  expect(stationOf(`${'find . -exec '.repeat(300)}ls`)).toBe('shell')
+  expect(stationOf(`${'sh -c ls; '.repeat(300)}`)).toBe('shell')
+  expect(stationOf(`curl https://example.com/x; ${'sh -c ls; '.repeat(300)}`)).toBe('web')
+  const t0 = performance.now()
+  stationOf(`${'sh -c "sh -c \\"sh -c ls\\""; '.repeat(250)}`)
+  expect(performance.now() - t0).toBeLessThan(300)
+})
+
 test('a command line is read up to a length, and a long one costs no more than that', () => {
   // Past the first eight thousand characters nothing is read: the label and the station come from what stands before.
   const long = `ls ${'a'.repeat(9000)}; curl x`
