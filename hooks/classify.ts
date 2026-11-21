@@ -32,10 +32,21 @@ function hostOf(url: string): string {
   return HOST.test(host) ? host.slice(0, 40) : scheme
 }
 
-/** A label as it may be shown: no control characters, which a terminal would act on, and no direction marks. */
+/** A text cut to `max` characters, the last of them `…`. Counted in whole characters: an emoji is never cut in two. */
+export function cut(text: string, max: number): string {
+  if (text.length <= max) return text
+  const all = [...text]
+  return all.length > max ? `${all.slice(0, max - 1).join('')}…` : text
+}
+
+/**
+ * A label as it may be shown: no control characters, which a terminal would act on; no characters that take no room
+ * and change how the rest reads, the direction marks, the zero-width space, the soft hyphen; no separators of lines
+ * and paragraphs. The zero-width joiner and non-joiner stay: an emoji of several parts and some scripts are written with them.
+ */
 export function clean(label: string, max = 120): string {
-  const text = label.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g, ' ').replace(/ {2,}/g, ' ').trim()
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+  const text = label.replace(/(?:(?![‌‍])[\p{Cc}\p{Cf}\p{Zl}\p{Zp}])+/gu, ' ').replace(/ {2,}/g, ' ').trim()
+  return cut(text, max)
 }
 
 /** Claude Code's own memory folder counts for everyone; anything else is the person's to name. */
@@ -826,7 +837,7 @@ export function formatTokens(tokens: number): string {
 /** The first line of a hook's refusal, cut short: the lines after it may repeat the whole command. */
 export function firstLine(text: string, max = 72): string {
   const line = (text.split('\n').find(l => l.trim() !== '') ?? '').trim()
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line
+  return cut(line, max)
 }
 
 /** The record numbers a memory hook put in front of the model: `[#123`, `[now #123`, `[todo #123`. */
