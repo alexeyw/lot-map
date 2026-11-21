@@ -8,6 +8,9 @@ import { paint, scaleFor } from './raster'
 import { parseMap } from './scene'
 import { SCALE } from './terminal'
 
+// The tests of cost print their figures. The types a mod is checked against have no console, so the tests name it.
+declare const console: { log: (...args: unknown[]) => void }
+
 const PANE = {
   plugin: 'lot-map',
   component: 'Pane',

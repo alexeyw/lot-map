@@ -8,6 +8,9 @@ import { COLOR_NAMES, STATIONS, TRAIL_FADE_MS, TRAIL_HOLD_MS, classify, clean, d
 import { hasGlyph } from './raster'
 import { stringsFor } from './text'
 
+// The tests of cost print their figures. The types a mod is checked against have no console, so the tests name it.
+declare const console: { log: (...args: unknown[]) => void }
+
 const PANE = {
   plugin: 'lot-map',
   component: 'Pane',
@@ -1456,6 +1459,59 @@ test('the bracket that closes a subshell is no part of its last command: `(cd su
   expect(stationOf('case $x in a) make ;; ls) make ;; esac')).toBe('shell')
 })
 
+test('a `case` is read by its branches: a pattern is no command, with `a|b)` too, and what each branch runs is', () => {
+  const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
+  expect(stationOf('case x in a|b) ls;; *) cat f;; esac')).toBe('files')
+  expect(labelOf('case x in a|b) ls;; *) cat f;; esac')).toBe('ls')
+  expect(stationOf('case $1 in a) ls ;; esac')).toBe('files')
+  expect(stationOf('case $1 in a|b|c) ls ;; d|e) cat f ;; esac')).toBe('files')
+  expect(stationOf('case $1 in (a|b) ls ;; (*) cat f ;; esac')).toBe('files')
+  expect(stationOf('case "$1" in "a b"|c ) ls ;; * ) cat f ;; esac')).toBe('files')
+  expect(stationOf('case $1 in\n  a|b)\n    ls\n    ;;\n  *)\n    cat f\n    ;;\nesac')).toBe('files')
+  expect(stationOf('case $1 in a) ls ;& b) cat f ;;& c) wc -l f ;; esac')).toBe('files')
+  expect(stationOf('(case $1 in a|b) ls ;; esac)')).toBe('files')
+  expect(stationOf('for f in *; do case $f in *.ts|*.tsx) cat "$f" ;; esac; done')).toBe('files')
+  expect(stationOf('case $1 in a) case $2 in x|y) ls ;; esac ;; b) cat f ;; esac')).toBe('files')
+  // A pattern that reads like a command is still a pattern.
+  expect(stationOf('case $x in make|rm) ls ;; esac')).toBe('files')
+  expect(stationOf('case $x in make) ls ;; esac')).toBe('files')
+  // But one choice of several named like a network command still lights Network: the search for the network cuts at
+  // every bracket and follows no `case`, and it errs that way.
+  expect(stationOf('case $x in make|curl) ls ;; esac')).toBe('web')
+  // What a branch runs still counts: every command of it, on one line or several, and after the `esac`.
+  expect(stationOf('case x in a|b) ls;; *) make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls; make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;\n make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls | make;; esac')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;; esac; make')).toBe('shell')
+  expect(stationOf('case x in a|b) ls;; esac; cat f')).toBe('files')
+  // And the network still shows, in any branch and in the word the `case` looks at.
+  expect(stationOf('case x in a|b) ls;; *) curl https://example.com/x;; esac')).toBe('web')
+  expect(stationOf('case x in a|b) curl https://example.com/x;; esac')).toBe('web')
+  expect(stationOf('case $(curl -s https://example.com/x) in a|b) ls;; esac')).toBe('web')
+})
+
+test('a word of the shell that sets a variable, an option or the folder says nothing either way: `local x=1; ls` is Files', () => {
+  const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
+  for (const c of ['local x=1; ls', 'declare -a arr=(a b); ls', 'typeset -i n=1; ls', 'readonly X=1; ls', 'unset X; ls', 'shopt -s globstar; ls **/*.ts', 'umask 022; cp a b', 'pushd d; ls; popd', 'wait; ls']) {
+    expect(stationOf(c)).toBe('files')
+  }
+  // The label is the line's first word, as it is for `export X=1; ls`: only the station changes.
+  expect(labelOf('local x=1; ls')).toBe('local')
+  expect(labelOf('export x=1; ls')).toBe('export')
+  // Alone they are still the shell's, and so is anything real beside them.
+  expect(stationOf('unset X')).toBe('shell')
+  expect(stationOf('shopt -s globstar; make')).toBe('shell')
+  // The network still shows, after them and inside what they set.
+  expect(stationOf('local x=1; curl https://example.com/x')).toBe('web')
+  expect(stationOf('declare x=$(curl -s https://example.com/x); ls')).toBe('web')
+  expect(stationOf('readonly X=`curl -s https://example.com/x`; ls')).toBe('web')
+  // These run code of their own: Shell.
+  for (const c of ['source env.sh; ls', '. env.sh; ls', 'eval "$x"; ls', 'trap "rm f" EXIT; ls', 'alias l=ls; ls']) {
+    expect(stationOf(c)).toBe('shell')
+  }
+})
+
 test('the list of a bash array is values, not the command: `arr=(a b c); ls` is ls', () => {
   const labelOf = (command: string) => classify('Bash', { command }, STRANGER).label
   expect(stationOf('arr=(a b c); ls')).toBe('files')
@@ -1648,6 +1704,21 @@ test('guardedHooks is on unless switched off, in either spelling', () => {
   expect(setupFrom({ guardedHooks: 'nonsense' }).guardedHooks).toBe(true)
   expect(setupFrom({ guardedHooks: false }).guardedHooks).toBe(false)
   expect(setupFrom({ guardedHooks: 'false' }).guardedHooks).toBe(false)
+})
+
+test('every on-off option reads the same way: true or false, either as a word in a string, and anything else is its default', () => {
+  const ON = ['guardedHooks', 'openAtStart'] as const
+  const OFF = ['hookRecords', 'hookReasons', 'subagentNames', 'contextCost'] as const
+  for (const name of [...ON, ...OFF]) {
+    expect(setupFrom({ [name]: true })[name]).toBe(true)
+    expect(setupFrom({ [name]: 'true' })[name]).toBe(true)
+    expect(setupFrom({ [name]: false })[name]).toBe(false)
+    expect(setupFrom({ [name]: 'false' })[name]).toBe(false)
+  }
+  for (const odd of [undefined, null, '', 'yes', 'TRUE', 1, 0, []]) {
+    for (const name of ON) expect(setupFrom({ [name]: odd })[name]).toBe(true)
+    for (const name of OFF) expect(setupFrom({ [name]: odd })[name]).toBe(false)
+  }
 })
 
 test('with guardedHooks off a call a hook refused reads as failed, and no hook of the five leaves a row', { options: { ...OWN, guardedHooks: false } }, async ($, on) => {

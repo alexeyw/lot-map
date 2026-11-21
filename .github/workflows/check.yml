@@ -44,6 +44,9 @@ jobs:
       # What the mod hooks and calls is what scripts/surface.txt lists, and nothing that reaches outside the session.
       - name: Surface
         run: node scripts/check-surface.mjs
+      # The stills of docs/options.md are what the mod paints now: a change to the drawing that left one behind fails here.
+      - name: Option pictures
+        run: node scripts/option-pictures.mjs --check
 
   # The same steps on the newest Claude Code. A new version changes what the engine does around a mod, and both
   # faults fixed in 0.10.0 (#54) were of that kind and were found by people, not by the tests. On a pull request or

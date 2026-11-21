@@ -6,7 +6,7 @@ Thanks for wanting to help. lot-map is small and kept by one person in his own t
 
 - **A bug or a small fix:** open a pull request straight away.
 - **Anything larger** (a new option, a new station, a new way to draw the map, more than about 200 lines): open an issue first and say what you have in mind. Two people have already built the same feature in parallel; an issue saves that.
-- **A change to how the map looks:** attach a picture. How the map looks is the maintainer's call, and a picture is what he decides from.
+- **A change to how the map looks:** attach a picture. How the map looks is the maintainer's call, and a picture is what he decides from. The pictures of [docs/options.md](docs/options.md) are painted by the mod's own code, and the check fails when one is behind the drawing: run `node scripts/option-pictures.mjs` (it needs ffmpeg) and commit what it changed.
 - **A security problem:** not in an issue. See [SECURITY.md](SECURITY.md).
 
 ## What the mod must stay

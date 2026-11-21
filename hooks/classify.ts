@@ -44,9 +44,10 @@ const isMemoryPath = (path: string, setup: Setup): boolean => {
 }
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
-/** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way. */
+/** Commands that work on files and nothing else: they read, search, move or edit them in place. echo, cd and the like say nothing either way:
+ * so do the shell's own words that set a variable, an option or the folder. `source`, `.`, `eval`, `trap` and `alias` run code of their own and stay Shell's. */
 const FILE_WORDS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg', 'find', 'ls', 'wc', 'cp', 'mv', 'mkdir', 'touch', 'diff', 'cmp', 'sort', 'uniq', 'cut', 'tr', 'awk', 'tee', 'stat', 'file', 'du', 'tree', 'ln', 'basename', 'dirname', 'realpath', 'jq', 'rm', 'rmdir'])
-const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read'])
+const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read', 'local', 'declare', 'typeset', 'readonly', 'unset', 'shopt', 'umask', 'pushd', 'popd', 'wait'])
 const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup', 'nmap', 'http', 'https', 'kubectl', 'aws', 'gcloud', 'az'])
 /** Commands that reach the network only with some of their subcommands. */
 const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
@@ -212,13 +213,15 @@ const ARRAY_NAME_ROOM = 120
  * backtick does), and a comment runs to the end of its line and is no command.
  * `deep` also takes out each command run inside another, in `$(…)`, backticks or brackets, as a command of its own.
  * Double quotes do not stop those from running; single quotes do.
+ * `ends`, when given, gets the mark that ended each piece, in step with them: a `case` is read by its `;;` and its `|`.
  */
-function pieces(line: string, deep: boolean, powershell: boolean): string[] {
+function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[]): string[] {
   const out: string[] = []
   const open: Reading[] = [{ text: '', quote: '', close: '' }]
   const escape = powershell ? '`' : '\\'
-  const cut = (reading: Reading): void => {
+  const cut = (reading: Reading, mark = ''): void => {
     out.push(reading.text)
+    ends?.push(mark)
     reading.text = ''
   }
   for (let i = 0; i < line.length; i++) {
@@ -275,11 +278,11 @@ function pieces(line: string, deep: boolean, powershell: boolean): string[] {
       i--
     } else if (c === '(' && inside === '' && !powershell && top.text.endsWith('=') && BEFORE_AN_ARRAY.test(top.text.slice(-ARRAY_NAME_ROOM)))
       open.push({ text: '', quote: '', close: ')', array: 0 })
-    else if (c === '\n' || c === ';' || c === '|') cut(top)
+    else if (c === '\n' || c === ';' || c === '|') cut(top, c)
     else if (c === '&' && (next === '&' || !powershell)) {
       // `2>&1` and `&>file` send output somewhere; they end no command.
       if (next !== '&' && (next === '>' || /[<>]/.test(line[i - 1] ?? ''))) top.text += c
-      else cut(top)
+      else cut(top, c)
     } else if (inside !== '' || (deep && c === '(')) {
       open.push({ text: '', quote: '', close: inside === '`' ? '`' : ')' })
       if (inside === ')') i++
@@ -319,32 +322,76 @@ const closesMore = (word: string): boolean => {
 function segments(command: string, deep = false, constructs = false, powershell = false): string[][] {
   // How many subshells stand open: the `(` before a command opens one, and a later command's `)` closes it.
   let subshells = 0
-  return pieces(command, deep, powershell)
-    .map(part => part.match(powershell ? PS_WORDS : WORDS) ?? [])
-    .map(words => {
+  // How many `case` stand open, and whether what comes next is a pattern: after `in`, and after each `;;`.
+  let cases = 0
+  let pattern = false
+  // A `case` is followed in a plain reading only: a deep one cuts at every `)`, a pattern's too.
+  const ends: string[] = []
+  const follow = constructs && !deep
+  const parts = pieces(command, deep, powershell, follow ? ends : undefined)
+  /** The command of a piece that starts where a command may: `do curl x`, `if curl x`, `! curl x`, `(curl x` are what follows. `for u in a b` and `done` run nothing. `end` is the mark that ended the piece. */
+  const commandOf = (words: string[], end: string): string[] => {
+    let rest = words
+    for (;;) {
+      const head = rest[0] ?? ''
+      if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
+      else if (head.startsWith('(') && !head.startsWith('((')) {
+        subshells++
+        rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
+      } else break
+    }
+    const head = rest[0] ?? ''
+    if (follow && head === 'case') {
+      // `case $x in a) ls`: what stands after `in` is the first pattern, and the command after its `)`.
+      cases++
+      pattern = true
+      const at = rest.indexOf('in')
+      return at < 0 ? [] : patternThen(rest.slice(at + 1), end)
+    }
+    if (follow && cases > 0 && head === 'esac') cases--
+    // `(cd sub; ls)` ends with `ls`, not `ls)`. With no subshell open the `)` is a `case` pattern's and stays.
+    rest = rest.flatMap(word => {
+      let w = word
+      while (subshells > 0 && closesMore(w)) {
+        w = w.slice(0, -1)
+        subshells--
+      }
+      return w === '' ? [] : [w]
+    })
+    return NO_COMMAND.has(rest[0] ?? '') ? [] : rest
+  }
+  /**
+   * A piece that starts where a `case` pattern may: `a)`, `*)`, `(a)`, or one side of `a|b)`, which the `|` cut off.
+   * The pattern is no command; what follows its `)` is. `end` is the mark that ended the piece.
+   */
+  const patternThen = (words: string[], end: string): string[] => {
+    const rest = words[0] === 'in' ? words.slice(1) : words
+    if (rest.length === 0) return []
+    if (rest[0] === 'esac') {
+      pattern = false
+      return commandOf(rest, end)
+    }
+    const first = rest[0] ?? ''
+    const own = first.startsWith('(') ? [first.slice(1), ...rest.slice(1)] : rest
+    const close = own.findIndex(closesMore)
+    // No `)` and a `|` after it: one of a pattern's choices, and the pattern goes on.
+    if (close < 0 && end === '|') return []
+    pattern = false
+    // No `)` and no `|`: this is no pattern after all, and is read as the command it looks like.
+    return commandOf(close < 0 ? rest : own.slice(close + 1), end)
+  }
+  return parts
+    .map((part, n) => {
+      const words = part.match(powershell ? PS_WORDS : WORDS) ?? []
       let i = 0
       while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) i++
       if (!constructs) return words.slice(i)
-      // `do curl x`, `if curl x`, `! curl x`, `(curl x`: the command is what follows. `for u in a b` and `done` run nothing.
-      let rest = words.slice(i)
-      for (;;) {
-        const head = rest[0] ?? ''
-        if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
-        else if (head.startsWith('(') && !head.startsWith('((')) {
-          subshells++
-          rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
-        } else break
+      if (follow && cases > 0) {
+        // `;;`, `;&` and `;;&` end a branch: an empty piece right after a `;`. The next thing is a pattern.
+        if (words.length === 0 && n > 0 && ends[n - 1] === ';' && (ends[n] === ';' || ends[n] === '&')) pattern = true
+        if (pattern) return patternThen(words.slice(i), ends[n] ?? '')
       }
-      // `(cd sub; ls)` ends with `ls`, not `ls)`. With no subshell open the `)` is a `case` pattern's and stays.
-      rest = rest.flatMap(word => {
-        let w = word
-        while (subshells > 0 && closesMore(w)) {
-          w = w.slice(0, -1)
-          subshells--
-        }
-        return w === '' ? [] : [w]
-      })
-      return NO_COMMAND.has(rest[0] ?? '') ? [] : rest
+      return commandOf(words.slice(i), ends[n] ?? '')
     })
     .filter(words => words.length > 0)
 }
