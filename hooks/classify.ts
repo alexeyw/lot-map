@@ -625,9 +625,28 @@ function classifyShell(command: string, description: string, setup: Setup, power
     }
   }
   // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
-  const reaches = (): boolean => {
+  // It can leave some commands out of the asking.
+  const reaches = (left: (words: string[]) => boolean = () => false): boolean => {
     followed = 0
-    return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(isNet)
+    return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(words => !left(words) && isNet(words))
+  }
+  // The station the person put a command on, by the rule `memoryCommands` goes by: found wherever a command is, so
+  // behind `sudo`, in a line handed to `bash -c` and in a container as well. Memory was asked first, so it wins.
+  const placed = (words: string[]): StationId | undefined => {
+    const head = name(words[0])
+    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
+    for (const [command, station] of setup.commandStations) {
+      if (named(head, command) || named(script, command)) return station
+    }
+    return undefined
+  }
+  const chosen = run.map(placed).find(station => station !== undefined)
+  if (chosen !== undefined) {
+    // The command stays where it was put, whatever its own name says, and the row keeps its label. Another command
+    // on the line that reaches the network still takes the line to Network.
+    const isPlaced = (words: string[]): boolean => placed(words) !== undefined
+    const elsewhere = run.some(words => !isPlaced(words) && isNet(words)) || reaches(isPlaced)
+    return { station: elsewhere ? 'web' : chosen, label }
   }
   if (run.some(isNet) || reaches()) return { station: 'web', label }
   const isNeutral = (head: string): boolean => NEUTRAL_WORDS.has(head) || (powershell && PS_NEUTRAL_WORDS.has(head))
