@@ -23,7 +23,7 @@ done
 node scripts/font.mjs hooks/font.ts 6x13.bdf 7x14.bdf 9x18.bdf 10x20.bdf --bold 7x14B.bdf
 ```
 
-The script says that `7x14B` lacks four Cyrillic letters (Ѐ, Ѝ, ѐ, ѝ); in bold, the picture strikes the regular letter twice instead. A language that needs letters the fonts in `hooks/font.ts` do not have fails the test `the terminal picture's font has every letter the map writes, in every language`; add them to `WANTED` in the script and make the file again.
+The script says that `7x14B` lacks four Cyrillic letters (Ѐ, Ѝ, ѐ, ѝ) and two Vietnamese ones (ạ, ỹ); in bold, the picture strikes the regular letter twice instead. A language that needs letters the fonts in `hooks/font.ts` do not have fails the test `the terminal picture's font has every letter the map writes, in every language`; add them to `WANTED` in the script and make the file again.
 
 ## Licence
 

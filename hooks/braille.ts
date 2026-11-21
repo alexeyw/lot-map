@@ -73,9 +73,13 @@ function oval(c: Cells, cx: number, cy: number, rx: number, ry: number, color: (
 /**
  * Whether a cell can hold the letter. A Raster takes one printable character a column wide and refuses the whole
  * drawing for any other, so only scripts known to be that are let through: Latin, Greek and Cyrillic.
+ * Latin Extended Additional (U+1E00–U+1EFF) is Latin a column wide too: Vietnamese writes with it.
  */
 const fits = (code: number): boolean =>
-  (code >= 0x20 && code < 0x7f) || (code >= 0xa1 && code < 0x250 && code !== 0xad) || (code >= 0x370 && code < 0x530 && /^[\p{L}\p{N}\p{P}]$/u.test(String.fromCodePoint(code)))
+  (code >= 0x20 && code < 0x7f) ||
+  (code >= 0xa1 && code < 0x250 && code !== 0xad) ||
+  (code >= 0x370 && code < 0x530 && /^[\p{L}\p{N}\p{P}]$/u.test(String.fromCodePoint(code))) ||
+  (code >= 0x1e00 && code < 0x1f00 && /^\p{L}$/u.test(String.fromCodePoint(code)))
 
 /** Letters over whatever dots were there: a name is never struck through by a line. One the grid cannot hold is a `?`. */
 function write(c: Cells, column: number, row: number, text: string, color: number): void {

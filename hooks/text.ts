@@ -434,6 +434,65 @@ const pt: Strings = {
   hours: (h, m) => `${h} h ${m} min`,
 }
 
-const TABLES = new Map<unknown, Strings>([['en', en], ['ru', ru], ['es', es], ['fr', fr], ['de', de], ['it', it], ['pt', pt]])
+// Vietnamese. Two station names keep the word Vietnamese speakers use as it is, as Italian keeps
+// `File` and `Browser`: `File`, because the bitmap fonts of the terminal picture have no `ệ` for
+// `Tệp` in one size, and `Browser`. `Memory` is `Tâm trí` for the same reason: no font has `ộ`
+// for `Bộ nhớ` in every size. The letters the names do need are in FONTS.md's making of font.ts.
+const vi: Strings = {
+  title: 'Bản đồ công việc',
+  command: 'Mở bản đồ công việc bên cạnh cuộc trò chuyện',
+  opened: 'Đã mở bản đồ công việc.',
+  cannotOpen: reason => `Hiện không có chỗ nào để hiện bản đồ: ${reason}`,
+  zoomOut: 'Thu nhỏ',
+  zoomIn: 'Phóng to',
+  hideMap: 'Ẩn bản đồ',
+  showMap: 'Hiện bản đồ',
+  stations: {
+    you: 'Bạn',
+    model: 'Mô hình',
+    memory: 'Tâm trí',
+    files: 'File',
+    shell: 'Terminal',
+    web: 'Mạng',
+    browser: 'Browser',
+    agents: 'Tác nhân',
+    skills: 'Kỹ năng',
+    hooks: 'Hooks',
+  },
+  newMessage: 'tin nhắn mới',
+  answerReady: 'đã có câu trả lời',
+  turnAborted: 'lượt bị ngắt',
+  step: n => `bước ${n}`,
+  subagent: 'tác nhân con',
+  compacting: 'đang nén ngữ cảnh',
+  addedContext: when => `đã thêm ngữ cảnh ${when}`,
+  addedMemory: when => `đã thêm ký ức ${when}`,
+  toMessage: 'vào tin nhắn',
+  atStart: 'lúc bắt đầu phiên',
+  records: (n, shown) => `${n} bản ghi: ${shown}`,
+  stopped: tool => `đã dừng ${tool}`,
+  askedPermission: tool => `đã xin phép: ${tool}`,
+  checkBefore: tool => `kiểm tra trước ${tool}`,
+  running: 'đang chạy',
+  nothingYet: 'Chưa có gì.',
+  noCounts: 'Bộ đếm còn trống.',
+  noPictureHere: 'Không có hình trong iTerm2 trước bản 3.7.8: nó giữ mọi khung hình trong bộ nhớ. Xem README.',
+  idle: 'Không có gì đang chạy.',
+  context: 'ngữ cảnh',
+  andMore: n => ` và ${n} nữa`,
+  webSearch: 'tìm kiếm web',
+  artifact: 'artifact',
+  workflow: 'quy trình',
+  skill: 'kỹ năng',
+  loadingTools: 'đang tải công cụ',
+  questionForYou: 'câu hỏi cho bạn',
+  fileForYou: 'file cho bạn',
+  ms: n => `${n} ms`,
+  seconds: s => `${s.replace('.', ',')} giây`,
+  minutes: (m, s) => `${m} phút ${s} giây`,
+  hours: (h, m) => `${h} giờ ${m} phút`,
+}
+
+const TABLES = new Map<unknown, Strings>([['en', en], ['ru', ru], ['es', es], ['fr', fr], ['de', de], ['it', it], ['pt', pt], ['vi', vi]])
 
 export const stringsFor = (language: unknown): Strings => TABLES.get(language) ?? en
