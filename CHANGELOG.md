@@ -2,6 +2,10 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.13.1 (2026-11-21)
+
+- Vietnamese labels: `language` takes `vi`. The terminal picture's fonts get the two letters its station names need, `ạ` and `ỹ`, and the braille map lets through the letters Vietnamese writes with. Contributed by dung997tb. (#141)
+
 ## 0.13.0 (2026-11-21)
 
 All but the new option come from a security review of 0.12.1. The first is a vulnerability by [SECURITY.md](SECURITY.md): a label that held content.
