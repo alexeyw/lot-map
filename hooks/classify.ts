@@ -165,6 +165,12 @@ const BEFORE_A_COMMAND = new Set(['do', 'then', 'else', 'elif', 'if', 'while', '
 const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', 'esac', '}'])
 /** How much of a command line is read. A longer one is a script written inline, and what counts stands at its start. */
 const READ = 8000
+/**
+ * How many commands run by other commands are followed in one line: the one behind `find -exec`, inside `bash -c`,
+ * in a container. A line that holds more is read no further and is Shell's, so that no line, however it is nested,
+ * costs more than its length.
+ */
+const FOLLOWED = 256
 
 /** A word without the one pair of quotes around it. Inside double quotes a backslash before `"`, `\\`, `$` or a backtick goes too. */
 const unquoted = (word: string): string => {
@@ -487,11 +493,18 @@ function classifyShell(command: string, description: string, setup: Setup, power
    * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, the one that
    * `docker exec` or `docker run` runs in a container, and in place of `bash -c "…"` or `eval "…"` the commands of
    * the line handed over. A script's name is not a line: `bash deploy.sh`
-   * is read no further. Shells inside shells are followed three deep.
+   * is read no further. Shells inside shells are followed three deep. No more than `FOLLOWED` commands are followed
+   * in one line; `spent` says the line held more.
    */
+  let followed = 0
+  let spent = false
   const commands = (words: string[], deep = false, depth = 0): string[][] => {
     const outer = unwrapped(words, name)
     const head = name(outer[0])
+    if (depth > 0 && ++followed > FOLLOWED) {
+      spent = true
+      return [outer]
+    }
     if (!powershell && depth < 3) {
       let line: string | undefined
       if (head === 'eval') line = outer.slice(1).map(unquoted).join(' ')
@@ -504,12 +517,16 @@ function classifyShell(command: string, description: string, setup: Setup, power
     }
     const all = [outer]
     if (head === 'find') {
-      outer.forEach((word, i) => {
-        if (!/^-(?:exec|execdir|ok|okdir)$/.test(word)) return
+      // Each `-exec` once, up to its `\;` or `+`. One with no end takes the rest of the words, the later `-exec`
+      // among them, and those are read as part of it and not a second time from here.
+      for (let i = 1; i < outer.length; i++) {
+        if (!/^-(?:exec|execdir|ok|okdir)$/.test(outer[i] ?? '')) continue
         const tail = outer.slice(i + 1)
         const end = tail.findIndex(w => w === '\\;' || unquoted(w) === ';' || w === '+')
         all.push(...commands(end < 0 ? tail : tail.slice(0, end), deep, depth + 1))
-      })
+        if (end < 0) break
+        i += end + 1
+      }
     }
     if (head === 'docker' && depth < 3) {
       let rest = pastFlags(outer.slice(1), DOCKER_TAKES)
@@ -552,11 +569,17 @@ function classifyShell(command: string, description: string, setup: Setup, power
       return { station: 'memory', label: memoryLabel(words, setup) }
     }
   }
-  if (run.some(isNet) || segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(isNet)) return { station: 'web', label }
+  // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
+  const reaches = (): boolean => {
+    followed = 0
+    return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(isNet)
+  }
+  if (run.some(isNet) || reaches()) return { station: 'web', label }
   const isNeutral = (head: string): boolean => NEUTRAL_WORDS.has(head) || (powershell && PS_NEUTRAL_WORDS.has(head))
   const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
   const real = run.filter(words => !isNeutral(name(words[0])))
-  if (real.length > 0 && real.every(words => isFile(name(words[0])))) {
+  // A line with more behind it than was followed is not known to be about files alone.
+  if (!spent && real.length > 0 && real.every(words => isFile(name(words[0])))) {
     return { station: isMemoryPath(read, setup) ? 'memory' : 'files', label }
   }
   return { station: 'shell', label }
