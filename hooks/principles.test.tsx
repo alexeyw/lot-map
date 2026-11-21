@@ -334,13 +334,14 @@ test('principle 4: a line nested as deep as it can be holds its call no longer t
   // An ordinary call first: the first call through the mod in a test also pays for starting it.
   await $.tool.call({ tool: 'Bash', command: 'ls', description: 'List' } as never)
   const waited: number[] = []
-  for (const command of [`${'find . -exec '.repeat(19)}ls`, `${'find . -exec '.repeat(600)}ls`, `${'sh -c "sh -c \\"sh -c ls\\""; '.repeat(250)}`]) {
+  for (const command of [`${'find . -exec '.repeat(19)}ls`, `${'find . -exec '.repeat(600)}ls`, `${'sh -c "sh -c \\"sh -c ls\\""; '.repeat(250)}`, 'cat <<A '.repeat(1000), 'cat <<A '.repeat(6000)]) {
     const started = now()
     await $.tool.call({ tool: 'Bash', command, description: 'Find' } as never)
     waited.push(ranAt - started)
   }
   console.log(`COST before a nested line's call runs: ${waited.map(ms => `${ms.toFixed(1)}ms`).join(', ')}`)
-  // The first of these took ten seconds before the tool beneath ran. The budget is many times what they take now.
+  // The first of these took ten seconds before the tool beneath ran, and the last, 48,000 characters of here-document
+  // marks, six. The budget is many times what they take now.
   for (const ms of waited) expect(ms).toBeLessThan(500)
 })
 

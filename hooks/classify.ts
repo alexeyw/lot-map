@@ -180,33 +180,87 @@ const unquoted = (word: string): string => {
   return q === '"' ? inner.replace(/\\(["\\$`])/g, '$1') : inner
 }
 
+/** The mark that opens a here-document, read from its `<<`: `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`, `<<\EOF`. */
+const HERE_MARK = /<<(-?)\s*\\?(["']?)([A-Za-z_][\w.]*)\2/y
+
 /**
  * A shell line without the text of its here-documents: what stands between `<<WORD` and the line that is `WORD` is
  * written somewhere, not run. One that never ends is text to the end. `<<<` is a here-string and `((a << b))` is
- * arithmetic: neither opens one.
+ * arithmetic: neither opens one. Nor does a `<<` inside quotes or in a comment: `grep "cout << value" f` opens
+ * nothing, and the lines after it are read.
  * One handed to a shell that was given no script (`bash <<EOF`, `sudo sh -s <<EOF`) is that shell's script: its
  * lines stay, as commands.
+ * The line is gone through once: each of its lines outside a here-document character by character, as far as will be
+ * read at all, and the command a mark stands in is looked at once however many marks it holds.
  */
 function withoutHereDocuments(command: string): string {
   if (!command.includes('<<')) return command
   const kept: string[] = []
   const waiting: { word: string; tabs: boolean; isRun: boolean }[] = []
+  // The quote left open by the lines before: a text in quotes may run over several lines.
+  let quote: '' | '"' | "'" | '$' = ''
+  // How much is kept so far. Past what is read nothing counts, and nothing more is looked at.
+  let size = 0
   for (const line of command.split('\n')) {
     const open = waiting[0]
     if (open !== undefined) {
       const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
       if (text === open.word) waiting.shift()
-      else if (open.isRun) kept.push(line)
+      else if (open.isRun) {
+        kept.push(line)
+        size += line.length + 1
+      }
       continue
     }
+    if (size >= READ) break
     kept.push(line)
-    for (const m of line.matchAll(/(?<!<)<<(?!<)(-?)\s*(["']?)([A-Za-z_][\w.]*)\2/g)) {
-      const before = line.slice(0, m.index)
-      if (before.lastIndexOf('((') > before.lastIndexOf('))')) continue
-      const feeds = unwrapped(segments(before).pop() ?? [], base)
-      const isRun = SHELLS.has(base(feeds[0])) && feeds.slice(1).every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
-      waiting.push({ word: m[3] ?? '', tabs: m[1] === '-', isRun })
+    // Where the command a mark stands in begins, and whether that command is a shell with no script: asked once a command.
+    let from = 0
+    let isRun: boolean | undefined
+    const room = Math.min(line.length, READ - size)
+    for (let i = 0; i < room; i++) {
+      const c = line[i]
+      if (quote === "'") {
+        if (c === "'") quote = ''
+      } else if (c === '\\') i++
+      else if (quote !== '') {
+        if (c === (quote === '$' ? "'" : '"')) quote = ''
+      } else if (c === '"' || c === "'") quote = c
+      else if (c === '$' && line[i + 1] === "'") {
+        quote = '$'
+        i++
+      } else if (c === '#' && (i === 0 || /\s/.test(line[i - 1] ?? ''))) break
+      else if (c === ';' || c === '|' || (c === '&' && line[i + 1] !== '>' && !/[<>]/.test(line[i - 1] ?? ''))) {
+        from = i + 1
+        isRun = undefined
+      } else if (c === '<' && line[i + 1] === '<') {
+        // `<<<` is a here-string: its text stands on the line.
+        if (line[i + 2] === '<') {
+          i += 2
+          continue
+        }
+        HERE_MARK.lastIndex = i
+        const m = HERE_MARK.exec(line)
+        const before = line.slice(from, i)
+        if (m === null || before.lastIndexOf('((') > before.lastIndexOf('))')) {
+          i++
+          continue
+        }
+        if (isRun === undefined) {
+          const feeds = unwrapped(segments(before).pop() ?? [], base)
+          // Where its output goes says nothing of what it runs: `bash -s 2>&1 <<EOF` and `sh 2> log <<EOF` are shells with no script.
+          const given = feeds.slice(1).filter((w, n, all) => {
+            const sent = REDIRECTION.exec(w)
+            const target = REDIRECTION.exec(all[n - 1] ?? '')
+            return sent === null && !(target !== null && target[0].length === (all[n - 1] ?? '').length)
+          })
+          isRun = SHELLS.has(base(feeds[0])) && given.every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
+        }
+        waiting.push({ word: m[3] ?? '', tabs: m[1] === '-', isRun })
+        i = HERE_MARK.lastIndex - 1
+      }
     }
+    size += line.length + 1
   }
   return kept.join('\n')
 }
@@ -513,7 +567,8 @@ function classifyShell(command: string, description: string, setup: Setup, power
         const flag = outer.findIndex((w, i) => i > 0 && /^-[a-z]*c$/.test(w))
         if (flag > 0 && (at < 0 || at > flag) && outer[flag + 1] !== undefined) line = unquoted(outer[flag + 1] ?? '')
       }
-      if (line !== undefined) return segments(line, deep, true).flatMap(inner => commands(inner, deep, depth + 1))
+      // The line handed over may hold here-documents of its own: their text is no command there either.
+      if (line !== undefined) return segments(withoutHereDocuments(line).slice(0, READ), deep, true).flatMap(inner => commands(inner, deep, depth + 1))
     }
     const all = [outer]
     if (head === 'find') {
