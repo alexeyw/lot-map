@@ -1,6 +1,7 @@
 // What the map is made of and what the person set: the stations, and the mod's options made ready to use.
 // Nothing here touches the engine.
 import type { StationId } from '../types'
+import { clean } from './classify'
 import { COLOR_NAMES } from './palette'
 import type { Palette } from './palette'
 import { stringsFor } from './text'
@@ -110,7 +111,8 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
   }
   const serverStations = stationsFrom(options.serverStations)
   const commandStations = stationsFrom(options.commandStations)
-  const core = typeof options.coreName === 'string' ? options.coreName.trim().slice(0, 10) : ''
+  // The name is drawn as text on every surface: cleaned like a label, and cut by whole characters.
+  const core = typeof options.coreName === 'string' ? [...clean(options.coreName)].slice(0, 10).join('').trim() : ''
   return {
     t: stringsFor(options.language),
     core: core === '' ? 'CLAUDE' : core,

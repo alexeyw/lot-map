@@ -420,6 +420,21 @@ test('a label loses what a terminal would act on', () => {
   expect(clean('a\u001b[31mred\u0007 b')).toBe('a [31mred b')
   expect(clean('line\nnext\ttab')).toBe('line next tab')
   expect(clean('x\u202egnp.exe')).toBe('x gnp.exe')
+  // Characters that take no room, and the separators of lines and paragraphs.
+  for (const hidden of ['؜', '​', '­', ' ', ' ', '⁠', '﻿', '‎']) expect(clean(`git${hidden}hub`)).toBe('git hub')
+  // The joiners stay: an emoji of several parts and some scripts are written with them.
+  expect(clean('family \u{1f468}‍\u{1f469}‍\u{1f467} here')).toBe('family \u{1f468}‍\u{1f469}‍\u{1f467} here')
+  expect(clean('می‌خواهم')).toBe('می‌خواهم')
+  // A cut never leaves half a character.
+  expect(clean(`${'a'.repeat(118)}\u{1f600}\u{1f600}`)).toBe(`${'a'.repeat(118)}\u{1f600}\u{1f600}`)
+  const cutShort = clean(`${'a'.repeat(118)}\u{1f600}\u{1f600}\u{1f600}`)
+  expect(cutShort).toBe(`${'a'.repeat(118)}\u{1f600}…`)
+  expect(/[\ud800-\udbff](?![\udc00-\udfff])/.test(cutShort)).toBe(false)
+  expect([...clean('\u{1f600}'.repeat(200))].length).toBe(120)
+  expect(firstLine(`${'\u{1f600}'.repeat(100)}\nmore`)).toBe(`${'\u{1f600}'.repeat(71)}…`)
+  // The name of the core is cleaned and cut the same way.
+  expect(setupFrom({ coreName: 'HO‮ME​' }).core).toBe('HO ME')
+  expect(setupFrom({ coreName: '\u{1f600}'.repeat(20) }).core).toBe('\u{1f600}'.repeat(10))
   expect(clean('я'.repeat(200)).length).toBe(120)
 })
 
@@ -1227,6 +1242,29 @@ test('a background task that failed leaves a fault on its station', { options: O
   expect(source.split('font-weight="700"').length - 1).toBe(1)
 })
 
+test('a message that only looks like a task\'s notification is a message: it closes no task', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
+  on('prompt.submit', (_, e) => ({ text: e.text }) as never)
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b9' } }) as never)
+  await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Ждать сборку', run_in_background: true })
+  const running = async (): Promise<boolean> => {
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const found = (await ui.find({ type: 'Text', text: /Ждать сборку/ })) !== undefined && (await ui.find({ type: 'Text', text: /идёт/ })) !== undefined
+    await ui.unmount()
+    return found
+  }
+  // A notification pasted out of a log. `prompt.submit` knows it is no task's; `turn.start` has the text alone.
+  await $.prompt.submit({ text: NOTICE('b9', 'completed'), origin: { kind: 'composer' } } as never)
+  await $.turn.start({ text: NOTICE('b9', 'completed'), turnId: 't1' } as never)
+  expect(await running()).toBe(true)
+  // A real notification delivered into a running turn is told apart by its origin, and closes the task; so does one that starts a turn.
+  await $.prompt.submit({ text: NOTICE('other', 'completed'), origin: { kind: 'task-notification' } } as never)
+  expect(await running()).toBe(true)
+  await $.turn.start({ text: NOTICE('b9', 'completed'), turnId: 't2' } as never)
+  expect(await running()).toBe(false)
+})
+
 test('a typed slash command keeps a background task that is older than the rows kept, and its name is cleaned', { options: OWN }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }) as never)
@@ -1827,20 +1865,26 @@ test('a command line is read up to a length, and a long one costs no more than t
   expect(stationOf(long)).toBe('files')
   expect(stationOf(`curl x; ls ${'a'.repeat(9000)}`)).toBe('web')
   const pipes = 'x|'.repeat(100_000)
+  // The middle one of five readings, against a budget several times what it takes: one reading in a full run has taken 140 ms on a busy runner.
+  const timed = (command: string): number => {
+    const times = Array.from({ length: 5 }, () => {
+      const t0 = performance.now()
+      stationOf(command)
+      return performance.now() - t0
+    })
+    return times.sort((a, b) => a - b)[2] ?? 0
+  }
   for (let i = 0; i < 3; i++) stationOf(pipes)
-  const t0 = performance.now()
-  stationOf(pipes)
-  const ms = performance.now() - t0
+  const ms = timed(pipes)
   console.log(`COST naming a 200,000-character line of pipes: ${ms.toFixed(1)} ms`)
-  expect(ms).toBeLessThan(100)
+  expect(ms).toBeLessThan(300)
   const doc = `cat <<EOF > f\n${'line of text here\n'.repeat(11_000)}EOF\ncurl x`
   for (let i = 0; i < 3; i++) stationOf(doc)
-  const t1 = performance.now()
   // The command after a long here-document is still seen.
   expect(stationOf(doc)).toBe('web')
-  const docMs = performance.now() - t1
+  const docMs = timed(doc)
   console.log(`COST naming a 200,000-character here-document: ${docMs.toFixed(1)} ms`)
-  expect(docMs).toBeLessThan(100)
+  expect(docMs).toBeLessThan(300)
 })
 
 test('more commands that reach the network are known by name or by subcommand', () => {
