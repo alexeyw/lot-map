@@ -2,6 +2,20 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.13.0 (2026-11-21)
+
+All but the new option come from a security review of 0.12.1. The first is a vulnerability by [SECURITY.md](SECURITY.md): a label that held content.
+
+- Fixed: when Claude wrote no description for a shell line, the label was the first word of its first command, and that word could be a value. In PowerShell `$token = "ghp_…"; Invoke-RestMethod …` was labelled `ghp_…`, and `$env:KEY="…"`, `$h = @{…}` and a JSON body did the same; in the shell `<<<"…" gh auth login` and `TOKEN[0]=… ./deploy.sh` did. A command now begins past the assignments and the redirections before it, in PowerShell what is kept in a variable is the command only when it is a bare name, and a label that is not shaped like a name is the word `shell`. A line with a description was never touched by this. (#135)
+- Fixed: an address with a backslash was shown with the wrong host. `https://attacker.example\@github.com/x` read `github.com`, while a browser goes to `attacker.example`; the label is `attacker.example` now. (#135)
+- Fixed: a short command line could hold its tool call for seconds. A `find` with one `-exec` inside another and no `\;` between them was read twice as long with each one more: nineteen deep, 250 characters, held the call for six seconds. Each `-exec` is read once now, and one line follows at most 256 commands run by other commands; a line with more is read no further and shown at Shell. Nineteen deep takes about a millisecond. (#136)
+- Fixed: a `<<` inside quotes or a comment hid the lines after it, so `grep -n "std::cout << value" src/main.cpp` with `curl` on the next line was Files; it is Network. And a line of many `<<` cost the square of its length: 8,000 characters took half a second and 48,000 six; both take 8 ms. Here-documents are found in one pass now, outside quotes and comments. `bash -s 2>&1 <<EOF` is read as a shell with no script, so what it runs is seen. (#137)
+- New option `commandStations`: put a shell command on a station of your choice, each as `command=station`, with the stations `serverStations` takes. A name counts as it does in `memoryCommands` and is found wherever a command is, behind `sudo`, in `bash -c`, in a container. The command stays where you put it whatever its own name says; another command on the line that reaches the network still takes the line to Network; Memory wins when a command is in both. None is set by default. Contributed by lizhuojunx86. (#103, #111)
+- A label loses every character that takes no room and changes how the rest reads: the zero-width space, the soft hyphen, U+061C and the separators of lines and paragraphs went through before. The zero-width joiner and non-joiner stay, for emoji of several parts and the scripts written with them. A label is cut by whole characters, so no cut leaves half an emoji. The core's name and the model's name are cleaned the same way. (#138)
+- Fixed: a message that began like a background task's notification, pasted from a log, was taken for one: it got no row, and the task named in it was closed. (#138)
+- PRINCIPLES.md: the limit on followed commands and what a nested line and a line of here-document marks cost, beside the other costs of reading a line. (#136, #137)
+- Inside: the test of principle 2 reads shell lines with no description; a test of principle 4 holds the time a nested line keeps its call; the test of a long line's cost takes the middle of five readings. (#135, #136, #138)
+
 ## 0.12.1 (2026-11-20)
 
 - Fixed: a `case` was not read by its branches. The `|` of a pattern cut it in two, so `case x in a|b) ls;; *) cat f;; esac` got the label `b)` at the Shell station, and a command on the line of the `case` itself was not read at all. A pattern is now read to its bracket and is no command, and what each branch runs is: that line is `ls` at Files. A network command in a branch shows as Network, as before. (#132)
