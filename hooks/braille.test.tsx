@@ -207,8 +207,8 @@ test('no label reaches the braille map: it holds the names of the stations, the 
 test('a core name in letters a cell cannot hold is written with question marks, and the pane keeps its map', { options: { ...BRAILLE, coreName: '日本語' } }, async ($, on) => {
   on('clock.now', () => ({ value: NOW }))
   expect(rowsOf(paintBraille(EMPTY, NOW, setupFrom({ coreName: '日本語' }), 60, 21)).join('\n')).toContain('???')
-  // Nor is a letter outside the basic plane, a control character, or a mark that stands on the letter before it.
-  expect(rowsOf(paintBraille(EMPTY, NOW, setupFrom({ coreName: 'a😀b\u0007x́' }), 60, 21)).join('\n')).toContain('a?b?x?')
+  // Nor is a letter outside the basic plane or a mark that stands on the letter before it. A control character never gets this far: the name is cleaned like a label, and it is a space.
+  expect(rowsOf(paintBraille(EMPTY, NOW, setupFrom({ coreName: 'a😀b\u0007x́' }), 60, 21)).join('\n')).toContain('a?b x?')
   // Latin with its accents, Greek and Cyrillic are a cell each.
   for (const name of ['ДОМ', 'Señor', 'Ωmega', 'Ação']) expect(rowsOf(paintBraille(EMPTY, NOW, setupFrom({ coreName: name }), 60, 21)).join('\n')).toContain(name)
 

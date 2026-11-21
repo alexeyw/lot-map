@@ -1,6 +1,7 @@
 // What the map is made of and what the person set: the stations, and the mod's options made ready to use.
 // Nothing here touches the engine.
 import type { StationId } from '../types'
+import { clean } from './classify'
 import { COLOR_NAMES } from './palette'
 import type { Palette } from './palette'
 import { stringsFor } from './text'
@@ -39,6 +40,8 @@ export type Setup = {
   memoryLabels: ReadonlyMap<string, string>
   /** MCP servers the person put on a station of their own choosing, by the server's name. Memory keeps `memoryServers`. */
   serverStations: ReadonlyMap<string, StationId>
+  /** Shell commands the person put on a station of their own choosing, by the command's name. Memory keeps `memoryCommands`. */
+  commandStations: ReadonlyMap<string, StationId>
   hookRecords: boolean
   /** Whether the first line of a hook's refusal is shown. Off, the row names only the tool. */
   hookReasons: boolean
@@ -96,13 +99,20 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     const at = pair.indexOf('=')
     if (at > 0 && at < pair.length - 1) memoryLabels.set(pair.slice(0, at).trim(), pair.slice(at + 1).trim())
   }
-  const serverStations = new Map<string, StationId>()
-  for (const pair of list(options.serverStations)) {
-    const at = pair.indexOf('=')
-    const station = SERVER_STATIONS.find(id => id === pair.slice(at + 1).trim())
-    if (at > 0 && station !== undefined) serverStations.set(pair.slice(0, at).trim(), station)
+  // A server and a command are put on a station the same way: `name=station`, and an unknown station counts as not set.
+  const stationsFrom = (value: unknown): Map<string, StationId> => {
+    const chosen = new Map<string, StationId>()
+    for (const pair of list(value)) {
+      const at = pair.indexOf('=')
+      const station = SERVER_STATIONS.find(id => id === pair.slice(at + 1).trim())
+      if (at > 0 && station !== undefined) chosen.set(pair.slice(0, at).trim(), station)
+    }
+    return chosen
   }
-  const core = typeof options.coreName === 'string' ? options.coreName.trim().slice(0, 10) : ''
+  const serverStations = stationsFrom(options.serverStations)
+  const commandStations = stationsFrom(options.commandStations)
+  // The name is drawn as text on every surface: cleaned like a label, and cut by whole characters.
+  const core = typeof options.coreName === 'string' ? [...clean(options.coreName)].slice(0, 10).join('').trim() : ''
   return {
     t: stringsFor(options.language),
     core: core === '' ? 'CLAUDE' : core,
@@ -112,6 +122,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     memoryPaths: list(options.memoryPaths),
     memoryLabels,
     serverStations,
+    commandStations,
     hookRecords: flag(options.hookRecords, false),
     hookReasons: flag(options.hookReasons, false),
     guardedHooks: flag(options.guardedHooks, true),

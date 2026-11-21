@@ -96,8 +96,13 @@ export const register: Register = (on, options) => {
     return { text: opened.isPlaced ? t.opened : t.cannotOpen(String(opened.reason)) }
   })
 
+  // The text of the last prompt that was not a task's notification: a person's, a peer's, a trigger's. `turn.start`
+  // is not told where its text comes from, and `prompt.submit` is.
+  let spoken: string | undefined
   on('turn.start', async ($, e, next) => {
-    const notice = e.agentId === undefined ? taskNotice(e.text) : undefined
+    // A message that only looks like a notification, pasted from a log, is a message.
+    const notice = e.agentId === undefined && e.text !== spoken ? taskNotice(e.text) : undefined
+    if (e.agentId === undefined) spoken = undefined
     if (notice !== undefined) {
       // A background task reporting back is no message of the person's.
       if (notice.status !== undefined) await settle($, notice.id, notice.status)
@@ -152,7 +157,8 @@ export const register: Register = (on, options) => {
       station: 'model',
       label: `${shortModel(e.model)} · ${t.step(e.index + 1)}${isMain ? '' : ` · ${crew.get(e.agentId ?? '') ?? t.subagent}`}`,
       from: isMain ? 'core' : 'agents',
-      ...(isMain ? { patch: { model: e.model, step: e.index + 1 } } : { agentId: e.agentId }),
+      // The model's name is drawn as text too: cleaned like a label before it is kept.
+      ...(isMain ? { patch: { model: clean(e.model, 60), step: e.index + 1 } } : { agentId: e.agentId }),
     })
     try {
       return yield* next(e)
@@ -253,6 +259,7 @@ export const register: Register = (on, options) => {
 
   // A notification delivered into a running turn starts no turn of its own; this is where it is seen.
   on('prompt.submit', async ($, e, next) => {
+    if (e.origin !== undefined && e.origin.kind !== 'task-notification') spoken = e.text
     await quietly(async () => {
       if (e.origin?.kind !== 'task-notification') return
       const notice = taskNotice(e.text)

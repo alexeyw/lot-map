@@ -24,7 +24,7 @@ const PLAIN = setupFrom({})
 const TALK = [{ role: 'user', text: 'kept', toolUses: [] }]
 
 // prettier-ignore
-const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"hookRecords":false,"hookReasons":false,"guardedHooks":true,"openAtStart":true,"subagentNames":false,"contextCost":false,"contextWindow":"model","theme":"auto","background":"solid","paneBackground":"theme","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","logRows":"16","terminalView":"text","cellShape":2.4}
+const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"commandStations":[],"hookRecords":false,"hookReasons":false,"guardedHooks":true,"openAtStart":true,"subagentNames":false,"contextCost":false,"contextWindow":"model","theme":"auto","background":"solid","paneBackground":"theme","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","logRows":"16","terminalView":"text","cellShape":2.4}
 
 // ---- 1. It watches and changes nothing ------------------------------------------------------------
 
@@ -140,6 +140,25 @@ const inputFor = (tool: string): Record<string, unknown> =>
 
 test('principle 2: no tool puts content on its label, whatever its input carries', () => {
   for (const tool of TOOLS) expect(`${tool}: ${classify(tool, inputFor(tool), PLAIN).label}`).not.toContain(MARK)
+})
+
+test('principle 2: a shell line with no description is named by its command, wherever the content stands in it', () => {
+  // The model may leave the description out. Then the label is the first command's name, and no value, text or address.
+  const LINES: Record<'Bash' | 'PowerShell', string[]> = {
+    Bash: [
+      `curl -H "token: ${MARK}" https://a.b/${MARK}`, `TOKEN=${MARK} ./deploy.sh`, `TOKEN[0]=${MARK} ./deploy.sh`, `<<<"${MARK}" gh auth login --with-token`,
+      `2>/tmp/${MARK} make`, `>${MARK} echo done`, `export TOKEN=${MARK}; make`, `env TOKEN=${MARK} make`, `${MARK}=1 make`, `echo ${MARK} | gh auth login`,
+      `TOKEN="${MARK}"`, `: ${MARK}`, `[ "$X" = "${MARK}" ] && make`, `case ${MARK} in ${MARK}) make ;; esac`, `arr=(${MARK} ${MARK}); make`,
+    ],
+    PowerShell: [
+      `$token = "${MARK}"; Invoke-RestMethod https://a.b`, `$env:KEY="${MARK}"; python app.py`, `$h = @{Authorization="Bearer ${MARK}"}; irm https://a.b`,
+      `$body = '{"password":"${MARK}"}'; irm https://a.b`, `$x += "${MARK}"`, `"${MARK}" | Set-Content key.txt`, `[Environment]::SetEnvironmentVariable("K", "${MARK}")`,
+      `$token="${MARK}"`, `@{a="${MARK}"}`, `Invoke-RestMethod https://a.b -Headers @{Authorization="${MARK}"}`, `$r = irm "https://a.b/${MARK}"`,
+    ],
+  }
+  for (const tool of ['Bash', 'PowerShell'] as const) {
+    for (const command of LINES[tool]) expect(`${tool}: ${classify(tool, { command }, PLAIN).label}`).not.toContain(MARK)
+  }
 })
 
 // Eighty-seven calls through the mod: up to 3.8 s on a slow CI runner, against a default of 5 s.
@@ -303,6 +322,28 @@ test('principle 3: a tool call through the mod stays within its budget, and the 
 })
 
 // ---- 4. A fault on the map never reaches the work ---------------------------------------------------
+
+// A slow reading is a fault too: the mod names a call before the call runs, so the call waits for the naming.
+test('principle 4: a line nested as deep as it can be holds its call no longer than any other', { timeoutMs: 60_000 }, async ($, on) => {
+  let ranAt = 0
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => {
+    ranAt = now()
+    return { result: {} }
+  })
+  // An ordinary call first: the first call through the mod in a test also pays for starting it.
+  await $.tool.call({ tool: 'Bash', command: 'ls', description: 'List' } as never)
+  const waited: number[] = []
+  for (const command of [`${'find . -exec '.repeat(19)}ls`, `${'find . -exec '.repeat(600)}ls`, `${'sh -c "sh -c \\"sh -c ls\\""; '.repeat(250)}`, 'cat <<A '.repeat(1000), 'cat <<A '.repeat(6000)]) {
+    const started = now()
+    await $.tool.call({ tool: 'Bash', command, description: 'Find' } as never)
+    waited.push(ranAt - started)
+  }
+  console.log(`COST before a nested line's call runs: ${waited.map(ms => `${ms.toFixed(1)}ms`).join(', ')}`)
+  // The first of these took ten seconds before the tool beneath ran, and the last, 48,000 characters of here-document
+  // marks, six. The budget is many times what they take now.
+  for (const ms of waited) expect(ms).toBeLessThan(500)
+})
 
 // It paints some ninety frames, 1.7 s on the machine PRINCIPLES.md names and once 5.06 s on a CI runner, past the test
 // kit's 5 s: the time allowed is for the whole test, and the budgets below still hold each frame.
