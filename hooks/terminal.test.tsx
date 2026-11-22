@@ -6,7 +6,7 @@ import { TRAIL_FADE_MS, TRAIL_HOLD_MS, drawMap, setupFrom } from './map'
 import { MAX_IMAGE_BYTES, fromBase64, imageSource } from './png'
 import { paint } from './raster'
 import { ENDLESS_FOR_MS, FASTEST_MS, endlessEvery, nextChangeIn, parseMap, valueAt } from './scene'
-import { freesFrames, isITerm2, schemeFrom } from './terminal'
+import { SENT_A_SECOND, freesFrames, isITerm2, paceFor, schemeFrom } from './terminal'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -346,12 +346,13 @@ test('with terminalView picture, in a terminal the map is a picture above the ro
   // Sixty columns across, and as many rows as keep the map round on cells 2.4 times as tall as they are wide, as iTerm2's Monaco 12 draws them.
   expect(image?.props.columns).toBe(60)
   expect(image?.props.rows).toBe(23)
-  // A PNG, a small part of the frame's 1.8 MB of pixels.
-  const file = fromBase64((image?.props.source as { png: string }).png)
-  expect(file.length).toBeLessThan(200 * 1024)
+  // A PNG, a small part of the frame's 0.8 MB of pixels, and small enough to be sent five times a second.
+  const sent = (image?.props.source as { png: string }).png
+  expect(paceFor(sent.length)).toBeLessThanOrEqual(200)
+  const file = fromBase64(sent)
   expect(file.length).toBeLessThanOrEqual(MAX_IMAGE_BYTES)
   const { width, height, rgba } = unpng(file)
-  expect([width, height]).toEqual([690, 645])
+  expect([width, height]).toEqual([460, 430])
   // No ground of its own: where the map draws nothing, the terminal's background shows through.
   expect(pixel({ width, rgba }, 45, 45)[3]).toBe(0)
   expect(String(image?.props.alt)).toContain(stringsFor('ru').title)
@@ -385,9 +386,10 @@ test('a background colour of the person\'s own gives the terminal picture its gr
 
 test('the picture moves while something moves, and stands still at rest', { options: PICTURE, timeoutMs: 15_000 }, async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
-  const frames: { requestId: string; key: string }[] = []
+  const frames: { requestId: string; key: string; characters: number }[] = []
   on('ui.blit', (_, e) => {
-    frames.push({ requestId: e.requestId, key: e.key })
+    const source: { png?: string; rgba?: string } = 'source' in e ? (e.source as { png?: string; rgba?: string }) : {}
+    frames.push({ requestId: e.requestId, key: e.key, characters: (source.png ?? source.rgba ?? '').length })
     return { value: {} }
   })
   on('tool.call', () => ({ result: {} }))
@@ -402,6 +404,10 @@ test('the picture moves while something moves, and stands still at rest', { opti
   await clock.advance(1000)
   expect(frames.length).toBeGreaterThanOrEqual(probed + 4)
   expect(frames.length).toBeLessThanOrEqual(probed + 6)
+  // And no more in that second than a terminal is known to show (issue #110): the budget, and the frame that ends the second.
+  const inTheSecond = frames.slice(probed)
+  const sent = inTheSecond.reduce((sum, f) => sum + f.characters, 0)
+  expect(sent).toBeLessThanOrEqual(SENT_A_SECOND + Math.max(...inTheSecond.map(f => f.characters)))
   // Nothing runs, so once the station's glow has faded (3.2 s) the core's breath alone sends no frames.
   await clock.advance(3000)
   const landed = frames.length
@@ -560,4 +566,13 @@ test('a theme set in the options wins over the terminal', { options: { ...PICTUR
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await inkOf(ui)).toBeLessThan(DARK_INK)
   await ui.unmount()
+})
+
+test('a frame waits as long as its size asks, so that no second sends more than a terminal shows', () => {
+  // The whole budget in one frame: a second. A frame as the map sends it: within the five a second it is painted at.
+  expect(paceFor(SENT_A_SECOND)).toBe(1000)
+  expect(paceFor(80 * 1024)).toBe(178)
+  // The frame of the scale the picture had before, 133 KB: under four a second, where five were sent and lost in kitty.
+  expect(paceFor(133 * 1024)).toBe(296)
+  expect(paceFor(0)).toBe(0)
 })
