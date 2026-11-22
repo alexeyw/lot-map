@@ -2,6 +2,16 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.13.2 (2026-11-22)
+
+Fixes only. The first two come from a second outside review, of 0.13.1.
+
+- Fixed: the text of a commit message was read as commands, since 0.13.0. Claude Code writes a commit as `git commit -m "$(cat <<'EOF' … EOF)"`, and a here-document inside `"$( )"` or backticks was not taken for one: a message with `(curl timeout)`, with `` `wget` `` or with a line beginning with `curl` lit Network. No label held the message. (#146)
+- Fixed: `>|` was cut as a pipe, so with no description `>|SECRET make` was labelled `SECRET`, the file's name, and not `make`. It is a redirection now. (#146)
+- Fixed: a call still running left the map once forty more calls had begun, while its row still said it ran: a background task's station went to rest, and the core with it. Both maps and the terminal picture now keep every running call. (#144)
+- Fixed: in kitty the terminal picture went away now and then while the map moved. It is how much is sent in a second that counts: above some 530 to 630 KB a second kitty 0.50 stops showing the picture, and the picture sent about 660. It is now 460 by 430 pixels, two thirds of the size it was and less sharp, in every terminal, and a frame waits long enough for no second to send more than 450 KB. [PRINCIPLES.md](PRINCIPLES.md) has the eight measurements. (#145, #110)
+- [SECURITY.md](SECURITY.md) counts a tool call held back as a vulnerability: the mod names a call before the call runs. (#146)
+
 ## 0.13.1 (2026-11-21)
 
 - Vietnamese labels: `language` takes `vi`. The terminal picture's fonts get the two letters its station names need, `ạ` and `ỹ`, and the braille map lets through the letters Vietnamese writes with. Contributed by dung997tb. (#141)
