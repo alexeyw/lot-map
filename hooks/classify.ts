@@ -63,19 +63,19 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
  * so do the shell's own words that set a variable, an option or the folder. `source`, `.`, `eval`, `trap` and `alias` run code of their own and stay Shell's. */
 const FILE_WORDS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg', 'find', 'ls', 'wc', 'cp', 'mv', 'mkdir', 'touch', 'diff', 'cmp', 'sort', 'uniq', 'cut', 'tr', 'awk', 'tee', 'stat', 'file', 'du', 'tree', 'ln', 'basename', 'dirname', 'realpath', 'jq', 'rm', 'rmdir'])
 const NEUTRAL_WORDS = new Set(['echo', 'printf', 'cd', 'export', 'true', 'false', ':', 'set', 'pwd', 'sleep', 'which', 'test', '[', '[[', 'read', 'local', 'declare', 'typeset', 'readonly', 'unset', 'shopt', 'umask', 'pushd', 'popd', 'wait'])
-const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup', 'nmap', 'http', 'https', 'kubectl', 'aws', 'gcloud', 'az'])
+const NET_WORDS = new Set(['curl', 'wget', 'gh', 'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nc', 'ncat', 'telnet', 'ping', 'dig', 'nslookup', 'nmap', 'http', 'https', 'kubectl', 'aws', 'gcloud', 'az', 'uvx'])
 /** Commands that reach the network only with some of their subcommands. */
 const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   git: new Set(['push', 'pull', 'fetch', 'clone', 'ls-remote', 'submodule update', 'remote update']),
   svn: new Set(['checkout', 'co', 'update', 'up', 'commit', 'ci', 'export']),
   hg: new Set(['clone', 'pull', 'push', 'incoming', 'outgoing']),
-  npm: new Set(['install', 'i', 'ci', 'add', 'update', 'publish', 'view', 'audit']),
+  npm: new Set(['install', 'i', 'ci', 'add', 'update', 'publish', 'view', 'audit', 'exec', 'x']),
   pnpm: new Set(['install', 'i', 'add', 'update', 'publish', 'dlx']),
   yarn: new Set(['install', 'add', 'upgrade', 'publish', 'dlx']),
-  bun: new Set(['install', 'i', 'add', 'update', 'publish']),
+  bun: new Set(['install', 'i', 'add', 'update', 'publish', 'x']),
   pip: new Set(['install', 'download']),
   pipx: new Set(['install', 'upgrade', 'upgrade-all', 'run']),
-  uv: new Set(['add', 'sync', 'lock', 'publish', 'tool install']),
+  uv: new Set(['add', 'sync', 'lock', 'publish', 'tool install', 'tool run']),
   poetry: new Set(['install', 'add', 'update', 'lock', 'publish']),
   docker: new Set(['pull', 'push', 'login']),
   'docker compose': new Set(['pull', 'push']),
@@ -88,6 +88,7 @@ const NET_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   terraform: new Set(['init', 'plan', 'apply', 'destroy', 'import', 'refresh']),
   helm: new Set(['install', 'upgrade', 'pull', 'push', 'repo', 'search', 'dependency']),
   openssl: new Set(['s_client']),
+  claude: new Set(['update', 'install', 'plugin install', 'plugin update', 'plugin marketplace add', 'plugin marketplace update']),
 }
 /** Programs that Python runs as a module: `python -m pip install` is `pip install`. */
 const PY_MODULES = new Set(['pip', 'uv', 'pipx', 'poetry'])
@@ -142,6 +143,25 @@ const pastFlags = (words: string[], takes: { has(flag: string): boolean }): stri
   return words.slice(i)
 }
 /**
+ * What `env -S 'curl x'` runs: `-S`, or `--split-string`, hands env one word to cut into a command and its words, and
+ * that command is the one that counts. The word may stand after the flag or be written onto it. Without the flag: nothing.
+ */
+function splitString(words: string[], takes: readonly string[]): string[] | undefined {
+  for (let i = 1; i < words.length && (words[i] ?? '').startsWith('-'); i++) {
+    const word = words[i] ?? ''
+    if (takes.includes(word)) {
+      i++
+      continue
+    }
+    const m = /^--split-string(?:=([^]*))?$/.exec(word) ?? /^-[A-Za-z0-9]*?S([^]*)$/.exec(word.startsWith('--') ? '' : word)
+    if (m === null) continue
+    const value = m[1] !== undefined && m[1] !== '' ? m[1] : (words[++i] ?? '')
+    return [...unquoted(value).trim().split(/\s+/).filter(w => w !== ''), ...words.slice(i + 1)]
+  }
+  return undefined
+}
+
+/**
  * `sudo curl` is curl, and so is the curl behind `env A=1`, `timeout 5` or `xargs`: the command run is the one that
  * counts. `name` reads a command's name from a word.
  */
@@ -150,6 +170,11 @@ function unwrapped(words: string[], name: (word?: string) => string): string[] {
   for (let depth = 0; depth < 6; depth++) {
     const wrapper = WRAPPERS[name(rest[0])]
     if (wrapper === undefined) break
+    const handed = name(rest[0]) === 'env' ? splitString(rest, wrapper.takes ?? []) : undefined
+    if (handed !== undefined) {
+      rest = handed.slice(start(handed))
+      continue
+    }
     if (wrapper.asks?.some(flag => rest[1] === flag) === true) break
     rest = pastFlags(rest.slice(1), new Set(wrapper.takes ?? []))
     rest = rest.slice(start(rest) + (wrapper.skip ?? 0))
@@ -181,7 +206,7 @@ const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', '
  * Programs known by name beside the ones above, for the label of a line the model wrote no description for. They
  * say nothing of the station: they are here only so that `make test` is labelled `make`.
  */
-const COMMON_WORDS = new Set(['make', 'cmake', 'ninja', 'gradle', 'gradlew', 'mvn', 'ant', 'bazel', 'npx', 'tsc', 'vite', 'jest', 'vitest', 'eslint', 'prettier', 'pytest', 'tox', 'ruff', 'mypy', 'black', 'rustc', 'gcc', 'clang', 'java', 'javac', 'kotlinc', 'swift', 'swiftc', 'xcodebuild', 'dotnet', 'ruby', 'perl', 'php', 'lua', 'Rscript', 'claude', 'code', 'open', 'ps', 'kill', 'pkill', 'date', 'chmod', 'chown', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'xz', 'sqlite3', 'psql', 'mysql', 'redis-cli', 'ffmpeg', 'ffprobe', 'magick', 'pandoc', 'man', 'less', 'more', 'history', 'uname', 'whoami', 'id', 'hostname', 'df', 'free', 'top', 'lsof', 'launchctl', 'systemctl', 'journalctl', 'crontab', 'adb', 'emulator', 'xcrun', 'pod', 'flutter', 'dart', 'bundle', 'rake', 'gem', 'composer', 'tmux', 'screen', 'source', 'eval', 'trap', 'alias', 'type', 'hash', 'jobs', 'fg', 'bg', 'exit', 'return', 'shift', 'getopts', 'ulimit', 'seq', 'yes', 'xxd', 'od', 'base64', 'shasum', 'sha256sum', 'md5', 'md5sum', 'openssl', 'gpg', 'patch', 'column', 'paste', 'join', 'comm', 'fold', 'nl', 'rev', 'tac', 'split', 'expr', 'bc', 'envsubst', 'mktemp', 'pbcopy', 'pbpaste', 'osascript', 'defaults', 'say', 'node', 'deno', 'bun'])
+const COMMON_WORDS = new Set(['bunx', 'pwsh', 'powershell', 'make', 'cmake', 'ninja', 'gradle', 'gradlew', 'mvn', 'ant', 'bazel', 'npx', 'tsc', 'vite', 'jest', 'vitest', 'eslint', 'prettier', 'pytest', 'tox', 'ruff', 'mypy', 'black', 'rustc', 'gcc', 'clang', 'java', 'javac', 'kotlinc', 'swift', 'swiftc', 'xcodebuild', 'dotnet', 'ruby', 'perl', 'php', 'lua', 'Rscript', 'claude', 'code', 'open', 'ps', 'kill', 'pkill', 'date', 'chmod', 'chown', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'xz', 'sqlite3', 'psql', 'mysql', 'redis-cli', 'ffmpeg', 'ffprobe', 'magick', 'pandoc', 'man', 'less', 'more', 'history', 'uname', 'whoami', 'id', 'hostname', 'df', 'free', 'top', 'lsof', 'launchctl', 'systemctl', 'journalctl', 'crontab', 'adb', 'emulator', 'xcrun', 'pod', 'flutter', 'dart', 'bundle', 'rake', 'gem', 'composer', 'tmux', 'screen', 'source', 'eval', 'trap', 'alias', 'type', 'hash', 'jobs', 'fg', 'bg', 'exit', 'return', 'shift', 'getopts', 'ulimit', 'seq', 'yes', 'xxd', 'od', 'base64', 'shasum', 'sha256sum', 'md5', 'md5sum', 'openssl', 'gpg', 'patch', 'column', 'paste', 'join', 'comm', 'fold', 'nl', 'rev', 'tac', 'split', 'expr', 'bc', 'envsubst', 'mktemp', 'pbcopy', 'pbpaste', 'osascript', 'defaults', 'say', 'node', 'deno', 'bun'])
 /**
  * Every command the mod knows by name. With no description a line's label is one of these, one the person named in
  * the options, or the word `shell`: a word that got to the head of a command by a misreading of the line is then never
@@ -226,29 +251,61 @@ const markOf = (written: string): string => written.replace(/'([^']*)'|"([^"]*)"
  * read at all, and the command a mark stands in is looked at once however many marks it holds.
  */
 /**
- * The commands a line of text runs when the shell expands it: what stands in each `$( )` and in each pair of
- * backticks, the outermost ones. `$(( ))` is arithmetic and runs nothing, and a `\$(` or a `\`` is the character.
+ * Where a `$( )` ends: the place of its closing bracket, asked with the place after its `$(`; the text's length if it
+ * never closes. A bracket in quotes, in backticks or in a comment closes nothing, a `$( )` inside double quotes is read
+ * the same way, and inside `case … esac` the bracket after a pattern is the pattern's.
  */
-function expanded(line: string): string[] {
+function closing(text: string, from: number, depth = 0): number {
+  let open = 1
+  let cases = 0
+  for (let i = from; i < text.length; i++) {
+    const c = text[i]
+    if (c === '\\') i++
+    else if (c === "'" || c === '`') {
+      let end = i + 1
+      while (end < text.length && text[end] !== c) end += c === '`' && text[end] === '\\' ? 2 : 1
+      i = end
+    } else if (c === '"') {
+      for (i++; i < text.length && text[i] !== '"'; i++) {
+        if (text[i] === '\\') i++
+        else if (text[i] === '$' && text[i + 1] === '(' && depth < 16) i = closing(text, i + 2, depth + 1)
+      }
+    } else if (c === '#' && /[\s;|&(]/.test(text[i - 1] ?? ' ')) {
+      const end = text.indexOf('\n', i)
+      i = end < 0 ? text.length : end
+    } else if (c === '(') open++
+    else if (c === ')') {
+      if (open === 1 && cases > 0) continue
+      if (--open === 0) return i
+    } else if ((c === 'c' || c === 'e') && /[\s;|&(]/.test(text[i - 1] ?? ' ')) {
+      const word = /^(?:case|esac)(?![\w-])/.exec(text.slice(i, i + 5))?.[0]
+      if (word === 'case') cases++
+      else if (word === 'esac' && cases > 0) cases--
+      if (word !== undefined) i += 3
+    }
+  }
+  return text.length
+}
+
+/**
+ * The commands a text runs when the shell expands it: what stands in each `$( )` and in each pair of backticks, the
+ * outermost ones, over as many lines as they take. `$(( ))` is arithmetic and runs nothing, and a `\$(` or a `\`` is
+ * the character. In the text itself a quote is a character; inside a `$( )` it is a quote.
+ */
+function expanded(text: string): string[] {
   const found: string[] = []
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
     if (c === '\\') i++
     else if (c === '`') {
       let end = i + 1
-      while (end < line.length && line[end] !== '`') end += line[end] === '\\' ? 2 : 1
-      found.push(line.slice(i + 1, end))
+      while (end < text.length && text[end] !== '`') end += text[end] === '\\' ? 2 : 1
+      found.push(text.slice(i + 1, end))
       i = end
-    } else if (c === '$' && line[i + 1] === '(' && line[i + 2] !== '(') {
-      let depth = 1
-      let end = i + 2
-      for (; end < line.length && depth > 0; end++) {
-        if (line[end] === '\\') end++
-        else if (line[end] === '(') depth++
-        else if (line[end] === ')') depth--
-      }
-      found.push(line.slice(i + 2, depth === 0 ? end - 1 : end))
-      i = end - 1
+    } else if (c === '$' && text[i + 1] === '(' && text[i + 2] !== '(') {
+      const end = closing(text, i + 2)
+      found.push(text.slice(i + 2, end))
+      i = end
     }
   }
   return found
@@ -258,7 +315,18 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
   if (!command.includes('<<')) return command
   const kept: string[] = []
   // `isBare`: the mark was written with no quote and no backslash, so the shell expands the text.
-  const waiting: { word: string; tabs: boolean; isRun: boolean; isBare: boolean }[] = []
+  const waiting: { word: string; tabs: boolean; isRun: boolean; isBare: boolean; text: string[] }[] = []
+  // The text of a here-document with a bare mark is expanded: what stands in `$( )` and in backticks runs, and is kept
+  // as lines of its own, once the text has ended. It is held from its first line that could begin a command; the rest
+  // of the text is not read.
+  const expand = (text: string[]): void => {
+    if (text.length === 0) return
+    for (const inner of expanded(text.join('\n'))) {
+      if (size >= READ) break
+      kept.push(inner)
+      size += inner.length + 1
+    }
+  }
   // How many marks stood open when each pair of backticks began: a here-document opened inside a pair ends with it.
   const marksAt: number[] = []
   // What the lines before left open, the innermost last: a text in quotes may run over several lines, and inside
@@ -275,18 +343,11 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
     const open = waiting[0]
     if (open !== undefined && !joined) {
       const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
-      if (text === open.word) waiting.shift()
+      if (text === open.word) expand(waiting.shift()?.text ?? [])
       else if (open.isRun) {
         kept.push(line)
         size += line.length + 1
-      } else if (open.isBare && size < READ && (line.includes('$(') || line.includes('`'))) {
-        // The text of a here-document with a bare mark is expanded: what stands in `$( )` and in backticks runs, and is
-        // kept as lines of its own. The rest of the text is not read.
-        for (const inner of expanded(line)) {
-          kept.push(inner)
-          size += inner.length + 1
-        }
-      }
+      } else if (open.isBare && size < READ && (open.text.length > 0 || line.includes('$(') || line.includes('`'))) open.text.push(line)
       continue
     }
     if (size >= READ) {
@@ -375,12 +436,14 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
           })
           isRun = SHELLS.has(base(feeds[0])) && given.every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
         }
-        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun, isBare: !/["'\\]/.test(m[2] ?? '') })
+        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun, isBare: !/["'\\]/.test(m[2] ?? ''), text: [] })
         i = HERE_MARK.lastIndex - 1
       }
     }
     size += line.length + 1
   }
+  // A text that never ended is text to the end, and what it runs is run all the same.
+  for (const open of waiting) expand(open.text)
   return kept.join('\n')
 }
 
@@ -661,8 +724,8 @@ function classifyShell(command: string, description: string, setup: Setup, power
    * it, but that word is a text and gives no name: `texts` keeps such pieces.
    */
   const texts = new Set<string[]>()
-  const own = (words: string[]): string[] => {
-    if (!powershell) return words
+  const own = (words: string[], ps = powershell): string[] => {
+    if (!ps) return words
     let rest = words
     const first = rest[0] ?? ''
     // `(Get-Content f | Select-String x)`: the bracket groups, and the command stands right after it.
@@ -715,14 +778,17 @@ function classifyShell(command: string, description: string, setup: Setup, power
    */
   let followed = 0
   let spent = false
-  const commands = (words: string[], deep = false, depth = 0): string[][] => {
+  // Commands read as PowerShell's on a line that is not: the ones handed to `pwsh -Command` from Bash.
+  const inPowerShell = new Set<string[]>()
+  const commands = (words: string[], deep = false, depth = 0, ps = powershell): string[][] => {
     const outer = unwrapped(words, name)
     const head = name(outer[0])
+    if (ps) inPowerShell.add(outer)
     if (depth > 0 && ++followed > FOLLOWED) {
       spent = true
       return [outer]
     }
-    if (!powershell && depth < 3) {
+    if (!ps && depth < 3) {
       let line: string | undefined
       if (head === 'eval') line = outer.slice(1).map(unquoted).join(' ')
       else if (SHELLS.has(head)) {
@@ -732,6 +798,27 @@ function classifyShell(command: string, description: string, setup: Setup, power
       }
       // The line handed over may hold here-documents of its own: their text is no command there either.
       if (line !== undefined) return segments(withoutHereDocuments(line).slice(0, READ), deep, true).flatMap(inner => commands(inner, deep, depth + 1))
+    }
+    if (depth < 3) {
+      // A line handed over as a text to PowerShell or to cmd: `iex 'irm x'`, `pwsh -Command "…"`, `cmd /c "…"`. Its
+      // commands count beside the one that runs them. A line kept in a variable is not known, and nothing is read.
+      const shell = head.toLowerCase().replace(/\.exe$/, '')
+      const handed = (line: string, isPs: boolean): string[][] =>
+        segments(line.slice(0, READ), deep, false, isPs)
+          .map(inner => own(inner, isPs))
+          .filter(inner => inner.length > 0)
+          .flatMap(inner => commands(inner, deep, depth + 1, isPs))
+      const isText = (word?: string): boolean => /^["']/.test(word ?? '')
+      if (ps && (shell === 'invoke-expression' || shell === 'iex')) {
+        const text = outer.slice(1).map(w => w.replace(/^-command:/i, '')).find(w => !w.startsWith('-'))
+        if (isText(text)) return [outer, ...handed(unquoted(text ?? ''), true)]
+      }
+      const flag = shell === 'pwsh' || shell === 'powershell' ? outer.findIndex((w, i) => i > 0 && /^-(?:c|command|commandwithargs|cwa)$/i.test(w)) : shell === 'cmd' ? outer.findIndex((w, i) => i > 0 && /^\/[ck]$/i.test(w)) : -1
+      if (flag > 0 && outer[flag + 1] !== undefined) {
+        const rest = outer.slice(flag + 1)
+        const isPs = shell !== 'cmd'
+        return [outer, ...(isText(rest[0]) ? handed(unquoted(rest[0] ?? ''), isPs) : commands(own(rest, isPs), deep, depth + 1, isPs))]
+      }
     }
     const all = [outer]
     if (head === 'find') {
@@ -758,7 +845,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
   const isNet = (words: string[]): boolean => {
     let head = name(words[0])
     let rest = words.slice(1)
-    if (NET_WORDS.has(head) || (powershell && PS_NET_WORDS.has(head))) return true
+    if (NET_WORDS.has(head) || ((powershell || inPowerShell.has(words)) && PS_NET_WORDS.has(head.toLowerCase()))) return true
     if (/^(?:python[\d.]*|py)$/.test(head) && rest[0] === '-m' && PY_MODULES.has(rest[1] ?? '')) [head, rest] = [rest[1] ?? '', rest.slice(2)]
     if (head === 'uv' && rest[0] === 'pip') [head, rest] = ['pip', rest.slice(1)]
     // pip3 and pip3.12 are pip.
@@ -770,10 +857,14 @@ function classifyShell(command: string, description: string, setup: Setup, power
       rest = pastFlags(rest, DOCKER_TAKES)
       if (rest[0] === 'compose') [head, rest] = ['docker compose', pastFlags(rest.slice(1), DOCKER_TAKES)]
     }
-    // npx runs what is installed already as readily as it downloads; only its own "yes, install" says which.
-    if (head === 'npx') return rest.some(w => w === '-y' || w === '--yes')
+    // A command that runs a package by its name fetches the package when it is not here, and the line does not say
+    // whether it is: Network, unless the command is told not to fetch.
+    if (head === 'npx' || head === 'bunx') return !rest.some(w => w === '--no-install' || w === '--no' || w === '--offline')
+    // `go run` with a version and `deno run` with an address fetch what they run; with a file that is here they do not.
+    if (head === 'go' && rest[0] === 'run') return rest.slice(1).some(w => !/^[-./]/.test(w) && /.@[\w.-]+$/.test(w))
+    if (head === 'deno' && rest[0] === 'run') return rest.slice(1).some(w => /^["']?(?:https?:|npm:|jsr:)/.test(w))
     const subs = NET_SUBCOMMANDS[head]
-    return subs !== undefined && (subs.has(rest[0] ?? '') || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''}`))
+    return subs !== undefined && (subs.has(rest[0] ?? '') || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''}`) || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''} ${rest[2] ?? ''}`))
   }
   // What is read: the line without the text of its here-documents, and no more than its first part.
   const cut = { short: false }
@@ -781,14 +872,14 @@ function classifyShell(command: string, description: string, setup: Setup, power
   const read = whole.slice(0, READ)
   // More of the line than is read: what stands there is not known.
   const isCutShort = cut.short || whole.length > READ
-  const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
+  const lines = segments(read, false, !powershell, powershell).map(words => own(words)).filter(words => words.length > 0)
   const label = description.trim() || (lines[0] !== undefined && texts.has(lines[0]) ? 'shell' : nameOnly(lines[0]?.[0]))
   const run = lines.flatMap(words => commands(words))
   // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
   // It can leave some commands out of the asking.
   const reaches = (left: (words: string[]) => boolean = () => false): boolean => {
     followed = 0
-    return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(words => !left(words) && isNet(words))
+    return segments(read, true, !powershell, powershell).map(words => own(words)).flatMap(words => commands(words, true)).some(words => !left(words) && isNet(words))
   }
   const isMemory = (words: string[]): boolean => {
     const head = name(words[0])
