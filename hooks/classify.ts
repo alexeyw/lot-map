@@ -97,13 +97,13 @@ const PY_MODULES = new Set(['pip', 'uv', 'pipx', 'poetry'])
  * after them; `skip` is how many words of its own follow the flags, and with a flag in `asks` it runs nothing.
  */
 const WRAPPERS: Record<string, { takes?: readonly string[]; skip?: number; asks?: readonly string[] }> = {
-  sudo: { takes: ['-u', '-g', '-p', '-h', '-C', '-D', '-R', '-T', '-U', '-r', '-t'] },
+  sudo: { takes: ['-u', '-g', '-p', '-h', '-C', '-D', '-R', '-T', '-U', '-r', '-t', '--user', '--group', '--prompt', '--host', '--close-from', '--chdir', '--chroot', '--command-timeout', '--other-user', '--role', '--type'] },
   doas: { takes: ['-u', '-C'] },
-  env: { takes: ['-u', '-C'] },
+  env: { takes: ['-u', '-C', '--unset', '--chdir'] },
   time: {},
-  timeout: { takes: ['-s', '-k'], skip: 1 },
+  timeout: { takes: ['-s', '-k', '--signal', '--kill-after'], skip: 1 },
   nohup: {},
-  nice: { takes: ['-n'] },
+  nice: { takes: ['-n', '--adjustment'] },
   ionice: { takes: ['-c', '-n'] },
   stdbuf: { takes: ['-i', '-o', '-e'] },
   caffeinate: { takes: ['-t', '-w'] },
@@ -205,8 +205,13 @@ const unquoted = (word: string): string => {
   return q === '"' ? inner.replace(/\\(["\\$`])/g, '$1') : inner
 }
 
-/** The mark that opens a here-document, read from its `<<`: `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`, `<<\EOF`. */
-const HERE_MARK = /<<(-?)\s*\\?(["']?)([A-Za-z_][\w.]*)\2/y
+/**
+ * The mark that opens a here-document, read from its `<<`: `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`, `<<\EOF`. The
+ * mark is any word of the shell, `EOF-1`, `E"O"F`, `"END MSG"`, `1`: quoted parts, escaped characters and anything
+ * that ends no word. Its quotes and backslashes go: the text ends at the line that is the word without them.
+ */
+const HERE_MARK = /<<(-?)[ \t]*((?:"[^"\n]*"|'[^'\n]*'|\\[^\n]|[^\s;&|<>()"'\\`])+)/y
+const markOf = (written: string): string => written.replace(/'([^']*)'|"([^"]*)"|\\(.)/g, '$1$2$3')
 
 /**
  * A shell line without the text of its here-documents: what stands between `<<WORD` and the line that is `WORD` is
@@ -220,20 +225,23 @@ const HERE_MARK = /<<(-?)\s*\\?(["']?)([A-Za-z_][\w.]*)\2/y
  * The line is gone through once: each of its lines outside a here-document character by character, as far as will be
  * read at all, and the command a mark stands in is looked at once however many marks it holds.
  */
-function withoutHereDocuments(command: string): string {
+function withoutHereDocuments(command: string, cut?: { short: boolean }): string {
   if (!command.includes('<<')) return command
   const kept: string[] = []
   const waiting: { word: string; tabs: boolean; isRun: boolean }[] = []
   // What the lines before left open, the innermost last: a text in quotes may run over several lines, and inside
   // double quotes a `$(` or a backtick begins a command, closed by its `)` or by the next backtick.
   const opened: ('"' | "'" | '$' | ')' | '`')[] = []
-  // How many `(` stand open in each `$( )`, its own aside.
+  // How many `(` stand open in each `$( )`, its own aside, and whether it is arithmetic, `$(( ))`: a shift there is no mark.
   const nested: number[] = []
+  const sums: boolean[] = []
   // How much is kept so far. Past what is read nothing counts, and nothing more is looked at.
   let size = 0
+  // Whether the line before ended with a backslash: the two are one line, and a here-document's text begins after it.
+  let joined = false
   for (const line of command.split('\n')) {
     const open = waiting[0]
-    if (open !== undefined) {
+    if (open !== undefined && !joined) {
       const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
       if (text === open.word) waiting.shift()
       else if (open.isRun) {
@@ -242,8 +250,12 @@ function withoutHereDocuments(command: string): string {
       }
       continue
     }
-    if (size >= READ) break
+    if (size >= READ) {
+      if (cut !== undefined) cut.short = true
+      break
+    }
     kept.push(line)
+    joined = opened[opened.length - 1] !== "'" && /(?:^|[^\\])(?:\\\\)*\\$/.test(line)
     // Where the command a mark stands in begins, and whether that command is a shell with no script: asked once a command.
     let from = 0
     let isRun: boolean | undefined
@@ -263,6 +275,7 @@ function withoutHereDocuments(command: string): string {
           opened.push(c === '`' ? '`' : ')')
           if (c === '$') {
             nested.push(0)
+            sums.push(line[i + 2] === '(')
             i++
           }
           from = i + 1
@@ -272,7 +285,7 @@ function withoutHereDocuments(command: string): string {
       else if (c === '$' && line[i + 1] === "'") {
         opened.push('$')
         i++
-      } else if (c === '#' && (i === 0 || /\s/.test(line[i - 1] ?? ''))) break
+      } else if (c === '#' && (i === 0 || /[\s;|&(]/.test(line[i - 1] ?? ''))) break
       else if (quote === '`' && c === '`') opened.pop()
       else if (quote === ')' && c === '(') nested[nested.length - 1] = (nested[nested.length - 1] ?? 0) + 1
       else if (quote === ')' && c === ')') {
@@ -280,6 +293,7 @@ function withoutHereDocuments(command: string): string {
         else {
           opened.pop()
           nested.pop()
+          sums.pop()
         }
       } else if (c === ';' || (c === '|' && line[i - 1] !== '>') || (c === '&' && line[i + 1] !== '>' && !/[<>]/.test(line[i - 1] ?? ''))) {
         from = i + 1
@@ -293,7 +307,8 @@ function withoutHereDocuments(command: string): string {
         HERE_MARK.lastIndex = i
         const m = HERE_MARK.exec(line)
         const before = line.slice(from, i)
-        if (m === null || before.lastIndexOf('((') > before.lastIndexOf('))')) {
+        // A shift inside `(( ))` or the old `$[ ]` is arithmetic.
+        if (m === null || (quote === ')' && sums[sums.length - 1] === true) || before.lastIndexOf('((') > before.lastIndexOf('))') || before.lastIndexOf('$[') > before.lastIndexOf(']')) {
           i++
           continue
         }
@@ -307,7 +322,7 @@ function withoutHereDocuments(command: string): string {
           })
           isRun = SHELLS.has(base(feeds[0])) && given.every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
         }
-        waiting.push({ word: m[3] ?? '', tabs: m[1] === '-', isRun })
+        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun })
         i = HERE_MARK.lastIndex - 1
       }
     }
@@ -331,7 +346,7 @@ const PS_KNOWN_WORDS = new Set([...PS_FILE_WORDS, ...PS_NEUTRAL_WORDS, ...PS_NET
  * the list as a piece of its own, so that `cmd=(curl -s …); "${cmd[@]}"` is still found, and a command run inside it,
  * `$(…)`, is taken out as anywhere else.
  */
-type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`'; array?: number }
+type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`' | '}'; array?: number }
 
 /** What stands right before the `(` of an array: `name=` or `name+=` at a word's start. */
 const BEFORE_AN_ARRAY = /(?:^|[\s;&|({])[A-Za-z_]\w*\+?=$/
@@ -355,13 +370,25 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
     ends?.push(mark)
     reading.text = ''
   }
+  // Whether the character before was escaped or closed a command run inside another: the text then ends with a space
+  // that the line does not have, and a `#` after it begins no comment.
+  let glued = false
   for (let i = 0; i < line.length; i++) {
     const top = open[open.length - 1] as Reading
     const c = line[i] ?? ''
     const next = line[i + 1] ?? ''
+    const wasGlued = glued
+    glued = false
     if (top.quote === "'") {
       top.text += c
       if (c === "'") top.quote = ''
+      continue
+    }
+    // Backticks inside backticks are written with a backslash: each one begins or ends a command of its own.
+    if (deep && !powershell && c === '\\' && next === '`' && open.some(reading => reading.close === '`')) {
+      cut(top)
+      glued = true
+      i++
       continue
     }
     // A backslash at a line's end joins the two lines.
@@ -372,6 +399,7 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
     }
     if (c === escape || (c === '\\' && top.quote === '$')) {
       top.text += c + next
+      glued = true
       i++
       continue
     }
@@ -392,7 +420,7 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
       top.quote = '$'
       top.text += "$'"
       i++
-    } else if (c === '#' && /^$|\s$/.test(top.text.slice(-1))) {
+    } else if (c === '#' && !wasGlued && /^$|\s$/.test(top.text.slice(-1))) {
       while (i + 1 < line.length && line[i + 1] !== '\n') i++
     } else if (top.array !== undefined && c === '\n') top.text += ' '
     else if (top.array !== undefined && inside === '' && c === '(' && !deep) top.array++
@@ -415,12 +443,14 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
       // `2>&1` and `&>file` send output somewhere; they end no command.
       if (next !== '&' && (next === '>' || /[<>]/.test(line[i - 1] ?? ''))) top.text += c
       else cut(top, c)
-    } else if (inside !== '' || (deep && c === '(')) {
-      open.push({ text: '', quote: '', close: inside === '`' ? '`' : ')' })
+    } else if (inside !== '' || (deep && (c === '(' || (powershell && c === '{')))) {
+      // A PowerShell script block, `{ … }`, runs what it holds: `ForEach-Object { … }`, `& { … }`, `if (…) { … }`.
+      open.push({ text: '', quote: '', close: inside === '`' ? '`' : c === '{' ? '}' : ')' })
       if (inside === ')') i++
       top.text += ' '
-    } else if (deep && (c === ')' || c === '`') && !(c === '`' && powershell)) {
+    } else if (deep && (c === ')' || (c === '`' && !powershell) || (c === '}' && powershell))) {
       cut(top)
+      glued = true
       // A `)` that closes nothing is a `case` pattern's: what follows it is a command.
       if (top.close === c && open.length > 1) open.pop()
     } else top.text += c
@@ -466,7 +496,12 @@ function segments(command: string, deep = false, constructs = false, powershell 
     let rest = words
     for (;;) {
       const head = rest[0] ?? ''
-      if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
+      // `if X=1 curl x`: the assignment stands after the word, and the command after the assignment.
+      if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1 + start(rest.slice(1)))
+      // `function name { …` and `name() { …`: the body runs when the function is called, and it is read as the line's own.
+      else if (head === 'function' && rest.length > 2) rest = rest.slice(rest[2] === '()' ? 3 : 2)
+      else if (/^[A-Za-z_][\w.-]*\(\)$/.test(head) && rest[1] === '{') rest = rest.slice(1)
+      else if (/^[A-Za-z_][\w.-]*$/.test(head) && rest[1] === '()' && rest[2] === '{') rest = rest.slice(2)
       else if (head.startsWith('(') && !head.startsWith('((')) {
         subshells++
         rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
@@ -679,7 +714,11 @@ function classifyShell(command: string, description: string, setup: Setup, power
     return subs !== undefined && (subs.has(rest[0] ?? '') || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''}`))
   }
   // What is read: the line without the text of its here-documents, and no more than its first part.
-  const read = (powershell ? command : withoutHereDocuments(command)).slice(0, READ)
+  const cut = { short: false }
+  const whole = powershell ? command : withoutHereDocuments(command, cut)
+  const read = whole.slice(0, READ)
+  // More of the line than is read: what stands there is not known.
+  const isCutShort = cut.short || whole.length > READ
   const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
   const label = description.trim() || (lines[0] !== undefined && texts.has(lines[0]) ? 'shell' : nameOnly(lines[0]?.[0]))
   const run = lines.flatMap(words => commands(words))
@@ -719,7 +758,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
   const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
   const real = run.filter(words => !isNeutral(name(words[0])))
   // A line with more behind it than was followed is not known to be about files alone.
-  if (!spent && real.length > 0 && real.every(words => isFile(name(words[0])))) {
+  if (!spent && !isCutShort && real.length > 0 && real.every(words => isFile(name(words[0])))) {
     return { station: isMemoryPath(read, setup) ? 'memory' : 'files', label }
   }
   return { station: 'shell', label }
