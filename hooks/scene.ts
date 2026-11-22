@@ -488,7 +488,8 @@ export function valueAt(shape: Shape, attr: string, base: number, t: number): nu
  * The quickest the map is painted again, in ms: five frames a second. It was thirty at first, and in kitty 0.50 none
  * of those reached the screen while the map moved: of twenty shots of the window taken while a command ran, none
  * showed a map at 33, 66 or 125 ms a frame, and all twenty did at 200 (2026-11-18, macOS; PRINCIPLES.md has it).
- * Why the quicker frames are not shown is not known here; a frame is about 150 KB as base64.
+ * It is how much is sent in a second that counts, not how often (issue #110): `SENT_A_SECOND` in terminal.tsx holds
+ * the picture under that, and may make a large frame wait longer than this.
  */
 export const FASTEST_MS = 200
 
