@@ -2,7 +2,7 @@
 
 lot-map is a mod for Claude Code that draws a map of the work in a pane beside the chat. It runs inside Claude Code on your computer. There is no lot-map service, no account and no server: nothing the mod sees leaves your machine through it.
 
-This page describes version 0.13.2. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
+This page describes version 0.14.0. It changes only together with the code, and the [changelog](CHANGELOG.md) says when it did.
 
 ## What the mod is handed
 
@@ -12,7 +12,7 @@ The mod does not look for personal data and has no use for it. It takes a name f
 
 - a file: the last two parts of its path;
 - a web address: the host alone, without a login, password, path or query;
-- a shell command or a monitor: the short description Claude wrote for it, or the command's name, never the command line;
+- a shell command or a monitor: the short description Claude wrote for it. With no description, the command's name if it is a command the mod knows by name (`git`, `make`, `curl` and the like) or one you named in `memoryCommands` or `commandStations`, and the word `shell` for any other. Never the command line;
 - a search: the tool's name for `Grep` and `Glob`, the words `web search` for a web search and `loading tools` for a tool search, in the map's language, never the pattern or the query;
 - a memory call: the tool's name and a record number or short identifier, never the text or the query;
 - a subagent: the short description it was started with; with `subagentNames` on, its first 40 characters on that subagent's model steps as well;

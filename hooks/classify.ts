@@ -19,7 +19,10 @@ const HOST = /^(?:[\p{L}\p{N}.-]+|\[[0-9a-f:.]+\])(?::\d+)?$/iu
  * `user:pa/ss@host` reads as the host `host`, and an address that can be read both ways gives its scheme alone.
  */
 function hostOf(url: string): string {
-  const [, scheme = '', rest = ''] = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
+  // After `http:`, `https:`, `ws:`, `wss:` and `ftp:` any number of slashes, or none, comes before the host: that is
+  // how a browser and `new URL` read `https:/a.example/x` and `https:a.example/x`.
+  const [, special = '', other = '', rest = ''] = /^(?:(https?|wss?|ftp):[/\\]*|([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
+  const scheme = special || other
   // A backslash ends the host as a slash does: that is how a browser and `new URL` read `https://a.example\@b.example/`.
   const end = rest.search(/[/?#\\]/)
   const first = end < 0 ? rest : rest.slice(0, end)
@@ -94,13 +97,13 @@ const PY_MODULES = new Set(['pip', 'uv', 'pipx', 'poetry'])
  * after them; `skip` is how many words of its own follow the flags, and with a flag in `asks` it runs nothing.
  */
 const WRAPPERS: Record<string, { takes?: readonly string[]; skip?: number; asks?: readonly string[] }> = {
-  sudo: { takes: ['-u', '-g', '-p', '-h', '-C', '-D', '-R', '-T', '-U', '-r', '-t'] },
+  sudo: { takes: ['-u', '-g', '-p', '-h', '-C', '-D', '-R', '-T', '-U', '-r', '-t', '--user', '--group', '--prompt', '--host', '--close-from', '--chdir', '--chroot', '--command-timeout', '--other-user', '--role', '--type'] },
   doas: { takes: ['-u', '-C'] },
-  env: { takes: ['-u', '-C'] },
+  env: { takes: ['-u', '-C', '--unset', '--chdir'] },
   time: {},
-  timeout: { takes: ['-s', '-k'], skip: 1 },
+  timeout: { takes: ['-s', '-k', '--signal', '--kill-after'], skip: 1 },
   nohup: {},
-  nice: { takes: ['-n'] },
+  nice: { takes: ['-n', '--adjustment'] },
   ionice: { takes: ['-c', '-n'] },
   stdbuf: { takes: ['-i', '-o', '-e'] },
   caffeinate: { takes: ['-t', '-w'] },
@@ -117,8 +120,8 @@ const REDIRECTION = /^(?:\d+|&)?(?:>>|>\||<<<|<<-|<<|<>|>&|<&|>|<)/
  * Where a command begins among a piece's words: past the assignments and the redirections before it. What they
  * hold is content, a value or a text, and none of it may be taken for the command's name.
  */
-function start(words: string[]): number {
-  let i = 0
+function start(words: string[], from = 0): number {
+  let i = from
   for (;;) {
     const word = words[i] ?? ''
     const sent = REDIRECTION.exec(word)
@@ -174,6 +177,17 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const BEFORE_A_COMMAND = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '!', '{'])
 /** Words that open or close a construct and run nothing themselves: `for u in a b`, `done`, `fi`. */
 const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', 'esac', '}'])
+/**
+ * Programs known by name beside the ones above, for the label of a line the model wrote no description for. They
+ * say nothing of the station: they are here only so that `make test` is labelled `make`.
+ */
+const COMMON_WORDS = new Set(['make', 'cmake', 'ninja', 'gradle', 'gradlew', 'mvn', 'ant', 'bazel', 'npx', 'tsc', 'vite', 'jest', 'vitest', 'eslint', 'prettier', 'pytest', 'tox', 'ruff', 'mypy', 'black', 'rustc', 'gcc', 'clang', 'java', 'javac', 'kotlinc', 'swift', 'swiftc', 'xcodebuild', 'dotnet', 'ruby', 'perl', 'php', 'lua', 'Rscript', 'claude', 'code', 'open', 'ps', 'kill', 'pkill', 'date', 'chmod', 'chown', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'xz', 'sqlite3', 'psql', 'mysql', 'redis-cli', 'ffmpeg', 'ffprobe', 'magick', 'pandoc', 'man', 'less', 'more', 'history', 'uname', 'whoami', 'id', 'hostname', 'df', 'free', 'top', 'lsof', 'launchctl', 'systemctl', 'journalctl', 'crontab', 'adb', 'emulator', 'xcrun', 'pod', 'flutter', 'dart', 'bundle', 'rake', 'gem', 'composer', 'tmux', 'screen', 'source', 'eval', 'trap', 'alias', 'type', 'hash', 'jobs', 'fg', 'bg', 'exit', 'return', 'shift', 'getopts', 'ulimit', 'seq', 'yes', 'xxd', 'od', 'base64', 'shasum', 'sha256sum', 'md5', 'md5sum', 'openssl', 'gpg', 'patch', 'column', 'paste', 'join', 'comm', 'fold', 'nl', 'rev', 'tac', 'split', 'expr', 'bc', 'envsubst', 'mktemp', 'pbcopy', 'pbpaste', 'osascript', 'defaults', 'say', 'node', 'deno', 'bun'])
+/**
+ * Every command the mod knows by name. With no description a line's label is one of these, one the person named in
+ * the options, or the word `shell`: a word that got to the head of a command by a misreading of the line is then never
+ * shown, whatever it is.
+ */
+const KNOWN_WORDS = new Set([...FILE_WORDS, ...NEUTRAL_WORDS, ...NET_WORDS, ...Object.keys(NET_SUBCOMMANDS), ...Object.keys(WRAPPERS), ...RUNNERS, ...SHELLS, ...COMMON_WORDS])
 /** How much of a command line is read. A longer one is a script written inline, and what counts stands at its start. */
 const READ = 8000
 /**
@@ -191,8 +205,13 @@ const unquoted = (word: string): string => {
   return q === '"' ? inner.replace(/\\(["\\$`])/g, '$1') : inner
 }
 
-/** The mark that opens a here-document, read from its `<<`: `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`, `<<\EOF`. */
-const HERE_MARK = /<<(-?)\s*\\?(["']?)([A-Za-z_][\w.]*)\2/y
+/**
+ * The mark that opens a here-document, read from its `<<`: `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`, `<<\EOF`. The
+ * mark is any word of the shell, `EOF-1`, `E"O"F`, `"END MSG"`, `1`: quoted parts, escaped characters and anything
+ * that ends no word. Its quotes and backslashes go: the text ends at the line that is the word without them.
+ */
+const HERE_MARK = /<<(-?)[ \t]*((?:"[^"\n]*"|'[^'\n]*'|\\[^\n]|[^\s;&|<>()"'\\`])+)/y
+const markOf = (written: string): string => written.replace(/'([^']*)'|"([^"]*)"|\\(.)/g, '$1$2$3')
 
 /**
  * A shell line without the text of its here-documents: what stands between `<<WORD` and the line that is `WORD` is
@@ -206,30 +225,76 @@ const HERE_MARK = /<<(-?)\s*\\?(["']?)([A-Za-z_][\w.]*)\2/y
  * The line is gone through once: each of its lines outside a here-document character by character, as far as will be
  * read at all, and the command a mark stands in is looked at once however many marks it holds.
  */
-function withoutHereDocuments(command: string): string {
+/**
+ * The commands a line of text runs when the shell expands it: what stands in each `$( )` and in each pair of
+ * backticks, the outermost ones. `$(( ))` is arithmetic and runs nothing, and a `\$(` or a `\`` is the character.
+ */
+function expanded(line: string): string[] {
+  const found: string[] = []
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '\\') i++
+    else if (c === '`') {
+      let end = i + 1
+      while (end < line.length && line[end] !== '`') end += line[end] === '\\' ? 2 : 1
+      found.push(line.slice(i + 1, end))
+      i = end
+    } else if (c === '$' && line[i + 1] === '(' && line[i + 2] !== '(') {
+      let depth = 1
+      let end = i + 2
+      for (; end < line.length && depth > 0; end++) {
+        if (line[end] === '\\') end++
+        else if (line[end] === '(') depth++
+        else if (line[end] === ')') depth--
+      }
+      found.push(line.slice(i + 2, depth === 0 ? end - 1 : end))
+      i = end - 1
+    }
+  }
+  return found
+}
+
+function withoutHereDocuments(command: string, cut?: { short: boolean }): string {
   if (!command.includes('<<')) return command
   const kept: string[] = []
-  const waiting: { word: string; tabs: boolean; isRun: boolean }[] = []
+  // `isBare`: the mark was written with no quote and no backslash, so the shell expands the text.
+  const waiting: { word: string; tabs: boolean; isRun: boolean; isBare: boolean }[] = []
+  // How many marks stood open when each pair of backticks began: a here-document opened inside a pair ends with it.
+  const marksAt: number[] = []
   // What the lines before left open, the innermost last: a text in quotes may run over several lines, and inside
   // double quotes a `$(` or a backtick begins a command, closed by its `)` or by the next backtick.
   const opened: ('"' | "'" | '$' | ')' | '`')[] = []
-  // How many `(` stand open in each `$( )`, its own aside.
+  // How many `(` stand open in each `$( )`, its own aside, and whether it is arithmetic, `$(( ))`: a shift there is no mark.
   const nested: number[] = []
+  const sums: boolean[] = []
   // How much is kept so far. Past what is read nothing counts, and nothing more is looked at.
   let size = 0
+  // Whether the line before ended with a backslash: the two are one line, and a here-document's text begins after it.
+  let joined = false
   for (const line of command.split('\n')) {
     const open = waiting[0]
-    if (open !== undefined) {
+    if (open !== undefined && !joined) {
       const text = (open.tabs ? line.replace(/^\t+/, '') : line).replace(/\r$/, '')
       if (text === open.word) waiting.shift()
       else if (open.isRun) {
         kept.push(line)
         size += line.length + 1
+      } else if (open.isBare && size < READ && (line.includes('$(') || line.includes('`'))) {
+        // The text of a here-document with a bare mark is expanded: what stands in `$( )` and in backticks runs, and is
+        // kept as lines of its own. The rest of the text is not read.
+        for (const inner of expanded(line)) {
+          kept.push(inner)
+          size += inner.length + 1
+        }
       }
       continue
     }
-    if (size >= READ) break
+    if (size >= READ) {
+      if (cut !== undefined) cut.short = true
+      break
+    }
     kept.push(line)
+    joined = opened[opened.length - 1] !== "'" && /(?:^|[^\\])(?:\\\\)*\\$/.test(line)
     // Where the command a mark stands in begins, and whether that command is a shell with no script: asked once a command.
     let from = 0
     let isRun: boolean | undefined
@@ -247,8 +312,10 @@ function withoutHereDocuments(command: string): string {
         else if (c === '`' || (c === '$' && line[i + 1] === '(')) {
           // A command of its own begins: a mark in it is a mark, and the command it stands in begins here.
           opened.push(c === '`' ? '`' : ')')
+          if (c === '`') marksAt.push(waiting.length)
           if (c === '$') {
             nested.push(0)
+            sums.push(line[i + 2] === '(')
             i++
           }
           from = i + 1
@@ -258,14 +325,28 @@ function withoutHereDocuments(command: string): string {
       else if (c === '$' && line[i + 1] === "'") {
         opened.push('$')
         i++
-      } else if (c === '#' && (i === 0 || /\s/.test(line[i - 1] ?? ''))) break
-      else if (quote === '`' && c === '`') opened.pop()
+      } else if (c === '#' && (i === 0 || /[\s;|&(]/.test(line[i - 1] ?? ''))) break
+      else if (c === '`') {
+        // Backticks hold a command inside double quotes and outside them. The shell reads a here-document of that
+        // command only up to the closing backtick: one opened in a pair that closes on its line has no text, and the
+        // lines after it run.
+        if (quote === '`') {
+          opened.pop()
+          waiting.length = Math.min(waiting.length, marksAt.pop() ?? 0)
+        } else {
+          opened.push('`')
+          marksAt.push(waiting.length)
+          from = i + 1
+          isRun = undefined
+        }
+      }
       else if (quote === ')' && c === '(') nested[nested.length - 1] = (nested[nested.length - 1] ?? 0) + 1
       else if (quote === ')' && c === ')') {
         if ((nested[nested.length - 1] ?? 0) > 0) nested[nested.length - 1] = (nested[nested.length - 1] ?? 0) - 1
         else {
           opened.pop()
           nested.pop()
+          sums.pop()
         }
       } else if (c === ';' || (c === '|' && line[i - 1] !== '>') || (c === '&' && line[i + 1] !== '>' && !/[<>]/.test(line[i - 1] ?? ''))) {
         from = i + 1
@@ -279,7 +360,8 @@ function withoutHereDocuments(command: string): string {
         HERE_MARK.lastIndex = i
         const m = HERE_MARK.exec(line)
         const before = line.slice(from, i)
-        if (m === null || before.lastIndexOf('((') > before.lastIndexOf('))')) {
+        // A shift inside `(( ))` or the old `$[ ]` is arithmetic.
+        if (m === null || (quote === ')' && sums[sums.length - 1] === true) || before.lastIndexOf('((') > before.lastIndexOf('))') || before.lastIndexOf('$[') > before.lastIndexOf(']')) {
           i++
           continue
         }
@@ -293,7 +375,7 @@ function withoutHereDocuments(command: string): string {
           })
           isRun = SHELLS.has(base(feeds[0])) && given.every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
         }
-        waiting.push({ word: m[3] ?? '', tabs: m[1] === '-', isRun })
+        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun, isBare: !/["'\\]/.test(m[2] ?? '') })
         i = HERE_MARK.lastIndex - 1
       }
     }
@@ -306,6 +388,9 @@ function withoutHereDocuments(command: string): string {
 const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-content', 'out-file', 'get-childitem', 'gci', 'dir', 'get-item', 'gi', 'select-string', 'sls', 'copy-item', 'cpi', 'copy', 'move-item', 'mi', 'move', 'rename-item', 'rni', 'ren', 'new-item', 'ni', 'md', 'test-path', 'resolve-path', 'get-filehash'])
 const PS_NEUTRAL_WORDS = new Set(['write-host', 'write-output', 'set-location', 'sl', 'get-location', 'gl', 'start-sleep', 'select-object', 'select', 'where-object', 'where', '?', 'foreach-object', 'foreach', '%', 'sort-object', 'measure-object', 'measure', 'format-table', 'ft', 'format-list', 'fl', 'out-string', 'out-null'])
 const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'test-connection', 'test-netconnection', 'resolve-dnsname', 'start-bitstransfer'])
+/** PowerShell's commands known by name beside those, for the label of a line with no description; in lower case. */
+const PS_COMMON_WORDS = new Set(['get-process', 'stop-process', 'start-process', 'get-date', 'get-command', 'get-help', 'get-member', 'get-service', 'get-variable', 'set-variable', 'remove-item', 'ri', 'del', 'rd', 'rmdir', 'clear-host', 'cls', 'convertto-json', 'convertfrom-json', 'convertto-csv', 'convertfrom-csv', 'import-csv', 'export-csv', 'import-module', 'join-path', 'split-path', 'compare-object', 'group-object', 'tee-object', 'new-object', 'write-error', 'write-warning', 'write-verbose', 'out-host', 'invoke-expression', 'iex', 'invoke-command', 'start-job', 'get-job', 'receive-job', 'wait-job', 'expand-archive', 'compress-archive', 'pwsh', 'powershell', 'cmd'])
+const PS_KNOWN_WORDS = new Set([...PS_FILE_WORDS, ...PS_NEUTRAL_WORDS, ...PS_NET_WORDS, ...PS_COMMON_WORDS])
 
 /**
  * A command being read: its text so far, the quote open in it, and what closes it when it stands inside another.
@@ -314,7 +399,7 @@ const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', '
  * the list as a piece of its own, so that `cmd=(curl -s …); "${cmd[@]}"` is still found, and a command run inside it,
  * `$(…)`, is taken out as anywhere else.
  */
-type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`'; array?: number }
+type Reading = { text: string; quote: '' | '"' | "'" | '$'; close: '' | ')' | '`' | '}'; array?: number }
 
 /** What stands right before the `(` of an array: `name=` or `name+=` at a word's start. */
 const BEFORE_AN_ARRAY = /(?:^|[\s;&|({])[A-Za-z_]\w*\+?=$/
@@ -338,13 +423,25 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
     ends?.push(mark)
     reading.text = ''
   }
+  // Whether the character before was escaped or closed a command run inside another: the text then ends with a space
+  // that the line does not have, and a `#` after it begins no comment.
+  let glued = false
   for (let i = 0; i < line.length; i++) {
     const top = open[open.length - 1] as Reading
     const c = line[i] ?? ''
     const next = line[i + 1] ?? ''
+    const wasGlued = glued
+    glued = false
     if (top.quote === "'") {
       top.text += c
       if (c === "'") top.quote = ''
+      continue
+    }
+    // Backticks inside backticks are written with a backslash: each one begins or ends a command of its own.
+    if (deep && !powershell && c === '\\' && next === '`' && open.some(reading => reading.close === '`')) {
+      cut(top)
+      glued = true
+      i++
       continue
     }
     // A backslash at a line's end joins the two lines.
@@ -355,6 +452,7 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
     }
     if (c === escape || (c === '\\' && top.quote === '$')) {
       top.text += c + next
+      glued = true
       i++
       continue
     }
@@ -375,7 +473,7 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
       top.quote = '$'
       top.text += "$'"
       i++
-    } else if (c === '#' && /^$|\s$/.test(top.text.slice(-1))) {
+    } else if (c === '#' && !wasGlued && /^$|\s$/.test(top.text.slice(-1))) {
       while (i + 1 < line.length && line[i + 1] !== '\n') i++
     } else if (top.array !== undefined && c === '\n') top.text += ' '
     else if (top.array !== undefined && inside === '' && c === '(' && !deep) top.array++
@@ -398,12 +496,14 @@ function pieces(line: string, deep: boolean, powershell: boolean, ends?: string[
       // `2>&1` and `&>file` send output somewhere; they end no command.
       if (next !== '&' && (next === '>' || /[<>]/.test(line[i - 1] ?? ''))) top.text += c
       else cut(top, c)
-    } else if (inside !== '' || (deep && c === '(')) {
-      open.push({ text: '', quote: '', close: inside === '`' ? '`' : ')' })
+    } else if (inside !== '' || (deep && (c === '(' || (powershell && c === '{')))) {
+      // A PowerShell script block, `{ … }`, runs what it holds: `ForEach-Object { … }`, `& { … }`, `if (…) { … }`.
+      open.push({ text: '', quote: '', close: inside === '`' ? '`' : c === '{' ? '}' : ')' })
       if (inside === ')') i++
       top.text += ' '
-    } else if (deep && (c === ')' || c === '`') && !(c === '`' && powershell)) {
+    } else if (deep && (c === ')' || (c === '`' && !powershell) || (c === '}' && powershell))) {
       cut(top)
+      glued = true
       // A `)` that closes nothing is a `case` pattern's: what follows it is a command.
       if (top.close === c && open.length > 1) open.pop()
     } else top.text += c
@@ -425,9 +525,14 @@ const WORDS = /(?:\\[\s\S]|[^\s"'\\]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?)+/g
 const PS_WORDS = /(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g
 
 /** Whether a word ends with a `)` that nothing in it opened, quoted text aside: `ls)` and `$(date))` do, `$(date)` and `"a)"` do not. */
-const closesMore = (word: string): boolean => {
+const closesMore = (word: string): boolean => closedBy(word) > 0
+/** How many `)` at a word's end close more than the word opened, quoted text aside: 1 for `ls)`, 2 for `x))`, 1 for `$(date))`, 0 for `$(date)`. */
+const closedBy = (word: string): number => {
+  if (!word.endsWith(')')) return 0
   const bare = word.replace(/\\[\s\S]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?/g, '_')
-  return bare.endsWith(')') && bare.split(')').length > bare.split('(').length
+  let last = 0
+  while (last < bare.length && bare[bare.length - 1 - last] === ')') last++
+  return Math.max(0, Math.min(last, bare.split(')').length - bare.split('(').length))
 }
 
 /**
@@ -446,15 +551,25 @@ function segments(command: string, deep = false, constructs = false, powershell 
   const parts = pieces(command, deep, powershell, follow ? ends : undefined)
   /** The command of a piece that starts where a command may: `do curl x`, `if curl x`, `! curl x`, `(curl x` are what follows. `for u in a b` and `done` run nothing. `end` is the mark that ended the piece. */
   const commandOf = (words: string[], end: string): string[] => {
-    let rest = words
+    // Where the command begins among the words, and its first word if a `(` was taken off it. The words are gone
+    // through by their place and cut once at the end: a line of nothing but `(` or `!` costs its length, not its square.
+    let at = 0
+    let first: string | undefined
     for (;;) {
-      const head = rest[0] ?? ''
-      if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1)
+      const head = first ?? words[at] ?? ''
+      // `if X=1 curl x`: the assignment stands after the word, and the command after the assignment.
+      if (BEFORE_A_COMMAND.has(head)) [at, first] = [start(words, at + 1), undefined]
+      // `function name { …` and `name() { …`: the body runs when the function is called, and it is read as the line's own.
+      else if (head === 'function' && words.length - at > 2) [at, first] = [at + (words[at + 2] === '()' ? 3 : 2), undefined]
+      else if (/^[A-Za-z_][\w.-]*\(\)$/.test(head) && words[at + 1] === '{') [at, first] = [at + 1, undefined]
+      else if (/^[A-Za-z_][\w.-]*$/.test(head) && words[at + 1] === '()' && words[at + 2] === '{') [at, first] = [at + 2, undefined]
       else if (head.startsWith('(') && !head.startsWith('((')) {
         subshells++
-        rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
+        if (head.length > 1) first = head.slice(1)
+        else [at, first] = [at + 1, undefined]
       } else break
     }
+    let rest = first === undefined ? words.slice(at) : [first, ...words.slice(at + 1)]
     const head = rest[0] ?? ''
     if (follow && head === 'case') {
       // `case $x in a) ls`: what stands after `in` is the first pattern, and the command after its `)`.
@@ -466,11 +581,10 @@ function segments(command: string, deep = false, constructs = false, powershell 
     if (follow && cases > 0 && head === 'esac') cases--
     // `(cd sub; ls)` ends with `ls`, not `ls)`. With no subshell open the `)` is a `case` pattern's and stays.
     rest = rest.flatMap(word => {
-      let w = word
-      while (subshells > 0 && closesMore(w)) {
-        w = w.slice(0, -1)
-        subshells--
-      }
+      // Counted once a word: how many `)` at its end close more than the word opened, and no more than stand open.
+      const off = subshells > 0 ? Math.min(subshells, closedBy(word)) : 0
+      subshells -= off
+      const w = off > 0 ? word.slice(0, -off) : word
       return w === '' ? [] : [w]
     })
     return NO_COMMAND.has(rest[0] ?? '') ? [] : rest
@@ -576,10 +690,21 @@ function classifyShell(command: string, description: string, setup: Setup, power
     if (/^["']/.test(rest[0] ?? '')) texts.add(rest)
     return rest
   }
-  /** The label of a line the model wrote no description for: the first command's name, and never anything that is not shaped like a name. */
+  /**
+   * The label of a line the model wrote no description for: the first command's name if it is a command the mod knows
+   * or one the person named in the options, and the word `shell` for anything else. The line is read by hand, and a
+   * reading can go wrong: a word of a pattern, of a value or of a text may come to stand where a command would. Such a
+   * word is in no list, so it is never shown.
+   */
   const nameOnly = (word: string | undefined): string => {
     const found = base(word ?? '')
-    return /^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(found) ? found : 'shell'
+    if (!/^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(found)) return 'shell'
+    const isKnown =
+      KNOWN_WORDS.has(found) ||
+      (powershell && (PS_KNOWN_WORDS.has(found.toLowerCase()) || KNOWN_WORDS.has(found.toLowerCase()))) ||
+      setup.memoryCommands.some(c => named(name(found), c)) ||
+      [...setup.commandStations.keys()].some(c => named(name(found), c))
+    return isKnown ? found : 'shell'
   }
   /**
    * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, the one that
@@ -651,22 +776,32 @@ function classifyShell(command: string, description: string, setup: Setup, power
     return subs !== undefined && (subs.has(rest[0] ?? '') || subs.has(`${rest[0] ?? ''} ${rest[1] ?? ''}`))
   }
   // What is read: the line without the text of its here-documents, and no more than its first part.
-  const read = (powershell ? command : withoutHereDocuments(command)).slice(0, READ)
+  const cut = { short: false }
+  const whole = powershell ? command : withoutHereDocuments(command, cut)
+  const read = whole.slice(0, READ)
+  // More of the line than is read: what stands there is not known.
+  const isCutShort = cut.short || whole.length > READ
   const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
   const label = description.trim() || (lines[0] !== undefined && texts.has(lines[0]) ? 'shell' : nameOnly(lines[0]?.[0]))
   const run = lines.flatMap(words => commands(words))
-  for (const words of run) {
-    const head = name(words[0])
-    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
-    if (setup.memoryCommands.some(c => named(head, c) || named(script, c))) {
-      return { station: 'memory', label: memoryLabel(words, setup) }
-    }
-  }
   // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
   // It can leave some commands out of the asking.
   const reaches = (left: (words: string[]) => boolean = () => false): boolean => {
     followed = 0
     return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(words => !left(words) && isNet(words))
+  }
+  const isMemory = (words: string[]): boolean => {
+    const head = name(words[0])
+    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
+    return setup.memoryCommands.some(c => named(head, c) || named(script, c))
+  }
+  const remembered = run.find(isMemory)
+  if (remembered !== undefined) {
+    // A memory command keeps the line on Memory whatever its own name says. Another command on the line that reaches
+    // the network takes the line to Network, as it does for a command of `commandStations`: `recall x; curl y` sends
+    // something out, and Memory would say it did not.
+    if (run.some(words => !isMemory(words) && isNet(words)) || reaches(isMemory)) return { station: 'web', label }
+    return { station: 'memory', label: memoryLabel(remembered, setup) }
   }
   // The station the person put a command on, by the rule `memoryCommands` goes by: found wherever a command is, so
   // behind `sudo`, in a line handed to `bash -c` and in a container as well. Memory was asked first, so it wins.
@@ -691,7 +826,7 @@ function classifyShell(command: string, description: string, setup: Setup, power
   const isFile = (head: string): boolean => FILE_WORDS.has(head) || (powershell && PS_FILE_WORDS.has(head))
   const real = run.filter(words => !isNeutral(name(words[0])))
   // A line with more behind it than was followed is not known to be about files alone.
-  if (!spent && real.length > 0 && real.every(words => isFile(name(words[0])))) {
+  if (!spent && !isCutShort && real.length > 0 && real.every(words => isFile(name(words[0])))) {
     return { station: isMemoryPath(read, setup) ? 'memory' : 'files', label }
   }
   return { station: 'shell', label }

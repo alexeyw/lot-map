@@ -74,6 +74,13 @@ export function foldRows(entries: readonly Entry[], max = LIST_ROWS, apart = fal
 }
 
 /**
+ * The tools of Claude Code that can start work which goes on after they answer. Any other tool's answer is not read
+ * for a task: a server's own tool may answer with a field of the same name, no notification will ever close its row,
+ * and the word in that field is the server's, not an id of Claude Code's.
+ */
+export const TASK_TOOLS: ReadonlySet<string> = new Set(['Bash', 'PowerShell', 'Agent', 'Task', 'Workflow', 'Monitor', 'Skill'])
+
+/**
  * The id of the background task a tool's answer started, if it started one: a shell command sent to the
  * background, a subagent or workflow launched to run on, a monitor.
  */

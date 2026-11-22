@@ -2,6 +2,20 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.14.0 (2026-11-22)
+
+What two reviews of 0.13.2 found, one from outside and one of the project's own: fourteen findings, all closed here. The first entry is a vulnerability by [SECURITY.md](SECURITY.md): a label that held content. Two things you may notice are marked **Changed**.
+
+- **Changed**, and fixed: with no description, a shell line's label could be a word of its content. `N=$(grep hunter2 notes.txt | wc -l)` was labelled `hunter2`; so was the text of a here-document whose mark is `END-MSG`, `"END MSG"` or `1`, and of a PowerShell here-string with an apostrophe in it. Each earlier fix closed the form that was reported, so the rule is another now: the label is the command's name only if it is a command the mod knows by name (`git`, `make`, `curl` and the like) or one you named in `memoryCommands` or `commandStations`, and the word `shell` for anything else. A program of your own or a script, run with no description, is therefore labelled `shell` and no longer by its name. A line with a description is not touched. (#149)
+- Fixed: an address with one slash after `https:`, or none, showed a part of its path: `https:/example.com/users/@hunter2` was labelled `hunter2`. (#149)
+- **Changed**: with `memoryCommands` set, a line that runs a memory command and another command that reaches the network goes to Network, as it already did for `commandStations`. `recall search x; curl https://x.io` was Memory. (#152)
+- Fixed: commands that reach the network and were shown on Files or Shell. A `#` after an escaped space or right after a closed `$( )` was taken for a comment; backticks inside backticks were not followed; a here-document's mark that is not shaped like a name (`EOF-1`, `E"O"F`) hid every line after it; a comment after `;`, a line joined by a backslash and a shift in `$[ ]` or in a quoted `$(( ))` misled the search for marks; a function's body was not read; `env --unset` and the long flags of `sudo`, `timeout` and `nice` were not known to take a word; an assignment after `if`, `{`, `!` or `do` stood for the command. A line longer than the 8,000 characters read is no longer shown as Files. (#150)
+- Fixed: a PowerShell script block was not read: `gci | % { irm https://x.io }` was Files. (#150)
+- Fixed: a here-document in backticks hid the lines after it when the backticks closed on its own line; and the text of a here-document with a bare mark, `<<EOF` and not `<<'EOF'`, was not read for what the shell runs in it: `cat > .env <<EOF` with `TOKEN=$(curl …)` was Files. (#153)
+- Fixed: the board grew without end when a tool that is not Claude Code's answered with a field named `backgroundTaskId`: each call left a row that nothing closes, and the word from that field was kept in the session's state. Only the tools that start background work are read for a task now, and the board keeps the newest forty tasks still going. (#151)
+- Fixed: a line of nothing but brackets, 7,800 characters, took 60 ms to read on the machine it was measured on; under 5 ms now. (#151)
+- Fixed: the terminal picture's budget of 450 KB a second held the loop's frames only. Each drawing of the pane sent a frame past it, so a burst of calls could make the picture go away in kitty again. A drawing that comes too soon keeps the frame on show, and the loop sends the new one when it may. (#153)
+
 ## 0.13.2 (2026-11-22)
 
 Fixes only. The first two come from a second outside review, of 0.13.1.
