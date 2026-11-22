@@ -576,3 +576,36 @@ test('a frame waits as long as its size asks, so that no second sends more than 
   expect(paceFor(133 * 1024)).toBe(296)
   expect(paceFor(0)).toBe(0)
 })
+
+// From an outside review of 0.13.2: the pane is drawn again at every change of the board, and those drawings went past the budget.
+test('a burst of calls sends no more in a second than the budget: a drawing that comes too soon sends no frame of its own', { options: { terminalView: 'picture' }, timeoutMs: 60_000 }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  const blits: number[] = []
+  on('ui.blit', (_, e) => {
+    const source: { png?: string; rgba?: string } = 'source' in e ? (e.source as { png?: string; rgba?: string }) : {}
+    blits.push((source.png ?? source.rgba ?? '').length)
+    return { value: {} }
+  })
+  on('tool.call', () => ({ result: {} }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await clock.advance(1000)
+  const imageNow = async (): Promise<string> => {
+    const source = ((await ui.find({ type: 'Image' }))?.props.source ?? {}) as { png?: string; rgba?: string }
+    return source.png ?? source.rgba ?? ''
+  }
+  let last = await imageNow()
+  const from = blits.length
+  const drawn: number[] = []
+  // Ten calls in a second: each change of the board draws the pane again, with a new frame.
+  for (let i = 0; i < 10; i++) {
+    await $.tool.call({ tool: 'Read', file_path: `/a/b/f${i}.py` } as never)
+    const now = await imageNow()
+    if (now !== '' && now !== last) drawn.push(now.length)
+    last = now
+    await clock.advance(100)
+  }
+  const frames = [...blits.slice(from), ...drawn]
+  // As the project's own test allows: the budget, and the frame that ends the second.
+  expect(frames.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(SENT_A_SECOND + Math.max(0, ...frames))
+  await ui.unmount()
+})

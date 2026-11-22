@@ -71,6 +71,10 @@ export type Picture = {
   isSchemeUnknown: boolean
   /** Whether this terminal keeps every picture it is sent (iTerm2 before 3.7.8): unknown until the first drawing has asked. No picture there. */
   keepsFrames: boolean | undefined
+  /** The last frame sent, with a drawing or by the loop: when, and how large. The next one waits for it, whoever sends it. */
+  sent: { at: number; size: number } | undefined
+  /** The frame the last drawing gave its Image. A drawing that may send none gives the same one again, so the Image does not change. */
+  given: ReturnType<typeof imageSource> | undefined
 }
 
 /** A map's next frame in `delay` ms, in place of the one it was waiting for; none with no delay. */
@@ -142,7 +146,7 @@ export function terminalPicture(setup: Setup): Picture | undefined {
     theme: setup.theme === 'auto' ? 'dark' : setup.theme,
     background: setup.colors.ground === undefined ? 'transparent' : setup.background,
   }
-  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto', keepsFrames: undefined }
+  return { setup: pictureSetup, shown: undefined, timer: undefined, showsPictures: undefined, isSchemeUnknown: setup.theme === 'auto', keepsFrames: undefined, sent: undefined, given: undefined }
 }
 
 /** The picture above the rows for this board; its loop then keeps it moving. None in a pane too narrow, or a terminal that shows no pictures; in iTerm2 before 3.7.8, a line saying why there is none. */
@@ -168,10 +172,20 @@ export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', '
   }
   const busy = isBusy(board)
   picture.shown = { scene, pane: e.requestId, drawnAt: now, isBusy: busy }
+  // The pane is drawn again at every change of the board, and a burst of calls changes it many times a second. A
+  // drawing that comes sooner than the last frame's size allows sends no frame of its own: the frame on show stays,
+  // and the loop paints this drawing as soon as it may. Without this the drawings alone sent twice the budget.
+  const last = picture.sent
+  const wait = last === undefined ? 0 : last.at + paceFor(last.size) - now
+  const held = wait > 0 ? picture.given : undefined
   // This frame goes with the drawing; the loop sends the rest, and its first frame tells whether pictures show here.
-  const source = imageSource(paint(scene, 0, scaleFor(scene, SCALE)))
-  const next = paced(nextChangeIn(scene, 0, endlessEvery(0, busy)), sizeOf(source))
-  schedule($, picture, picture.showsPictures ? next : Math.min(PROBE_MS, next ?? PROBE_MS), () => tick($, picture))
+  const source = held ?? imageSource(paint(scene, 0, scaleFor(scene, SCALE)))
+  if (held === undefined) {
+    picture.sent = { at: now, size: sizeOf(source) }
+    picture.given = source
+  }
+  const next = held === undefined ? paced(nextChangeIn(scene, 0, endlessEvery(0, busy)), sizeOf(source)) : wait
+  schedule($, picture, picture.showsPictures || held !== undefined ? next : Math.min(PROBE_MS, next ?? PROBE_MS), () => tick($, picture))
   return (
     <Image
       key={MAP_KEY}
@@ -201,6 +215,7 @@ async function tick($: EngineInterface, picture: Picture): Promise<void> {
     return
   }
   picture.showsPictures = true
+  picture.sent = { at: drawing.drawnAt + t, size: sizeOf(source) }
   if (picture.shown !== drawing) return
   const next = paced(nextChangeIn(drawing.scene, t, endlessEvery(t, drawing.isBusy)), sizeOf(source))
   // Less the time this frame took, but at least a third of the wait, to leave the mod's other hooks their turn.
