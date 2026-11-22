@@ -195,7 +195,7 @@ Each of these with a picture of its values: [How the options look](docs/options.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `memoryServers` | `memory` | MCP servers whose tools light Memory |
-| `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py` |
+| `memoryCommands` | none | shell commands or scripts that light Memory; a name counts when it is the command itself or begins with it and `-`, `_` or `.`, so `recall` also names `recall-sync.py`. A line that also runs another command that reaches the network goes to Network |
 | `memorySubcommands` | none | words after a memory command that the map may show, such as `add` or `search`; without them the command goes by its own name |
 | `memoryPaths` | none | parts of a path that make a file a memory |
 | `memoryLabels` | none | short names for memory tools, each as `tool=name` |

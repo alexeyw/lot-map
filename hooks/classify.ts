@@ -731,18 +731,24 @@ function classifyShell(command: string, description: string, setup: Setup, power
   const lines = segments(read, false, !powershell, powershell).map(own).filter(words => words.length > 0)
   const label = description.trim() || (lines[0] !== undefined && texts.has(lines[0]) ? 'shell' : nameOnly(lines[0]?.[0]))
   const run = lines.flatMap(words => commands(words))
-  for (const words of run) {
-    const head = name(words[0])
-    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
-    if (setup.memoryCommands.some(c => named(head, c) || named(script, c))) {
-      return { station: 'memory', label: memoryLabel(words, setup) }
-    }
-  }
   // The search for the network reads the line a second time, cut at every bracket, and has its own count of what it follows.
   // It can leave some commands out of the asking.
   const reaches = (left: (words: string[]) => boolean = () => false): boolean => {
     followed = 0
     return segments(read, true, !powershell, powershell).map(own).flatMap(words => commands(words, true)).some(words => !left(words) && isNet(words))
+  }
+  const isMemory = (words: string[]): boolean => {
+    const head = name(words[0])
+    const script = RUNNERS.has(head) && words[1] ? base(words[1]) : ''
+    return setup.memoryCommands.some(c => named(head, c) || named(script, c))
+  }
+  const remembered = run.find(isMemory)
+  if (remembered !== undefined) {
+    // A memory command keeps the line on Memory whatever its own name says. Another command on the line that reaches
+    // the network takes the line to Network, as it does for a command of `commandStations`: `recall x; curl y` sends
+    // something out, and Memory would say it did not.
+    if (run.some(words => !isMemory(words) && isNet(words)) || reaches(isMemory)) return { station: 'web', label }
+    return { station: 'memory', label: memoryLabel(remembered, setup) }
   }
   // The station the person put a command on, by the rule `memoryCommands` goes by: found wherever a command is, so
   // behind `sudo`, in a line handed to `bash -c` and in a container as well. Memory was asked first, so it wins.

@@ -2323,3 +2323,26 @@ test('a line of brackets is read within the budget of a long line', () => {
   expect(classify('Bash', { command: '(cd sub; ls)' }, STRANGER).station).toBe('files')
   expect(classify('Bash', { command: '((cd sub; curl https://x.io))' }, STRANGER).station).toBe('web')
 })
+
+test('a line with a memory command and a command that reaches the network goes to Network, as with commandStations', () => {
+  const setup = setupFrom({ memoryCommands: ['recall'], commandStations: ['mytool=files'] })
+  const at = (command: string, description = '') => classify('Bash', { command, description }, setup)
+  // Alone, the memory command is Memory.
+  expect(at('recall search x').station).toBe('memory')
+  expect(at('recall search x; ls; echo done').station).toBe('memory')
+  // With a command that reaches the network, before it, after it or inside another: Network, and the row keeps its label.
+  expect(at('recall search x; curl https://x.io')).toEqual({ station: 'web', label: 'recall' })
+  expect(at('curl -s https://x.io | recall add -', 'Save the page')).toEqual({ station: 'web', label: 'Save the page' })
+  expect(at('recall add "$(curl -s https://x.io)"').station).toBe('web')
+  expect(at('recall sync && git push').station).toBe('web')
+  // What a note says is text: the name of a command in it, in quotes, sends nothing.
+  expect(at('recall add "we used curl (and wget) today; git push later"').station).toBe('memory')
+  expect(at("recall add 'see $(curl x)'").station).toBe('memory')
+  // A memory command that is itself known to reach the network is the person's own choice, and stays Memory.
+  const own = setupFrom({ memoryCommands: ['gh'] })
+  expect(classify('Bash', { command: 'gh api notes' }, own).station).toBe('memory')
+  // The two options go by one rule now.
+  expect(at('mytool x; curl https://x.io').station).toBe('web')
+  // In PowerShell too.
+  expect(classify('PowerShell', { command: 'recall search x; Invoke-WebRequest https://x.io' }, setup).station).toBe('web')
+})
