@@ -5,7 +5,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Entry } from '../types'
 import { background, begin, change, charge, compactionWindowOf, contextOf, finish, kept, newId, quietly, settle } from './board'
 import { stepCosts } from './cost'
-import { classify, clean, firstLine, keepNewest, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
+import { TASK_TOOLS, classify, clean, firstLine, keepNewest, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
 import { ZOOMS, drawPane } from './pane'
 import { terminalMap } from './terminal'
@@ -220,7 +220,7 @@ export const register: Register = (on, options) => {
     try {
       const ran = await next(e)
       const wasRefused = ran.deny !== undefined || (e.tool_use_id !== undefined && refused.delete(e.tool_use_id))
-      const task = wasRefused || ran.isError === true ? undefined : taskOf(ran.result)
+      const task = wasRefused || ran.isError === true || !TASK_TOOLS.has(e.tool) ? undefined : taskOf(ran.result)
       if (task !== undefined) {
         await background($, id, task)
         return ran

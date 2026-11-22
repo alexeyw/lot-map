@@ -120,8 +120,8 @@ const REDIRECTION = /^(?:\d+|&)?(?:>>|>\||<<<|<<-|<<|<>|>&|<&|>|<)/
  * Where a command begins among a piece's words: past the assignments and the redirections before it. What they
  * hold is content, a value or a text, and none of it may be taken for the command's name.
  */
-function start(words: string[]): number {
-  let i = 0
+function start(words: string[], from = 0): number {
+  let i = from
   for (;;) {
     const word = words[i] ?? ''
     const sent = REDIRECTION.exec(word)
@@ -472,9 +472,14 @@ const WORDS = /(?:\\[\s\S]|[^\s"'\\]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?)+/g
 const PS_WORDS = /(?:[^\s"']|"[^"]*"?|'[^']*'?)+/g
 
 /** Whether a word ends with a `)` that nothing in it opened, quoted text aside: `ls)` and `$(date))` do, `$(date)` and `"a)"` do not. */
-const closesMore = (word: string): boolean => {
+const closesMore = (word: string): boolean => closedBy(word) > 0
+/** How many `)` at a word's end close more than the word opened, quoted text aside: 1 for `ls)`, 2 for `x))`, 1 for `$(date))`, 0 for `$(date)`. */
+const closedBy = (word: string): number => {
+  if (!word.endsWith(')')) return 0
   const bare = word.replace(/\\[\s\S]|"(?:[^"\\]|\\[\s\S])*"?|'[^']*'?/g, '_')
-  return bare.endsWith(')') && bare.split(')').length > bare.split('(').length
+  let last = 0
+  while (last < bare.length && bare[bare.length - 1 - last] === ')') last++
+  return Math.max(0, Math.min(last, bare.split(')').length - bare.split('(').length))
 }
 
 /**
@@ -493,20 +498,25 @@ function segments(command: string, deep = false, constructs = false, powershell 
   const parts = pieces(command, deep, powershell, follow ? ends : undefined)
   /** The command of a piece that starts where a command may: `do curl x`, `if curl x`, `! curl x`, `(curl x` are what follows. `for u in a b` and `done` run nothing. `end` is the mark that ended the piece. */
   const commandOf = (words: string[], end: string): string[] => {
-    let rest = words
+    // Where the command begins among the words, and its first word if a `(` was taken off it. The words are gone
+    // through by their place and cut once at the end: a line of nothing but `(` or `!` costs its length, not its square.
+    let at = 0
+    let first: string | undefined
     for (;;) {
-      const head = rest[0] ?? ''
+      const head = first ?? words[at] ?? ''
       // `if X=1 curl x`: the assignment stands after the word, and the command after the assignment.
-      if (BEFORE_A_COMMAND.has(head)) rest = rest.slice(1 + start(rest.slice(1)))
+      if (BEFORE_A_COMMAND.has(head)) [at, first] = [start(words, at + 1), undefined]
       // `function name { …` and `name() { …`: the body runs when the function is called, and it is read as the line's own.
-      else if (head === 'function' && rest.length > 2) rest = rest.slice(rest[2] === '()' ? 3 : 2)
-      else if (/^[A-Za-z_][\w.-]*\(\)$/.test(head) && rest[1] === '{') rest = rest.slice(1)
-      else if (/^[A-Za-z_][\w.-]*$/.test(head) && rest[1] === '()' && rest[2] === '{') rest = rest.slice(2)
+      else if (head === 'function' && words.length - at > 2) [at, first] = [at + (words[at + 2] === '()' ? 3 : 2), undefined]
+      else if (/^[A-Za-z_][\w.-]*\(\)$/.test(head) && words[at + 1] === '{') [at, first] = [at + 1, undefined]
+      else if (/^[A-Za-z_][\w.-]*$/.test(head) && words[at + 1] === '()' && words[at + 2] === '{') [at, first] = [at + 2, undefined]
       else if (head.startsWith('(') && !head.startsWith('((')) {
         subshells++
-        rest = head.length > 1 ? [head.slice(1), ...rest.slice(1)] : rest.slice(1)
+        if (head.length > 1) first = head.slice(1)
+        else [at, first] = [at + 1, undefined]
       } else break
     }
+    let rest = first === undefined ? words.slice(at) : [first, ...words.slice(at + 1)]
     const head = rest[0] ?? ''
     if (follow && head === 'case') {
       // `case $x in a) ls`: what stands after `in` is the first pattern, and the command after its `)`.
@@ -518,11 +528,10 @@ function segments(command: string, deep = false, constructs = false, powershell 
     if (follow && cases > 0 && head === 'esac') cases--
     // `(cd sub; ls)` ends with `ls`, not `ls)`. With no subshell open the `)` is a `case` pattern's and stays.
     rest = rest.flatMap(word => {
-      let w = word
-      while (subshells > 0 && closesMore(w)) {
-        w = w.slice(0, -1)
-        subshells--
-      }
+      // Counted once a word: how many `)` at its end close more than the word opened, and no more than stand open.
+      const off = subshells > 0 ? Math.min(subshells, closedBy(word)) : 0
+      subshells -= off
+      const w = off > 0 ? word.slice(0, -off) : word
       return w === '' ? [] : [w]
     })
     return NO_COMMAND.has(rest[0] ?? '') ? [] : rest

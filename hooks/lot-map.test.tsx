@@ -2285,3 +2285,41 @@ test('logRows is fill or 16, whatever else was set', () => {
   expect(setupFrom({ logRows: 'fill' }).logRows).toBe('fill')
   for (const value of ['16', 16, '24', true, undefined]) expect(setupFrom({ logRows: value }).logRows).toBe(16)
 })
+
+test('a task id in the answer of a tool that starts no background task leaves no row running, and the board has an end', { timeoutMs: 60_000 }, async ($, on) => {
+  let now = 1_000_000
+  on('clock.now', () => ({ value: now++ }))
+  let last: unknown
+  on('state.set' as never, ((_: unknown, e: unknown, next: (e: unknown) => unknown) => ((last = e), next(e))) as never)
+  const board = (): Board | undefined => (last as { value?: { value?: Board } }).value?.value
+  let n = 0
+  on('tool.call', () => ({ result: { backgroundTaskId: `sk-ant-hunter2-${n++}` } }) as never)
+  // Any tool may answer with a field of this name: a server's own tool is no background task of Claude Code's.
+  for (let i = 0; i < 300; i++) await $.tool.call({ tool: 'mcp__notes__save', text: 'x' } as never)
+  expect(board()?.entries.length ?? 0).toBeLessThanOrEqual(80)
+  expect(board()?.entries.filter(e => e.status === 'run').length).toBe(0)
+  expect(JSON.stringify(board())).not.toContain('hunter2')
+  // The shell does start them, and each row stays open; but past a number of them the oldest go, so the board ends.
+  for (let i = 0; i < 300; i++) await $.tool.call({ tool: 'Bash', command: 'sleep 600', description: 'Wait', run_in_background: true } as never)
+  const entries = board()?.entries ?? []
+  expect(entries.length).toBeLessThanOrEqual(120)
+  expect(entries.filter(e => e.status === 'run' && e.task !== undefined).length).toBeGreaterThanOrEqual(40)
+  // The newest task is among those kept.
+  expect(entries.some(e => e.task === `sk-ant-hunter2-${n - 1}`)).toBe(true)
+})
+
+test('a line of brackets is read within the budget of a long line', () => {
+  for (const line of [`${'( '.repeat(2600)}${')'.repeat(2600)}`, `${'( '.repeat(2000)}${')'.repeat(4000)}`]) {
+    for (let i = 0; i < 10; i++) classify('Bash', { command: line }, STRANGER)
+    const took = Array.from({ length: 5 }, () => {
+      const t0 = performance.now()
+      classify('Bash', { command: line }, STRANGER)
+      return performance.now() - t0
+    }).sort((a, b) => a - b)
+    console.log(`COST naming a line of ${line.length} brackets: ${(took[2] ?? 0).toFixed(1)} ms`)
+    expect(took[2] ?? 0).toBeLessThan(20)
+  }
+  // A subshell's closing bracket still comes off its last word, and no more of them than were opened.
+  expect(classify('Bash', { command: '(cd sub; ls)' }, STRANGER).station).toBe('files')
+  expect(classify('Bash', { command: '((cd sub; curl https://x.io))' }, STRANGER).station).toBe('web')
+})
