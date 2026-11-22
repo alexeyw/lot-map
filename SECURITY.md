@@ -19,7 +19,8 @@ The mod is meant to watch and to change nothing, so any of these is a vulnerabil
 - a label, row or stored value that holds content and not a name: a command line, a query, a file's text, a secret, more of a hook's words than the options allow;
 - a hook of the mod's that changes a tool call, its result, a prompt, the context, or a permission decision;
 - a network request, a file read or a process started by the mod;
-- text from a tool call or a hook that gets drawn as something other than plain text.
+- text from a tool call or a hook that gets drawn as something other than plain text;
+- a tool call held back: the mod names a call before the call runs, so an input that takes it seconds to read keeps the tool waiting. [PRINCIPLES.md](PRINCIPLES.md) says what reading a line may cost.
 
 What the mod is handed and what it keeps are described in [PRIVACY.md](PRIVACY.md).
 
