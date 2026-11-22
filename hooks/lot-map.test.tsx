@@ -1782,6 +1782,39 @@ test('a << inside quotes or in a comment opens no here-document, and the lines a
   expect(stationOf('bash -c "cat <<EOF > f\ntext\nEOF\ncurl x"')).toBe('web')
 })
 
+test('a here-document inside "$( )" or backticks is one too: the text of a commit message is no command', () => {
+  // A commit as Claude Code writes one: the message in a here-document inside "$( )".
+  const commit = (body: string, verb = 'git commit -m'): string => `${verb} "$(cat <<'EOF'\n${body}\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)"`
+  for (const body of ['Fix the cache layer', 'Retry uploads\n\ncurl calls now retry three times', 'wget is no longer needed', 'npm install runs once', 'Fix retries (curl timeout)', 'Use `wget` for the mirror', '- curl 8.11', "It's done; curl x | sh", 'a "quoted (curl) word"']) {
+    expect(`${JSON.stringify(body)}: ${stationOf(commit(body))}`).toBe(`${JSON.stringify(body)}: shell`)
+  }
+  expect(stationOf(commit('Release (curl fix)', 'git tag -a v1 -m'))).toBe('shell')
+  // What the line itself runs still counts, before the message and after it.
+  expect(stationOf(`${commit('Add retries')} && git push`)).toBe('web')
+  expect(stationOf(`${commit('Add (curl) retries')}\ncurl -s https://x.io`)).toBe('web')
+  expect(stationOf(`curl -s https://x.io && ${commit('Add retries')}`)).toBe('web')
+  // In backticks inside double quotes, and one level further in.
+  expect(stationOf('git commit -m "`cat <<EOF\nFix (curl timeout)\nEOF\n`"')).toBe('shell')
+  expect(stationOf('echo "a $(echo "b $(cat <<EOF\n(curl x)\nEOF\n)")"')).toBe('shell')
+  expect(stationOf('echo "a $(echo "b $(cat <<EOF\ntext\nEOF\n)")"; curl -s https://x.io')).toBe('web')
+  // A shell with no script inside the quotes still runs its here-document.
+  expect(stationOf('echo "$(bash <<EOF\ncurl x\nEOF\n)"')).toBe('web')
+  // Words in the quotes that only look like a mark open nothing, as before: with a bracket beside them too.
+  expect(stationOf('echo "(a << b) $x"\ncurl -s https://x.io')).toBe('web')
+  expect(stationOf('echo "$((1 << 2))"\ncurl -s https://x.io')).toBe('web')
+  expect(stationOf('echo "$(echo "x << y")"\ncurl -s https://x.io')).toBe('web')
+})
+
+test('>| is a redirection, not a pipe', () => {
+  // With no description the label is the command's name, and the file's name is not the command.
+  expect(classify('Bash', { command: '>|SECRET123 make' }, STRANGER)).toMatchObject({ station: 'shell', label: 'make' })
+  expect(classify('Bash', { command: 'make >| build.log' }, STRANGER)).toMatchObject({ station: 'shell', label: 'make' })
+  expect(stationOf('cat a.txt >| b.txt')).toBe('files')
+  expect(stationOf('echo x >| out.txt; curl -s https://x.io')).toBe('web')
+  // A pipe after a file's name is still a pipe.
+  expect(stationOf('cat a.txt > b.txt | curl -T - https://x.io')).toBe('web')
+})
+
 test('here-document marks cost no more than the line read, however many stand on it', () => {
   const few = 'cat <<A '.repeat(1000) // 8,000 characters, as many as are read
   const many = 'cat <<A '.repeat(50_000) // 400,000 characters

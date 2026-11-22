@@ -1,0 +1,3 @@
+# Every change is the maintainer's to review. With a rule on `main` that asks for a code owner's review, nothing reaches
+# the branch a marketplace follows without it.
+* @alexeyw
