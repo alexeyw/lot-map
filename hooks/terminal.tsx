@@ -13,8 +13,28 @@ import { endlessEvery, nextChangeIn, parseMap } from './scene'
 import type { Scene } from './scene'
 
 const MAP_KEY = 'map'
-/** Pixels per unit of the drawing: about what a docked pane shows on a sharp screen. The Image's size limit may take it lower. */
-export const SCALE = 1.5
+/**
+ * Pixels per unit of the drawing: a frame of 460 by 430 pixels, some 80 KB as it is sent. It was 1.5, about what a
+ * docked pane shows on a sharp screen, at some 133 KB a frame: more than `SENT_A_SECOND` lets through five times a
+ * second. The Image's size limit may take it lower.
+ */
+export const SCALE = 1
+/**
+ * The most the picture sends in a second, in characters of base64. Above some 530 to 630 KB a second kitty 0.50 on
+ * macOS stops showing the picture while the map moves, whatever the size of a frame and however often it comes: of
+ * eight pairs of size and pace watched on 2026-11-22, the three under 532 KB a second moved evenly and the five over
+ * 635 lost the map (issue #110). Whether the limit is kitty's or Claude Code's is not known.
+ */
+export const SENT_A_SECOND = 450 * 1024
+
+/** How long a frame of this many characters must be left on show before the next, in ms, to keep under `SENT_A_SECOND`. */
+export const paceFor = (characters: number): number => Math.ceil((characters * 1000) / SENT_A_SECOND)
+
+/** How many characters a frame is as it is sent. */
+const sizeOf = (source: ReturnType<typeof imageSource>): number => ('png' in source ? source.png : source.rgba).length
+
+/** The wait before the next frame, never shorter than the frame just sent allows. */
+const paced = (next: number | undefined, sent: number): number | undefined => (next === undefined ? undefined : Math.max(next, paceFor(sent)))
 /** Narrower than this the map cannot be read, and the pane stays text. */
 const MAP_MIN_COLUMNS = 24
 const MAP_MAX_COLUMNS = 72
@@ -149,12 +169,13 @@ export async function drawPicture($: EngineInterface, e: RenderInputOf<'Pane', '
   const busy = isBusy(board)
   picture.shown = { scene, pane: e.requestId, drawnAt: now, isBusy: busy }
   // This frame goes with the drawing; the loop sends the rest, and its first frame tells whether pictures show here.
-  const next = nextChangeIn(scene, 0, endlessEvery(0, busy))
+  const source = imageSource(paint(scene, 0, scaleFor(scene, SCALE)))
+  const next = paced(nextChangeIn(scene, 0, endlessEvery(0, busy)), sizeOf(source))
   schedule($, picture, picture.showsPictures ? next : Math.min(PROBE_MS, next ?? PROBE_MS), () => tick($, picture))
   return (
     <Image
       key={MAP_KEY}
-      source={imageSource(paint(scene, 0, scaleFor(scene, SCALE)))}
+      source={source}
       columns={columns}
       rows={Math.max(1, Math.round(columns * perColumn))}
       alt={`${setup.t.title}. ${describeNow(board, setup.t)}`}
@@ -168,7 +189,8 @@ async function tick($: EngineInterface, picture: Picture): Promise<void> {
   const drawing = picture.shown
   if (drawing === undefined) return
   const t = (await $.clock.now()) - drawing.drawnAt
-  const sent = await $.ui.blit({ requestId: drawing.pane, key: MAP_KEY, source: imageSource(paint(drawing.scene, t, scaleFor(drawing.scene, SCALE))) })
+  const source = imageSource(paint(drawing.scene, t, scaleFor(drawing.scene, SCALE)))
+  const sent = await $.ui.blit({ requestId: drawing.pane, key: MAP_KEY, source })
   if (sent.deny !== undefined) {
     // Not on show any more, or the terminal draws the words instead; the engine says which only in words.
     if (picture.shown === drawing) picture.shown = undefined
@@ -180,7 +202,7 @@ async function tick($: EngineInterface, picture: Picture): Promise<void> {
   }
   picture.showsPictures = true
   if (picture.shown !== drawing) return
-  const next = nextChangeIn(drawing.scene, t, endlessEvery(t, drawing.isBusy))
+  const next = paced(nextChangeIn(drawing.scene, t, endlessEvery(t, drawing.isBusy)), sizeOf(source))
   // Less the time this frame took, but at least a third of the wait, to leave the mod's other hooks their turn.
   const spent = (await $.clock.now()) - drawing.drawnAt - t
   schedule($, picture, next === undefined ? undefined : Math.round(Math.max(next - spent, next / 3)), () => tick($, picture))

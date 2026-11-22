@@ -452,3 +452,21 @@ test('principle 3: a frame of the braille map, painted and packed, stays within 
   expect(whole).toBeLessThan(5)
   expect(asking).toBeLessThan(0.5)
 })
+
+test('a call still running stays on both maps, however many calls came after it', () => {
+  // A background task started long ago, and sixty calls begun and ended since: its row still says it runs.
+  const board = (entries: Entry[]): Board => ({ entries, counts: {} })
+  const later = Array.from({ length: 60 }, (_, i) => entry(i % 2 === 0 ? 'files' : 'model', NOW - 60_000 + i * 100))
+  const busy = board([running('shell', NOW - 600_000), ...later])
+  const idle = board([entry('shell', NOW - 600_000), ...later])
+  const setup = setupFrom({})
+
+  // The first drawing: the hands of the clock go round the station at work, and the core is lit.
+  expect(drawMap(busy, NOW, setup)).toContain('stroke-dashoffset')
+  expect(drawMap(idle, NOW, setup)).not.toContain('stroke-dashoffset')
+  // The braille map: the station is not drawn as one at rest, and it asks for the next beat's frame.
+  const dots = (b: Board): string => packCells(paintBraille(b, NOW, setup, 76, 21))
+  expect(dots(busy)).not.toBe(dots(idle))
+  expect(nextFrameIn(busy, NOW, setup)).toBe(400)
+  expect(nextFrameIn(idle, NOW, setup)).toBeUndefined()
+})
