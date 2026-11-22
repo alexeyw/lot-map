@@ -28,7 +28,7 @@ Every hook hands the event on as it came and returns what came back as it was. N
 
 ## 2. A label holds a name, never content
 
-What a call carries stays in the call. The map shows a file's last two path parts, an address's host, a tool's name, a record's number. Three labels are words the model wrote for the row and are shown as written, up to 120 characters: the short description of a shell command, of a monitor and of a subagent. [PRIVACY.md](PRIVACY.md) has the whole list.
+What a call carries stays in the call. The map shows a file's last two path parts, an address's host, a tool's name, a record's number. A shell line with no description is labelled with its command's name only if that is a command the mod knows by name or one named in the options, and with the word `shell` otherwise: three times a word of the line's content was read as its command and shown (0.13.0, 0.13.2 and the review of 0.13.2), and a list of names cannot show a word it does not hold. Three labels are words the model wrote for the row and are shown as written, up to 120 characters: the short description of a shell command, of a monitor and of a subagent. [PRIVACY.md](PRIVACY.md) has the whole list.
 
 The mod makes no network request, reads no file, runs no process and calls no model. What it keeps is the session's rows and, between sessions, the last model's name and two values of the VS Code pane.
 
