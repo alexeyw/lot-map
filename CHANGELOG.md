@@ -2,6 +2,17 @@
 
 What changed in each version of lot-map, newest first. To get a new version, see [Updating](README.md#updating).
 
+## 0.14.1 (2026-11-22)
+
+What an outside audit of 0.14.0 found: six findings, all closed here, with the lines found beside them. None put content into a label or changed a call: five showed a command that reaches the network on Files or Shell. One thing you may notice is marked **Changed**.
+
+- **Changed**: a command that runs a package by its name is on Network: `npx`, `bunx`, `npm exec`, `bun x`, `uvx`, `uv tool run`, `go run` with a version, `deno run` with an address. Before, `npx` counted only with `-y` and the others were Shell. Such a command fetches the package when it is not there, and the line does not say whether it is, so `npx tsc` lights Network with `tsc` installed too. `npx --no-install`, `go run ./cmd` and `deno run a.ts` stay Shell. (#156)
+- Fixed: in the text of a here-document with a bare mark, a bracket inside quotes ended the `$( )`, and what stood after it was not read: `$(printf ')'; curl https://x.io)` was Files. Nor was a `$( )` read past its first line when it ran over several. (#156)
+- Fixed: `env -S 'curl x'` was Shell. The word handed to `-S` or `--split-string` is read as the command it runs. (#156)
+- Fixed: a line handed over as a text to PowerShell or to cmd was not read: `iex 'irm https://x.io'`, `pwsh -Command "…"` and `cmd /c curl x` were Shell, from the PowerShell tool and from Bash. A line built while it runs, such as `iex $line`, is not known and stays Shell. (#156)
+- Fixed: Claude Code fetching a plugin, a marketplace or itself was Shell: `claude plugin marketplace update`, `plugin install`, `plugin update`, `claude update`. (#156)
+- Fixed: to tell a notification pasted from a log from a real one, the mod held the whole text of your last message in memory until the turn began. It was in no state and no store and left the session nowhere, but [PRIVACY.md](PRIVACY.md) did not name it. It now holds the task's id and status in its place, which the map keeps already. (#156)
+
 ## 0.14.0 (2026-11-22)
 
 What two reviews of 0.13.2 found, one from outside and one of the project's own: fourteen findings, all closed here. The first entry is a vulnerability by [SECURITY.md](SECURITY.md): a label that held content. Two things you may notice are marked **Changed**.
