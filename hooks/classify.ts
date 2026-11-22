@@ -225,10 +225,42 @@ const markOf = (written: string): string => written.replace(/'([^']*)'|"([^"]*)"
  * The line is gone through once: each of its lines outside a here-document character by character, as far as will be
  * read at all, and the command a mark stands in is looked at once however many marks it holds.
  */
+/**
+ * The commands a line of text runs when the shell expands it: what stands in each `$( )` and in each pair of
+ * backticks, the outermost ones. `$(( ))` is arithmetic and runs nothing, and a `\$(` or a `\`` is the character.
+ */
+function expanded(line: string): string[] {
+  const found: string[] = []
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '\\') i++
+    else if (c === '`') {
+      let end = i + 1
+      while (end < line.length && line[end] !== '`') end += line[end] === '\\' ? 2 : 1
+      found.push(line.slice(i + 1, end))
+      i = end
+    } else if (c === '$' && line[i + 1] === '(' && line[i + 2] !== '(') {
+      let depth = 1
+      let end = i + 2
+      for (; end < line.length && depth > 0; end++) {
+        if (line[end] === '\\') end++
+        else if (line[end] === '(') depth++
+        else if (line[end] === ')') depth--
+      }
+      found.push(line.slice(i + 2, depth === 0 ? end - 1 : end))
+      i = end - 1
+    }
+  }
+  return found
+}
+
 function withoutHereDocuments(command: string, cut?: { short: boolean }): string {
   if (!command.includes('<<')) return command
   const kept: string[] = []
-  const waiting: { word: string; tabs: boolean; isRun: boolean }[] = []
+  // `isBare`: the mark was written with no quote and no backslash, so the shell expands the text.
+  const waiting: { word: string; tabs: boolean; isRun: boolean; isBare: boolean }[] = []
+  // How many marks stood open when each pair of backticks began: a here-document opened inside a pair ends with it.
+  const marksAt: number[] = []
   // What the lines before left open, the innermost last: a text in quotes may run over several lines, and inside
   // double quotes a `$(` or a backtick begins a command, closed by its `)` or by the next backtick.
   const opened: ('"' | "'" | '$' | ')' | '`')[] = []
@@ -247,6 +279,13 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
       else if (open.isRun) {
         kept.push(line)
         size += line.length + 1
+      } else if (open.isBare && size < READ && (line.includes('$(') || line.includes('`'))) {
+        // The text of a here-document with a bare mark is expanded: what stands in `$( )` and in backticks runs, and is
+        // kept as lines of its own. The rest of the text is not read.
+        for (const inner of expanded(line)) {
+          kept.push(inner)
+          size += inner.length + 1
+        }
       }
       continue
     }
@@ -273,6 +312,7 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
         else if (c === '`' || (c === '$' && line[i + 1] === '(')) {
           // A command of its own begins: a mark in it is a mark, and the command it stands in begins here.
           opened.push(c === '`' ? '`' : ')')
+          if (c === '`') marksAt.push(waiting.length)
           if (c === '$') {
             nested.push(0)
             sums.push(line[i + 2] === '(')
@@ -286,7 +326,20 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
         opened.push('$')
         i++
       } else if (c === '#' && (i === 0 || /[\s;|&(]/.test(line[i - 1] ?? ''))) break
-      else if (quote === '`' && c === '`') opened.pop()
+      else if (c === '`') {
+        // Backticks hold a command inside double quotes and outside them. The shell reads a here-document of that
+        // command only up to the closing backtick: one opened in a pair that closes on its line has no text, and the
+        // lines after it run.
+        if (quote === '`') {
+          opened.pop()
+          waiting.length = Math.min(waiting.length, marksAt.pop() ?? 0)
+        } else {
+          opened.push('`')
+          marksAt.push(waiting.length)
+          from = i + 1
+          isRun = undefined
+        }
+      }
       else if (quote === ')' && c === '(') nested[nested.length - 1] = (nested[nested.length - 1] ?? 0) + 1
       else if (quote === ')' && c === ')') {
         if ((nested[nested.length - 1] ?? 0) > 0) nested[nested.length - 1] = (nested[nested.length - 1] ?? 0) - 1
@@ -322,7 +375,7 @@ function withoutHereDocuments(command: string, cut?: { short: boolean }): string
           })
           isRun = SHELLS.has(base(feeds[0])) && given.every(w => w.startsWith('-') && !/^-[a-z]*c$/.test(w))
         }
-        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun })
+        waiting.push({ word: markOf(m[2] ?? ''), tabs: m[1] === '-', isRun, isBare: !/["'\\]/.test(m[2] ?? '') })
         i = HERE_MARK.lastIndex - 1
       }
     }

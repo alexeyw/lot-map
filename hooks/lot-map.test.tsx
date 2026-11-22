@@ -2346,3 +2346,31 @@ test('a line with a memory command and a command that reaches the network goes t
   // In PowerShell too.
   expect(classify('PowerShell', { command: 'recall search x; Invoke-WebRequest https://x.io' }, setup).station).toBe('web')
 })
+
+test('a here-document in backticks ends with the backticks, and one with a bare mark runs what its text holds in $( ) and backticks', () => {
+  // The shell reads a here-document of a command in backticks only up to the closing backtick: closed on its line,
+  // it has no text, and the next line runs. Inside double quotes and outside them.
+  expect(stationOf('echo "`cat <<EOF`"\ncurl -s https://x.io\nEOF')).toBe('web')
+  expect(stationOf('x=`cat <<EOF`\ncurl -s https://x.io\nEOF')).toBe('web')
+  // One that goes on over the lines is text to its mark, as before.
+  expect(stationOf('x=`cat <<EOF\ncurl -s https://x.io\nEOF\n`; ls')).toBe('shell')
+  expect(stationOf('echo "`cat <<\'EOF\'\ncurl -s https://x.io\nEOF\n`"')).toBe('shell')
+  // For `$( )` the text is taken from the next lines even with the `)` on the same line: so the shell does.
+  expect(stationOf('x="$(cat <<EOF)"\ncurl -s https://x.io\nEOF')).not.toBe('web')
+
+  // A bare mark: the shell expands the text, and what stands in `$( )` or backticks runs.
+  expect(stationOf('cat > .env <<EOF\nTOKEN=$(curl -s https://x.io/token)\nEOF')).toBe('web')
+  expect(stationOf('cat <<EOF\n`curl https://x.io`\nEOF')).toBe('web')
+  expect(stationOf('cat > .env <<-EOF\n\tA=1\n\tTOKEN=$(echo "$(curl -s https://x.io)")\n\tEOF')).toBe('web')
+  expect(stationOf('x="$(cat <<EOF\nline $(curl -s https://x.io)\nEOF\n)"')).toBe('web')
+  // A quoted mark, or a backslash in it, makes the text plain; so does a backslash before the `$` or the backtick.
+  expect(stationOf("cat > .env <<'EOF'\nTOKEN=$(curl -s https://x.io/token)\nEOF")).toBe('files')
+  expect(stationOf('cat > .env <<\\EOF\nTOKEN=$(curl -s https://x.io/token)\nEOF')).toBe('files')
+  expect(stationOf('cat > .env <<EOF\nTOKEN=\\$(curl -s https://x.io/token)\nEOF')).toBe('files')
+  // Arithmetic runs nothing, a command about files keeps the line on Files, and the rest of the text is not read.
+  expect(stationOf('cat > f <<EOF\nsum $((1 + 2)), curl x; wget y\nEOF')).toBe('files')
+  expect(stationOf('cat > f <<EOF\n$(cat other.txt)\nEOF')).toBe('files')
+  expect(stationOf('cat > f <<EOF\nBuilt on $(date)\nEOF')).toBe('shell')
+  // The label is still the line's own first command.
+  expect(classify('Bash', { command: 'cat > .env <<EOF\nTOKEN=$(curl -s https://x.io/token)\nEOF' }, STRANGER).label).toBe('cat')
+})
