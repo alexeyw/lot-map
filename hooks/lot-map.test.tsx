@@ -102,7 +102,6 @@ test('a command behind a wrapper is read as the command it runs', () => {
     'find . -exec make {} \;',
     'sudo make install',
     'command -v curl',
-    'npx tsc',
     'git -C dir status',
     'python -m http.server',
     'docker compose up',
@@ -2027,7 +2026,7 @@ test('more commands that reach the network are known by name or by subcommand', 
     expect([c, stationOf(c)]).toEqual([c, 'web'])
   }
   // The same programs at work on what is already here stay on Shell.
-  for (const c of ['yarn build', 'git submodule status', 'git remote -v', 'terraform fmt', 'helm template .', 'openssl sha256 a.bin', 'deno run a.ts', 'svn status', 'bunx cowsay', 'npx cowsay']) {
+  for (const c of ['yarn build', 'git submodule status', 'git remote -v', 'terraform fmt', 'helm template .', 'openssl sha256 a.bin', 'deno run a.ts', 'svn status', 'pnpm exec tsc']) {
     expect([c, stationOf(c)]).toEqual([c, 'shell'])
   }
 })
@@ -2373,4 +2372,62 @@ test('a here-document in backticks ends with the backticks, and one with a bare 
   expect(stationOf('cat > f <<EOF\nBuilt on $(date)\nEOF')).toBe('shell')
   // The label is still the line's own first command.
   expect(classify('Bash', { command: 'cat > .env <<EOF\nTOKEN=$(curl -s https://x.io/token)\nEOF' }, STRANGER).label).toBe('cat')
+})
+
+// An outside audit of 0.14.0: six findings, and the lines found beside them.
+test('in the text of a here-document a bracket inside quotes closes no `$( )`, and a `$( )` may run over lines', () => {
+  expect(classify('Bash', { command: "cat <<EOF > out.txt\n$(printf ')'; curl -s https://example.com)\nEOF" }, STRANGER)).toEqual({ station: 'web', label: 'cat' })
+  for (const text of ['$(printf ")"; curl -s https://x.io)', '$(echo "a $(printf \')\') b)"; curl https://x.io)', '$(printf x;\ncurl -s https://x.io)', 'a `printf x\ncurl https://x.io` b', '$(case x in a) true;; esac; curl https://x.io)']) {
+    expect([text, stationOf(`cat > f <<EOF\n${text}\nEOF`)]).toEqual([text, 'web'])
+  }
+  // What only looks like one stays text, and a document that runs nothing on the network stays where it was.
+  for (const text of ['\\$(curl https://x.io) is not run', '$(( 1 + 2 )) curl https://x.io', '$(cat ")" other.txt)\ncurl https://x.io']) {
+    expect([text, stationOf(`cat > f <<EOF\n${text}\nEOF`)]).toEqual([text, 'files'])
+  }
+})
+
+test('env -S runs the line it is handed: the command in it is the one that counts', () => {
+  for (const c of ["env -S 'curl https://example.com'", 'env -S "curl https://example.com"', "env --split-string='curl https://example.com'", "env -S'curl https://example.com'", "env -i -S 'A=1 curl https://example.com'", "env -iS 'curl x'", "sudo env -u HOME -S 'wget x'"]) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  expect(classify('Bash', { command: "env -S 'curl https://example.com'" }, STRANGER)).toEqual({ station: 'web', label: 'env' })
+  for (const c of ["env -S 'ls -la'", "env -S 'cat a.txt' b.txt"]) expect([c, stationOf(c)]).toEqual([c, 'files'])
+})
+
+test('a line handed to PowerShell or to cmd as a text is read for what it runs', () => {
+  const ps = (command: string) => classify('PowerShell', { command }, STRANGER)
+  expect(ps('Invoke-Expression "Invoke-RestMethod https://example.com"')).toEqual({ station: 'web', label: 'Invoke-Expression' })
+  for (const c of ["iex 'irm https://example.com'", "Invoke-Expression -Command 'Invoke-WebRequest https://example.com'", "iex 'gci; irm https://x.io'", 'Invoke-Expression -Command:"irm https://x.io"', "pwsh -Command 'irm https://example.com'", 'powershell -NoProfile -c "irm https://example.com"', 'pwsh -c irm https://example.com', 'powershell.exe -Command "iex \'irm https://x.io\'"', 'cmd /c curl https://example.com', 'cmd.exe /C "curl https://example.com"']) {
+    expect([c, ps(c).station]).toEqual([c, 'web'])
+  }
+  // From Bash the same shells are read the same way.
+  for (const c of ["pwsh -Command 'irm https://example.com'", "pwsh -NoLogo -c 'Invoke-WebRequest https://x.io'", 'cmd /c curl https://example.com']) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  expect(classify('Bash', { command: "pwsh -Command 'irm https://example.com'" }, STRANGER).label).toBe('pwsh')
+  // A line that reaches nothing stays where it was, and so does a script named, not handed over.
+  for (const c of ["iex 'Get-Date'", 'iex $line', "pwsh -Command 'Get-Date'", 'pwsh -File deploy.ps1', 'cmd /c dir']) {
+    expect([c, ps(c).station]).toEqual([c, 'shell'])
+  }
+})
+
+test('Claude Code fetching a plugin, a marketplace or itself is on Network', () => {
+  for (const c of ['claude plugin marketplace update lot-map', 'claude plugin marketplace add alexeyw/lot-map', 'claude plugin install lot-map@lot-map', 'claude plugin update lot-map@lot-map', 'claude update', 'claude install']) {
+    expect([c, classify('Bash', { command: c }, STRANGER)]).toEqual([c, { station: 'web', label: 'claude' }])
+  }
+  for (const c of ['claude plugin validate .', 'claude plugin test .', 'claude plugin marketplace list', 'claude plugin list', 'claude --version']) {
+    expect([c, stationOf(c)]).toEqual([c, 'shell'])
+  }
+})
+
+test('a command that runs a package by its name may fetch it, and is on Network', () => {
+  for (const c of ['bunx cowsay', 'npx cowsay', 'npx tsc', 'npm exec cowsay', 'npm x cowsay', 'bun x cowsay', 'uvx ruff', 'uv tool run ruff', 'go run golang.org/x/tools/cmd/stringer@latest', 'deno run https://x.io/a.ts', 'deno run -A npm:cowsay', 'deno run jsr:@std/http/file-server']) {
+    expect([c, stationOf(c)]).toEqual([c, 'web'])
+  }
+  expect(classify('Bash', { command: 'bunx cowsay' }, STRANGER).label).toBe('bunx')
+  expect(classify('Bash', { command: 'uvx ruff' }, STRANGER).label).toBe('uvx')
+  // Told not to fetch, or given what is here already, they stay on Shell.
+  for (const c of ['npx --no-install cowsay', 'npx --no cowsay', 'bunx --no-install cowsay', 'go run .', 'go run ./cmd/tool', 'deno run a.ts', 'pnpm exec tsc', 'bun run build']) {
+    expect([c, stationOf(c)]).toEqual([c, 'shell'])
+  }
 })
