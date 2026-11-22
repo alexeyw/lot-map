@@ -49,10 +49,27 @@ export type Start = {
   patch?: Partial<Pick<Board, 'model' | 'step' | 'switchedAt'>>
 }
 
-/** The newest rows, and beside them every background task still going, however long ago it started. */
+/** How many background tasks still going are kept beside the newest rows. */
+const HELD = 40
+
+/**
+ * The newest rows, and beside them the background tasks still going, however long ago they started: the newest
+ * `HELD` of those. More than that the board does not hold, so that it has an end whatever a session starts and
+ * never hears of again; an older task that ends later closes no row.
+ */
 export const kept = (entries: Entry[]): Entry[] => {
   const from = entries.length - KEEP
-  return from <= 0 ? entries : entries.filter((e, i) => i >= from || (e.status === 'run' && e.task !== undefined))
+  if (from <= 0) return entries
+  let room = HELD
+  const held = new Set<Entry>()
+  for (let i = from - 1; i >= 0 && room > 0; i--) {
+    const e = entries[i] as Entry
+    if (e.status === 'run' && e.task !== undefined) {
+      held.add(e)
+      room--
+    }
+  }
+  return entries.filter((e, i) => i >= from || held.has(e))
 }
 
 const isFault = (status: Status): boolean => status === 'err' || status === 'block'
