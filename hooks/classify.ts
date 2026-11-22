@@ -19,7 +19,10 @@ const HOST = /^(?:[\p{L}\p{N}.-]+|\[[0-9a-f:.]+\])(?::\d+)?$/iu
  * `user:pa/ss@host` reads as the host `host`, and an address that can be read both ways gives its scheme alone.
  */
 function hostOf(url: string): string {
-  const [, scheme = '', rest = ''] = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
+  // After `http:`, `https:`, `ws:`, `wss:` and `ftp:` any number of slashes, or none, comes before the host: that is
+  // how a browser and `new URL` read `https:/a.example/x` and `https:a.example/x`.
+  const [, special = '', other = '', rest = ''] = /^(?:(https?|wss?|ftp):[/\\]*|([a-z][a-z0-9+.-]*):\/\/)?(.*)$/is.exec(url) ?? []
+  const scheme = special || other
   // A backslash ends the host as a slash does: that is how a browser and `new URL` read `https://a.example\@b.example/`.
   const end = rest.search(/[/?#\\]/)
   const first = end < 0 ? rest : rest.slice(0, end)
@@ -174,6 +177,17 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const BEFORE_A_COMMAND = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '!', '{'])
 /** Words that open or close a construct and run nothing themselves: `for u in a b`, `done`, `fi`. */
 const NO_COMMAND = new Set(['for', 'select', 'case', 'function', 'done', 'fi', 'esac', '}'])
+/**
+ * Programs known by name beside the ones above, for the label of a line the model wrote no description for. They
+ * say nothing of the station: they are here only so that `make test` is labelled `make`.
+ */
+const COMMON_WORDS = new Set(['make', 'cmake', 'ninja', 'gradle', 'gradlew', 'mvn', 'ant', 'bazel', 'npx', 'tsc', 'vite', 'jest', 'vitest', 'eslint', 'prettier', 'pytest', 'tox', 'ruff', 'mypy', 'black', 'rustc', 'gcc', 'clang', 'java', 'javac', 'kotlinc', 'swift', 'swiftc', 'xcodebuild', 'dotnet', 'ruby', 'perl', 'php', 'lua', 'Rscript', 'claude', 'code', 'open', 'ps', 'kill', 'pkill', 'date', 'chmod', 'chown', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'xz', 'sqlite3', 'psql', 'mysql', 'redis-cli', 'ffmpeg', 'ffprobe', 'magick', 'pandoc', 'man', 'less', 'more', 'history', 'uname', 'whoami', 'id', 'hostname', 'df', 'free', 'top', 'lsof', 'launchctl', 'systemctl', 'journalctl', 'crontab', 'adb', 'emulator', 'xcrun', 'pod', 'flutter', 'dart', 'bundle', 'rake', 'gem', 'composer', 'tmux', 'screen', 'source', 'eval', 'trap', 'alias', 'type', 'hash', 'jobs', 'fg', 'bg', 'exit', 'return', 'shift', 'getopts', 'ulimit', 'seq', 'yes', 'xxd', 'od', 'base64', 'shasum', 'sha256sum', 'md5', 'md5sum', 'openssl', 'gpg', 'patch', 'column', 'paste', 'join', 'comm', 'fold', 'nl', 'rev', 'tac', 'split', 'expr', 'bc', 'envsubst', 'mktemp', 'pbcopy', 'pbpaste', 'osascript', 'defaults', 'say', 'node', 'deno', 'bun'])
+/**
+ * Every command the mod knows by name. With no description a line's label is one of these, one the person named in
+ * the options, or the word `shell`: a word that got to the head of a command by a misreading of the line is then never
+ * shown, whatever it is.
+ */
+const KNOWN_WORDS = new Set([...FILE_WORDS, ...NEUTRAL_WORDS, ...NET_WORDS, ...Object.keys(NET_SUBCOMMANDS), ...Object.keys(WRAPPERS), ...RUNNERS, ...SHELLS, ...COMMON_WORDS])
 /** How much of a command line is read. A longer one is a script written inline, and what counts stands at its start. */
 const READ = 8000
 /**
@@ -306,6 +320,9 @@ function withoutHereDocuments(command: string): string {
 const PS_FILE_WORDS = new Set(['get-content', 'gc', 'type', 'set-content', 'add-content', 'out-file', 'get-childitem', 'gci', 'dir', 'get-item', 'gi', 'select-string', 'sls', 'copy-item', 'cpi', 'copy', 'move-item', 'mi', 'move', 'rename-item', 'rni', 'ren', 'new-item', 'ni', 'md', 'test-path', 'resolve-path', 'get-filehash'])
 const PS_NEUTRAL_WORDS = new Set(['write-host', 'write-output', 'set-location', 'sl', 'get-location', 'gl', 'start-sleep', 'select-object', 'select', 'where-object', 'where', '?', 'foreach-object', 'foreach', '%', 'sort-object', 'measure-object', 'measure', 'format-table', 'ft', 'format-list', 'fl', 'out-string', 'out-null'])
 const PS_NET_WORDS = new Set(['invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'test-connection', 'test-netconnection', 'resolve-dnsname', 'start-bitstransfer'])
+/** PowerShell's commands known by name beside those, for the label of a line with no description; in lower case. */
+const PS_COMMON_WORDS = new Set(['get-process', 'stop-process', 'start-process', 'get-date', 'get-command', 'get-help', 'get-member', 'get-service', 'get-variable', 'set-variable', 'remove-item', 'ri', 'del', 'rd', 'rmdir', 'clear-host', 'cls', 'convertto-json', 'convertfrom-json', 'convertto-csv', 'convertfrom-csv', 'import-csv', 'export-csv', 'import-module', 'join-path', 'split-path', 'compare-object', 'group-object', 'tee-object', 'new-object', 'write-error', 'write-warning', 'write-verbose', 'out-host', 'invoke-expression', 'iex', 'invoke-command', 'start-job', 'get-job', 'receive-job', 'wait-job', 'expand-archive', 'compress-archive', 'pwsh', 'powershell', 'cmd'])
+const PS_KNOWN_WORDS = new Set([...PS_FILE_WORDS, ...PS_NEUTRAL_WORDS, ...PS_NET_WORDS, ...PS_COMMON_WORDS])
 
 /**
  * A command being read: its text so far, the quote open in it, and what closes it when it stands inside another.
@@ -576,10 +593,21 @@ function classifyShell(command: string, description: string, setup: Setup, power
     if (/^["']/.test(rest[0] ?? '')) texts.add(rest)
     return rest
   }
-  /** The label of a line the model wrote no description for: the first command's name, and never anything that is not shaped like a name. */
+  /**
+   * The label of a line the model wrote no description for: the first command's name if it is a command the mod knows
+   * or one the person named in the options, and the word `shell` for anything else. The line is read by hand, and a
+   * reading can go wrong: a word of a pattern, of a value or of a text may come to stand where a command would. Such a
+   * word is in no list, so it is never shown.
+   */
   const nameOnly = (word: string | undefined): string => {
     const found = base(word ?? '')
-    return /^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(found) ? found : 'shell'
+    if (!/^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(found)) return 'shell'
+    const isKnown =
+      KNOWN_WORDS.has(found) ||
+      (powershell && (PS_KNOWN_WORDS.has(found.toLowerCase()) || KNOWN_WORDS.has(found.toLowerCase()))) ||
+      setup.memoryCommands.some(c => named(name(found), c)) ||
+      [...setup.commandStations.keys()].some(c => named(name(found), c))
+    return isKnown ? found : 'shell'
   }
   /**
    * The commands of one piece of a line: its own, each one that `find` is told to run with `-exec`, the one that

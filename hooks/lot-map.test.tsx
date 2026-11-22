@@ -1054,8 +1054,10 @@ test('with no description a shell line is named by its command and by nothing it
   // The shell: a text sent in, an output sent away and an array's element set are no command.
   expect(read('Bash', `<<<"ghp_${SECRET}" gh auth login --with-token`)).toEqual({ station: 'web', label: 'gh' })
   expect(read('Bash', `<<< "ghp_${SECRET}" gh auth login --with-token`)).toEqual({ station: 'web', label: 'gh' })
-  expect(read('Bash', `TOKEN[0]=${SECRET} ./deploy.sh`)).toEqual({ station: 'shell', label: 'deploy.sh' })
-  expect(read('Bash', `TOKEN=${SECRET} KEYS[a]=${SECRET} 2>/dev/null ./deploy.sh`)).toEqual({ station: 'shell', label: 'deploy.sh' })
+  expect(read('Bash', `TOKEN[0]=${SECRET} make deploy`)).toEqual({ station: 'shell', label: 'make' })
+  // A script of the person's own is no command the mod knows: it runs, and the label is the word shell.
+  expect(read('Bash', `TOKEN[0]=${SECRET} ./deploy.sh`)).toEqual({ station: 'shell', label: 'shell' })
+  expect(read('Bash', `TOKEN=${SECRET} KEYS[a]=${SECRET} 2>/dev/null make deploy`)).toEqual({ station: 'shell', label: 'make' })
   expect(read('Bash', '2>/dev/null curl https://x.io')).toEqual({ station: 'web', label: 'curl' })
   expect(read('Bash', '2> /dev/null >out.txt cat f.txt')).toEqual({ station: 'files', label: 'cat' })
   expect(read('Bash', `TOKEN=${SECRET}`).label).toBe('shell')
@@ -1803,6 +1805,49 @@ test('a here-document inside "$( )" or backticks is one too: the text of a commi
   expect(stationOf('echo "(a << b) $x"\ncurl -s https://x.io')).toBe('web')
   expect(stationOf('echo "$((1 << 2))"\ncurl -s https://x.io')).toBe('web')
   expect(stationOf('echo "$(echo "x << y")"\ncurl -s https://x.io')).toBe('web')
+})
+
+test('with no description a label is a command the mod knows by name, or the word shell: nothing of the line gets there by a misreading', () => {
+  const MARK = 'hunter2'
+  const bash = (command: string) => classify('Bash', { command }, STRANGER).label
+  const ps = (command: string) => classify('PowerShell', { command }, STRANGER).label
+  // A word inside a substitution that stands in a leading assignment or a redirection.
+  for (const line of [`N=$(grep ${MARK} notes.txt | wc -l)`, `PASS=$(echo ${MARK} | base64); echo done`, `N=\`grep ${MARK} notes.txt | wc -l\``, `X=\${Y:-a ${MARK} c} ls`, `> $(echo ${MARK} b) ls`]) {
+    expect(`${line} → ${bash(line)}`).not.toContain(`→ ${MARK}`)
+  }
+  // The text of a here-document whose mark is not shaped like a name.
+  for (const line of [`MSG=$(cat <<'END-MSG'\n${MARK} is the password\nEND-MSG\n)`, `MSG=$(cat <<"END MSG"\n${MARK} is the password\nEND MSG\n)`, `X=1 <<'1'\n${MARK} is the password\n1`]) {
+    expect(`${line} → ${bash(line)}`).not.toContain(`→ ${MARK}`)
+  }
+  // The text of a PowerShell here-string with a quote inside it.
+  for (const line of [`@'\ndon't tell anyone\n${MARK} is the password\n'@ | Set-Content notes.txt`, `@"\nHe said "hi\n${MARK} is the password\n"@ | Set-Content notes.txt`, `$body = @'\ndon't tell\n${MARK} x\n'@`]) {
+    expect(`${line} → ${ps(line)}`).not.toContain(`→ ${MARK}`)
+  }
+  // Whatever stands first and is no command the mod knows is the word shell: a program of the person's own too.
+  expect(bash(`${MARK} --version`)).toBe('shell')
+  expect(bash('./deploy.sh production')).toBe('shell')
+  expect(bash('my-own-tool run')).toBe('shell')
+  expect(ps('My-OwnTool -Run')).toBe('shell')
+  // A command it knows keeps its name, behind a folder and as Windows writes it.
+  expect(bash('make test')).toBe('make')
+  expect(bash('/usr/bin/git status')).toBe('git')
+  expect(bash('X=1 npm test')).toBe('npm')
+  expect(ps('Get-ChildItem .')).toBe('Get-ChildItem')
+  expect(ps('& "C:\\Program Files\\Git\\cmd\\git.exe" status')).toBe('git')
+  // So does one the person named in the options.
+  const own = setupFrom({ commandStations: ['agent-dispatch=agents'], memoryCommands: ['recall'] })
+  expect(classify('Bash', { command: 'agent-dispatch status' }, own).label).toBe('agent-dispatch')
+  // A description is the model's own words and is shown as written, as before.
+  expect(classify('Bash', { command: `${MARK} --version`, description: 'Check the version' }, STRANGER).label).toBe('Check the version')
+})
+
+test('an address with one slash after its scheme, or none, shows its host and never a part of its path', () => {
+  for (const [url, host] of [['https:/example.com/users/@hunter2', 'example.com'], ['https:example.com/@hunter2', 'example.com'], ['http:\\\\example.com\\@hunter2', 'example.com'], ['HTTPS:/Example.com/@hunter2', 'Example.com']] as const) {
+    expect(`${url} → ${classify('WebFetch', { url }, STRANGER).label}`).toBe(`${url} → ${host}`)
+  }
+  // The forms read before are read as before.
+  expect(classify('WebFetch', { url: 'https://user:pa/ss@host.com/x' }, STRANGER).label).toBe('host.com')
+  expect(classify('WebFetch', { url: 'localhost:8080/x' }, STRANGER).label).toBe('localhost:8080')
 })
 
 test('>| is a redirection, not a pipe', () => {
