@@ -2160,6 +2160,109 @@ test('with openAtStart off the pane opens on the command alone, and the map hold
   await ui.unmount()
 })
 
+/** A session on the desktop with the pane's opens counted, and whether it is on show as the engine would list it. */
+function toggleSession(...[, on]: Parameters<TestBody>): { opens: () => number; shown: (isShown: boolean) => void; kept: Map<string, unknown> } {
+  let opens = 0
+  let isShown = false
+  const kept = fakeStore(on as never)
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('command.register', () => ({ value: { command: 'lot-map' } }))
+  on('session.id', () => ({ value: 's-1' }) as never)
+  on('session.surfaces', () => ({ value: ['desktop'] }) as never)
+  on('ui.open', () => {
+    opens++
+    isShown = true
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', () => {
+    isShown = false
+    return { value: undefined } as never
+  })
+  on('ui.panes', () => ({ value: isShown ? [{ id: 'lot-map', title: 'Work map', isShown: true, isFocused: false, isPlaced: true }] : [] }) as never)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }) as never)
+  return { opens: () => opens, shown: value => { isShown = value }, kept }
+}
+
+const OFF_TEXT = stringsFor('en').offForSession
+
+// The pane's close mark turns the session off by the same path as `/lot-map off`. The kit raises no person's close:
+// `afterClose` is driven directly in principles.test.tsx, and the mark itself was checked by hand in the desktop app.
+test('with keepClosed, a session turned off stays closed on a return and a restart, until /lot-map turns it on', { options: { keepClosed: true } }, async ($, on) => {
+  const session = toggleSession($, on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(session.opens()).toBe(1)
+
+  expect((await $.command.run({ command: 'lot-map', args: 'off' } as never))?.text).toBe(OFF_TEXT)
+  expect(session.kept.get('offSessions')).toEqual(['s-1'])
+
+  await $.session.attach({ clientId: 'c2', surface: 'desktop' } as never)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(session.opens()).toBe(1)
+
+  expect((await $.command.run({ command: 'lot-map', args: '' } as never))?.text).toBe('Work map opened.')
+  expect(session.opens()).toBe(2)
+  expect(session.kept.get('offSessions')).toEqual([])
+  await $.session.attach({ clientId: 'c3', surface: 'desktop' } as never)
+  expect(session.opens()).toBe(3)
+})
+
+test('with keepClosed, /lot-map alone turns off a map on show and turns on one that is not; on and off say which', { options: { keepClosed: true } }, async ($, on) => {
+  const session = toggleSession($, on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(session.opens()).toBe(1)
+
+  expect((await $.command.run({ command: 'lot-map', args: '' } as never))?.text).toBe(OFF_TEXT)
+  expect(session.kept.get('offSessions')).toEqual(['s-1'])
+  await $.session.attach({ clientId: 'c2', surface: 'desktop' } as never)
+  expect(session.opens()).toBe(1)
+
+  expect((await $.command.run({ command: 'lot-map', args: 'off' } as never))?.text).toBe(OFF_TEXT)
+  expect(session.opens()).toBe(1)
+  expect((await $.command.run({ command: 'lot-map', args: ' ON ' } as never))?.text).toBe('Work map opened.')
+  expect(session.opens()).toBe(2)
+  expect((await $.command.run({ command: 'lot-map', args: 'on' } as never))?.text).toBe('Work map opened.')
+  expect(session.opens()).toBe(3)
+
+  // On, but behind another pane's tab: the command brings it forward rather than turning it off.
+  session.shown(false)
+  expect((await $.command.run({ command: 'lot-map', args: '' } as never))?.text).toBe('Work map opened.')
+  expect(session.kept.get('offSessions')).toEqual([])
+})
+
+test('without keepClosed nothing changes: /lot-map opens the pane, toggles nothing and keeps nothing', async ($, on) => {
+  const session = toggleSession($, on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(session.opens()).toBe(1)
+  for (const args of ['', 'off', 'on']) {
+    expect((await $.command.run({ command: 'lot-map', args } as never))?.text).toBe('Work map opened.')
+  }
+  expect(session.opens()).toBe(4)
+  await $.session.attach({ clientId: 'c2', surface: 'desktop' } as never)
+  expect(session.opens()).toBe(5)
+  expect(session.kept.get('offSessions')).toBeUndefined()
+})
+
+test('with keepClosed, the list holds session ids alone: whatever else the store gave back is dropped', { options: { keepClosed: true } }, async ($, on) => {
+  const session = toggleSession($, on)
+  session.kept.set('offSessions', ['old-1', 42, { text: 'not an id' }, '', 'x'.repeat(129), null])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run({ command: 'lot-map', args: 'off' } as never)
+  expect(session.kept.get('offSessions')).toEqual(['old-1', 's-1'])
+})
+
+test('with keepClosed, the sessions kept off are the newest two hundred, and a session not among them opens', { options: { keepClosed: true } }, async ($, on) => {
+  const session = toggleSession($, on)
+  session.kept.set('offSessions', Array.from({ length: 200 }, (_, n) => `old-${n}`))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(session.opens()).toBe(1)
+  await $.command.run({ command: 'lot-map', args: 'off' } as never)
+  const ids = session.kept.get('offSessions') as string[]
+  expect(ids.length).toBe(200)
+  expect(ids[0]).toBe('old-1')
+  expect(ids[199]).toBe('s-1')
+})
+
 // A background call that keeps running, then calls enough that nothing folds: the board keeps 80.
 const crowd = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], calls = 70): Promise<void> => {
   on('clock.now', () => ({ value: 1_000_000 }))

@@ -44,4 +44,5 @@ The same session twice. With `reduced` nothing flies, spreads or spins: a call s
 - `textSize` (`caption`, `footnote`, `body`): the size of the rows under the map in the desktop app. A terminal has one size.
 - `logRows` (`16`, `fill`): how many rows the list shows in the desktop app's docked pane.
 - `openAtStart` (`true`, `false`): whether the pane opens by itself when a session starts.
+- `keepClosed` (`false`, `true`): whether a pane closed by hand stays closed for that session.
 - `cellShape`: how tall a terminal's cells are, which sizes the picture's box.

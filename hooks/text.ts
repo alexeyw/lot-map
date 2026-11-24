@@ -7,6 +7,8 @@ export type Strings = {
   command: string
   opened: string
   cannotOpen: (reason: string) => string
+  /** With `keepClosed`: said when the map is turned off for the session, by the command or the pane's close mark. */
+  offForSession: string
   /** The pane's buttons in an editor, where the pane cannot be made taller. */
   zoomOut: string
   zoomIn: string
@@ -53,6 +55,7 @@ const en: Strings = {
   command: 'Open the work map beside the chat',
   opened: 'Work map opened.',
   cannotOpen: reason => `Nowhere to show the map right now: ${reason}`,
+  offForSession: 'Work map off for this session. /lot-map turns it back on.',
   zoomOut: 'Zoom out',
   zoomIn: 'Zoom in',
   hideMap: 'Hide map',
@@ -108,6 +111,7 @@ const ru: Strings = {
   command: 'Открыть карту работы рядом с чатом',
   opened: 'Карта работы открыта.',
   cannotOpen: reason => `Карту сейчас негде показать: ${reason}`,
+  offForSession: 'Карта работы выключена в этой сессии. /lot-map включит её снова.',
   zoomOut: 'Уменьшить',
   zoomIn: 'Увеличить',
   hideMap: 'Скрыть карту',
@@ -163,6 +167,7 @@ const es: Strings = {
   command: 'Abrir el mapa de trabajo junto al chat',
   opened: 'Mapa de trabajo abierto.',
   cannotOpen: reason => `Ahora no hay dónde mostrar el mapa: ${reason}`,
+  offForSession: 'Mapa de trabajo desactivado en esta sesión. /lot-map lo vuelve a activar.',
   zoomOut: 'Alejar',
   zoomIn: 'Acercar',
   hideMap: 'Ocultar mapa',
@@ -218,6 +223,7 @@ const fr: Strings = {
   command: 'Ouvrir la carte du travail à côté du chat',
   opened: 'Carte du travail ouverte.',
   cannotOpen: reason => `Impossible d'afficher la carte pour le moment : ${reason}`,
+  offForSession: 'Carte du travail désactivée dans cette session. /lot-map la réactive.',
   zoomOut: 'Dézoomer',
   zoomIn: 'Zoomer',
   hideMap: 'Masquer la carte',
@@ -273,6 +279,7 @@ const de: Strings = {
   command: 'Arbeitskarte neben dem Chat öffnen',
   opened: 'Arbeitskarte geöffnet.',
   cannotOpen: reason => `Die Karte kann gerade nirgends angezeigt werden: ${reason}`,
+  offForSession: 'Arbeitskarte in dieser Sitzung aus. /lot-map schaltet sie wieder ein.',
   zoomOut: 'Verkleinern',
   zoomIn: 'Vergrößern',
   hideMap: 'Karte ausblenden',
@@ -328,6 +335,7 @@ const it: Strings = {
   command: 'Apri la mappa del lavoro accanto alla chat',
   opened: 'Mappa del lavoro aperta.',
   cannotOpen: reason => `Al momento non c'è dove mostrare la mappa: ${reason}`,
+  offForSession: 'Mappa del lavoro disattivata in questa sessione. /lot-map la riattiva.',
   zoomOut: 'Riduci',
   zoomIn: 'Ingrandisci',
   hideMap: 'Nascondi mappa',
@@ -384,6 +392,7 @@ const pt: Strings = {
   command: 'Abrir o mapa de trabalho ao lado do chat',
   opened: 'Mapa de trabalho aberto.',
   cannotOpen: reason => `De momento não há onde mostrar o mapa: ${reason}`,
+  offForSession: 'Mapa de trabalho desativado nesta sessão. /lot-map volta a ativá-lo.',
   zoomOut: 'Reduzir',
   zoomIn: 'Ampliar',
   hideMap: 'Ocultar mapa',
@@ -443,6 +452,7 @@ const vi: Strings = {
   command: 'Mở bản đồ công việc bên cạnh cuộc trò chuyện',
   opened: 'Đã mở bản đồ công việc.',
   cannotOpen: reason => `Hiện không có chỗ nào để hiện bản đồ: ${reason}`,
+  offForSession: 'Đã tắt bản đồ công việc trong phiên này. Gõ /lot-map để bật lại.',
   zoomOut: 'Thu nhỏ',
   zoomIn: 'Phóng to',
   hideMap: 'Ẩn bản đồ',

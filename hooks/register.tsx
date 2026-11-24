@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Entry } from '../types'
 import { background, begin, change, charge, compactionWindowOf, contextOf, finish, kept, newId, quietly, settle } from './board'
+import { afterClose, isOff, setOff } from './closed'
 import { stepCosts } from './cost'
 import { TASK_TOOLS, classify, clean, firstLine, keepNewest, memoryIds, setupFrom, shortModel, taskNotice, taskOf } from './map'
 import type { Setup } from './map'
@@ -67,8 +68,9 @@ export const register: Register = (on, options) => {
     await quietly(() => $.command.register({ name: 'lot-map', description: t.command }))
     // Where no surface is attached yet, as in the desktop app at its start, an open has nowhere to go and the
     // engine says so in the transcript. The pane is opened once a surface joins instead. If the roster cannot
-    // be read, the open is tried as before. With `openAtStart` off the pane waits for `/lot-map`.
-    if (setup.openAtStart) {
+    // be read, the open is tried as before. With `openAtStart` off, or with `keepClosed` in a session the person
+    // turned the map off in, the pane waits for `/lot-map`.
+    if (setup.openAtStart && !(setup.keepClosed && (await isOff($)))) {
       const surfaces = await quietly(() => $.session.surfaces())
       if (surfaces === undefined || surfaces.length > 0) void quietly(() => $.ui.open(pane))
     }
@@ -87,11 +89,30 @@ export const register: Register = (on, options) => {
   })
 
   on('session.attach', async ($, e, next) => {
-    if (setup.openAtStart) void quietly(() => $.ui.open(pane))
+    if (setup.openAtStart && !(setup.keepClosed && (await isOff($)))) void quietly(() => $.ui.open(pane))
     return next(e)
   })
 
-  on('command.run', { command: 'lot-map' }, async $ => {
+  // With `keepClosed`: the person's close mark turns the map off for this session. It stays closed on a return to the
+  // chat, in a new window and after a restart, until `/lot-map` turns it on. A close by the mod or an unload changes
+  // nothing. The hook only looks (`closed.ts`); with the option off it is not added.
+  if (setup.keepClosed) on('ui.close', { id: PANE }, ($, e, next) => afterClose($, e, next, t.offForSession))
+
+  // `/lot-map` opens the pane. With `keepClosed`, alone it turns the map off where it is on show and on anywhere else,
+  // and `on` and `off` say which.
+  on('command.run', { command: 'lot-map' }, async ($, e) => {
+    if (!setup.keepClosed) {
+      const opened = await $.ui.open(pane)
+      return { text: opened.isPlaced ? t.opened : t.cannotOpen(String(opened.reason)) }
+    }
+    const word = e.args.trim().toLowerCase()
+    const isShown = word === '' && ((await quietly(() => $.ui.panes())) ?? []).some(one => one.id === PANE && one.isShown)
+    if (word === 'off' || isShown) {
+      await setOff($, true)
+      await quietly(() => $.ui.close({ id: PANE }))
+      return { text: t.offForSession }
+    }
+    await setOff($, false)
     const opened = await $.ui.open(pane)
     return { text: opened.isPlaced ? t.opened : t.cannotOpen(String(opened.reason)) }
   })
