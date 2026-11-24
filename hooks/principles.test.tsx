@@ -2,6 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
+import { afterClose } from './closed'
 import { STATIONS, classify, clean, drawMap, foldRows, setupFrom } from './map'
 import { imageSource } from './png'
 import { paint, scaleFor } from './raster'
@@ -24,7 +25,7 @@ const PLAIN = setupFrom({})
 const TALK = [{ role: 'user', text: 'kept', toolUses: [] }]
 
 // prettier-ignore
-const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"commandStations":[],"hookRecords":false,"hookReasons":false,"guardedHooks":true,"openAtStart":true,"subagentNames":false,"contextCost":false,"contextWindow":"model","theme":"auto","background":"solid","paneBackground":"theme","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","logRows":"16","terminalView":"text","cellShape":2.4}
+const DEFAULTS = {"language":"en","coreName":"CLAUDE","memoryServers":["memory"],"memoryCommands":[],"memorySubcommands":[],"memoryPaths":[],"memoryLabels":[],"serverStations":[],"commandStations":[],"hookRecords":false,"hookReasons":false,"guardedHooks":true,"openAtStart":true,"keepClosed":false,"subagentNames":false,"contextCost":false,"contextWindow":"model","theme":"auto","background":"solid","paneBackground":"theme","colors":[],"layout":"you-top","motion":"full","textSize":"footnote","logRows":"16","terminalView":"text","cellShape":2.4}
 
 // ---- 1. It watches and changes nothing ------------------------------------------------------------
 
@@ -386,6 +387,30 @@ test('principle 4: with the engine refusing every call the mod makes, each event
   expect(await $.session.compact({ trigger: 'manual', messages: TALK } as never)).toEqual(expect.objectContaining({ skip: 'kept' }))
   expect(await $.turn.start({ text: 'hello', turnId: 't1' } as never)).toEqual(expect.objectContaining({ turnId: 't1' }))
   expect(await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'end' } as never)).toEqual(expect.objectContaining({ text: 'kept' }))
+})
+
+test('principle 4: with keepClosed and the engine refusing every call the mod makes, a pane closed by hand still closes', async () => {
+  // The kit raises no close by a person, so the hook's function is driven directly, with an engine whose every call
+  // throws at once or rejects, and with one whose calls never answer.
+  const refusing = (how: 'throw' | 'reject' | 'hang'): never => {
+    const call = (): unknown => {
+      if (how === 'throw') throw new Error('refused')
+      return how === 'reject' ? Promise.reject(new Error('refused')) : new Promise(() => {})
+    }
+    return new Proxy({}, { get: () => new Proxy({}, { get: () => call }) }) as never
+  }
+  for (const how of ['throw', 'reject', 'hang'] as const) {
+    for (const kind of ['person', 'plugin', 'unload'] as const) {
+      const e = { id: 'lot-map', origin: { kind } }
+      const passed: unknown[] = []
+      const answer = await afterClose(refusing(how), e, async given => {
+        passed.push(given)
+        return { closed: true }
+      }, 'off')
+      expect(passed).toEqual([e])
+      expect(answer).toEqual({ closed: true })
+    }
+  }
 })
 
 test('principle 4: a result that could fail when read never reaches the mod: the engine hands a hook plain data alone', async ($, on) => {

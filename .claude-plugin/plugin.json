@@ -112,6 +112,12 @@
       "default": true,
       "description": "Off, the pane stays closed until you type /lot-map. The map is kept from the session's first call all the same, so it is whole when you open it."
     },
+    "keepClosed": {
+      "type": "boolean",
+      "title": "Keep a pane closed by hand closed for the session",
+      "default": false,
+      "description": "On, a pane you close by hand stays closed for that session, also when you come back to it, until you type /lot-map, which then turns the map on or off. Off, the pane opens again as before."
+    },
     "subagentNames": {
       "type": "boolean",
       "title": "Name subagents in the rows",

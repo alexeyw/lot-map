@@ -12,11 +12,13 @@
 ./register.tsx hooks: turn.complete
 ./register.tsx hooks: turn.start
 ./register.tsx hooks: turn.step
+./register.tsx hooks: ui.close{id=lot-map}
 ./register.tsx hooks: ui.render{component=Pane, requestId=lot-map}
 ./register.tsx calls: $.clock.after
 ./register.tsx calls: $.clock.now
 ./register.tsx calls: $.command.register
 ./register.tsx calls: $.env.get
+./register.tsx calls: $.session.id
 ./register.tsx calls: $.session.surfaces
 ./register.tsx calls: $.session.usage
 ./register.tsx calls: $.state.get
@@ -24,9 +26,12 @@
 ./register.tsx calls: $.store.get
 ./register.tsx calls: $.store.set
 ./register.tsx calls: $.ui.blit
+./register.tsx calls: $.ui.close
 ./register.tsx calls: $.ui.invalidate
 ./register.tsx calls: $.ui.open
+./register.tsx calls: $.ui.panes
 ./register.tsx calls: $.ui.resolve
+./register.tsx calls: $.ui.toast
 ./register.tsx env writes: nothing
 ./register.tsx env reads: COLORFGBG
 ./register.tsx env reads: LC_TERMINAL
@@ -36,6 +41,9 @@
 ./register.tsx state writes: lot-map.board
 ./register.tsx state reads: lot-map.board
 ./board.ts arguments: $.session.usage{breakdown='summary'}
+./closed.ts arguments: $.store.get(not written out)
+./closed.ts arguments: $.store.set(not written out)
+./closed.ts arguments: $.ui.toast(not written out)
 ./pane.tsx arguments: $.store.set('mapZoom')
 ./pane.tsx arguments: $.store.set('paneMin')
 ./pane.tsx arguments: $.ui.resolve(not written out)
@@ -44,6 +52,7 @@
 ./register.tsx arguments: $.store.get('paneMin')
 ./register.tsx arguments: $.store.get(not written out)
 ./register.tsx arguments: $.store.set(not written out)
+./register.tsx arguments: $.ui.close{id}
 ./register.tsx arguments: $.ui.open(not written out)
 ./terminal.tsx arguments: $.clock.after(not written out)
 ./terminal.tsx arguments: $.env.get('COLORFGBG')

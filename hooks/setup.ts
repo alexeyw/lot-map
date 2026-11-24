@@ -49,6 +49,8 @@ export type Setup = {
   guardedHooks: boolean
   /** Whether the pane opens by itself when a session starts and when a surface joins. Off, it opens on `/lot-map` alone; the board is kept all the same. */
   openAtStart: boolean
+  /** Whether a pane the person closes by hand stays closed for that session, and `/lot-map` toggles. Off, as before. */
+  keepClosed: boolean
   /** Whether a subagent's model step says which subagent it is, by the description it was started with. Off, it says only that it is one. */
   subagentNames: boolean
   /** Whether a row says about how much its call added to the context, and the desktop map each station's sum. */
@@ -127,6 +129,7 @@ export function setupFrom(options: Readonly<Record<string, unknown>> = {}): Setu
     hookReasons: flag(options.hookReasons, false),
     guardedHooks: flag(options.guardedHooks, true),
     openAtStart: flag(options.openAtStart, true),
+    keepClosed: flag(options.keepClosed, false),
     subagentNames: flag(options.subagentNames, false),
     contextCost: flag(options.contextCost, false),
     contextWindow: options.contextWindow === 'compaction' ? 'compaction' : 'model',

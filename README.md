@@ -178,6 +178,7 @@ Each of these with a picture of its values: [How the options look](docs/options.
 | `motion` | `full` | `full`, or `reduced`: nothing flies, spreads or spins. A call still lights its station and flashes its spoke, the route still gets its leg, and those only fade; the clock hands around a running station stay, as slow as a clock's |
 | `textSize` | `footnote` | the size of the rows under the map: `caption`, `footnote` or `body`. A terminal has one size and ignores it |
 | `openAtStart` | `true` | whether the pane opens by itself when a session starts. With `false` it stays closed until you type `/lot-map`; the map is kept from the session's first call all the same, so it is whole when you open it |
+| `keepClosed` | `false` | whether a pane you close by hand stays closed for that session: when you come back to it, in a new window and after a restart, until you type `/lot-map`. With `true`, `/lot-map` alone turns the map off where it is on show and on anywhere else, and `/lot-map on` and `/lot-map off` say which. Each session is its own; the mod keeps the ids of the 200 newest sessions turned off |
 | `logRows` | `16` | how many rows the list under the map shows: `16`, or `fill`, as many as the pane has room for below the map, never fewer than 16. The oldest rows that do not fit are cut off at the bottom, above the calls still running. Only in the desktop app's docked pane; a terminal, the editor and the mobile app keep 16 |
 
 ### What it shows

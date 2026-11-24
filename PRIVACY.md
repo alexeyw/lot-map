@@ -29,6 +29,7 @@ With `contextWindow` set to `compaction`, it also asks Claude Code how the conte
 
 - **During a session:** the rows of the map, which of them you opened to read whole, the counters under the stations and the last model step, in Claude Code's state for the session. With `contextCost` on, also a number of tokens on a row and a sum per station: how much the context grew, taken from the same figure as the ring's percentage. They are gone when the session ends.
 - **Between sessions:** one value per folder, the name of the model last used there, so that the map can show a change of model. It is stored under the folder's full path in Claude Code's own store for the plugin, on your computer. A folder's path usually contains your account name.
+- **Between sessions, with `keepClosed` on:** the ids of the sessions you turned the map off in, by closing the pane or with `/lot-map off`, so that it stays closed when you come back. A session's id is the name Claude Code gives its transcript; nothing else of the session is kept. The list holds the 200 newest, in the same store, and a session turned on again leaves it.
 - **Between sessions, from the VS Code pane:** how far you zoomed the map out and whether you hid it, a number and a yes or no, the same for every folder. They are in the same store and say nothing of what the map showed.
 - **Your options** (language, colours, memory servers and the rest) are kept by Claude Code in your settings, as for any plugin.
 
